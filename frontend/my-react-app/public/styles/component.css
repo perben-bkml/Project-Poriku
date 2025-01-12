@@ -1,0 +1,52 @@
+/* Navbar Component Style */
+.Nav-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100px;
+    background-color: #1a284b;
+    color: white;
+}
+
+.poriku-1 {
+    height: 100px;
+    margin-left: 30px;
+}
+
+.Nav-link {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.Nav-link p {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+    transition: text-shadow 0.5s;
+}
+
+.Nav-link p:hover {
+    text-shadow: 0px 0px 20px  white;
+}
+
+.Nav-SIPKU {
+    display: flex;
+    height: 40px;
+    width: 180px;
+    border: none;
+    border-radius: 20px;
+    background-color: rgb(8, 13, 20);
+    color: white;
+    align-items: center;
+    justify-content: center;
+    font-family: "Outfit", serif;
+    font-weight: 800;
+    font-size: 1.2rem;
+    transition: box-shadow 0.5s;
+}
+
+.Nav-SIPKU:hover {
+    box-shadow: 0px 0px 20px  white;
+}

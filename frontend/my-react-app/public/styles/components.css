@@ -15,6 +15,7 @@
 .Nav-link {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    max-width: 100%;
 }
 
 .Nav-link p {
@@ -51,4 +52,32 @@
 .Nav-SIPKU:hover {
     transform: scale(1.1, 1.1);
     box-shadow: 0px 0px 20px  white;
+}
+
+
+/* Footer Component Style */
+.footer {
+    display: inline-block;
+    height: 140px;
+    width: 100%;
+    background-color: #1a284b;
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 400;
+}
+
+.footer-copy {
+    margin-top: 40px;
+}
+
+.footer p {
+    margin-left: 6%;
+}
+
+
+/* Trying to add media queries */
+@media screen and (max-width: 1280px) {
+    .Nav-link p {
+        transform: scale(0.8, 0.8);
+    }
 }

@@ -2,13 +2,13 @@
 .Nav-bar {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    height: 100px;
+    height: 85px;
     background-color: #1a284b;
     color: white;
 }
 
 .poriku-1 {
-    height: 100px;
+    height: 80px;
     margin-left: 30px;
 }
 
@@ -16,6 +16,7 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     max-width: 100%;
+    margin-top: 0px;
 }
 
 .Nav-link p {
@@ -58,7 +59,7 @@
 /* Footer Component Style */
 .footer {
     display: inline-block;
-    height: 140px;
+    height: 80px;
     width: 100%;
     background-color: #1a284b;
     color: white;
@@ -67,7 +68,7 @@
 }
 
 .footer-copy {
-    margin-top: 40px;
+    margin-top: 28px;
 }
 
 .footer p {

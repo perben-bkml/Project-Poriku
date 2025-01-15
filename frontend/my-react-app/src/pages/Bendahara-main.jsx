@@ -24,7 +24,7 @@ function Bendahara() {
                 <button><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
             </div>
             <div className="dash-user">
-                <Avatar sx={{width: 35, height: 35}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />
+                <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />
                 <span className="padd-span-bend"></span>
                 <p>Biro Umum</p>
             </div>

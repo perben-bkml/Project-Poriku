@@ -75,6 +75,27 @@
     margin-left: 6%;
 }
 
+/* Daftar Pengajuan style */
+
+.bg-card {
+    width: 980px;
+    height: 78%;
+    margin: 5px 30px;
+    background-color: white;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 20px;
+}
+
+.pengajuan {
+    display: grid;
+    grid-template-rows: 70px 1fr;
+}
+
+.pengajuan-filter {
+    background-color:black;
+    margin: 8px 8px;
+}
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1280px) {

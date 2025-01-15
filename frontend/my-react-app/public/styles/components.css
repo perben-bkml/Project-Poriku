@@ -78,7 +78,16 @@
 
 /* Trying to add media queries */
 @media screen and (max-width: 1280px) {
+    /* Styling Navbar */
+    .Nav-link {
+        grid-template-columns: repeat(3, 220px);
+    }
     .Nav-link p {
         transform: scale(0.8, 0.8);
+    }
+
+    /* Styling Footer */
+    .footer p {
+        transform: scale(0.9, 0.9);
     }
 }

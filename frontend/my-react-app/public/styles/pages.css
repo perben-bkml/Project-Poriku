@@ -141,6 +141,7 @@
     display: flex;
     padding-left: 30px;
     font-size: 1.1rem;
+    color: #0a0f1b;
     border: 1px solid rgb(214, 214, 214);
 }
 
@@ -161,6 +162,10 @@
     
 }
 
+.padd-span-bend {
+    padding-left: 20px;
+}
+
 .dash-content button {
     display: flex;
     align-items: center;
@@ -168,6 +173,7 @@
     padding-left: 20px;
     font-size: 1rem;
     background-color: #f5f6fa;
+    color: #0a0f1b;
     /*The button that got clicked will have this bg color: background-color: #e8ebf1; will add with On Click*/
     border: none;
     border-radius: 15px;
@@ -193,4 +199,26 @@
     .welcome-buttons button:hover {
         transform: scale(0.9, 0.9);
     }
+
+    /* Sizing Bendahara Page */
+    .bendahara-home {
+        grid-template-columns: 210px 1fr;
+    }
+
+    .dash-title {
+        padding-left: 25px;
+    }
+    .dash-title h2 {
+        transform: scale(0.9, 0.9);
+    }
+
+    .padd-span-bend {
+        padding-left: 15px;
+    }
+
+    .dash-content button {
+        transform: scale(1, 1);
+        font-size: 0.9rem;
+    }
+
 }

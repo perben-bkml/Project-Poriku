@@ -11,11 +11,11 @@ function Bendahara() {
                 <h2>Menu<br /> Bendahara</h2>
             </div>
             <div className="page-content">
-                <h1>Hexsia</h1>
+                <h1>Test Page</h1>
             </div>
             <div className="dash-content">
-                <button><AssignmentIcon fontSize="small"/><span style={{ paddingLeft: "20px" }}/>Daftar Pengajuan</button>
-                <button><ChecklistIcon fontSize="small"/><span style={{ paddingLeft: "20px" }}/>Lihat Antrian</button>
+                <button><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
+                <button><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
             </div>
         </div>
     )

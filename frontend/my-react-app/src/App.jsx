@@ -6,15 +6,17 @@ import Footer from './components/Footer'
 //Page Imports
 import Home from './pages/Home'
 import Bendahara from './pages/Bendahara-main'
+import Login from './pages/Login'
 
 function App() {
 
   return (
     <div>
-      <Navbar />
+      {/* <Navbar /> */}
       {/* <Home /> */}
-      <Bendahara />
-      <Footer />
+      {/* <Bendahara /> */}
+      {/* <Footer /> */}
+      <Login />
     </div>
   )
 }

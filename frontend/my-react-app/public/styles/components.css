@@ -76,7 +76,6 @@
 }
 
 /* Daftar Pengajuan style */
-
 .bg-card {
     width: 94%;
     height: 80%;
@@ -84,11 +83,12 @@
     background-color: white;
     border: 1px solid rgb(214, 214, 214);
     border-radius: 20px;
+    padding-bottom: 10px;
 }
 
 .pengajuan {
     display: grid;
-    grid-template-rows: 70px 1fr;
+    grid-template-rows: 50px 1fr;
 }
 
 .pengajuan-filter {
@@ -99,7 +99,11 @@
 }
 
 .filter-input1 {
-    margin-left: 30px
+    margin-left: 30px;
+    font-family: "Outfit", serif;
+    font-size: 1rem;
+    height: 22px;
+    width: 150px;
 }
 
 .filter-label1 {
@@ -112,9 +116,53 @@
 
 .filter-select {
     margin-right: 30px;
+    display: inline-block;
 }
 
+.filter-select select {
+    height: 25px;
+    width: 80px;
+    font-size: 1rem;
+    font-family: "Outfit", serif;
+}
 
+.pagination {
+    margin: auto;
+    padding: 20px 10px 10px 10px;
+}
+
+/* Pengajuan Info Style */
+.pengajuan-info {
+    background-color: #fdfdfd;
+    margin: auto;
+    margin-top: 20px;
+    height: 85px;
+    width: 90%;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 12px;
+    padding-left: 20px;
+    padding-right: 20px;
+    display: grid;
+    grid-template-columns: 150px 1fr 1fr 1fr;
+    font-weight: 600;
+    color: #0a0f1b;
+}
+
+.info-ubah {
+    display: flex;
+    padding: 20px;
+    align-items: center;
+    justify-content: space-evenly;
+}
+
+.info p {
+    margin-bottom: 0px;
+}
+
+.info.data {
+    margin-top: 12px;
+    font-weight: 400;
+}
 
 
 /* Trying to add media queries */
@@ -135,7 +183,8 @@
     /* Styling Daftar Pengajuan */
     .bg-card {
         width: 980px;
-        height: 80%;
+        height: auto;
         margin: 5px 30px;
+        padding-bottom: 10px;
     }
 }

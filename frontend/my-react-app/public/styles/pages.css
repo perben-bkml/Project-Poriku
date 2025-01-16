@@ -5,21 +5,36 @@
     background-image: url("../assets/BG_Bendahara.jpg");
     background-repeat: no-repeat;
     background-size: cover;
-    display: grid;
-    grid-template-rows: 1fr 1fr;
+    position: fixed;
+
 }
 
 .login-bg {
     margin: auto;
-    margin-top: 20px;
-    height: 500px;
-    width: 480px;
-    background-color: white;
+    margin-top: 100px;
+    height: auto;
+    width: 600px;
+    background-color: #fdfdfd;
+    border-radius: 15px;
+}
+
+.login-logo-container {
+    display: flex;
+    justify-content: center;
+    padding-top: 30px;
+    padding-bottom: 0px;
+    width: 100%;
+}
+
+.login-logo {
+    height: 100px;
+    width: 100px;
 }
 
 .login-title {
     display: grid;
-    grid-template-rows: 100px 50px 1fr;
+    grid-template-rows: 110px 60px 1fr;
+    color: #1a284b;
 }
 
 .title-1, .title-2 {
@@ -28,7 +43,12 @@
     align-items: center;
     margin-top: 0px;
     margin-bottom: 0px;
-    font-size: 2rem;
+    font-size: 2.5rem;
+    font-weight: 600;
+}
+
+.title-1 {
+    height: 100px;
 }
 
 .title-2 {
@@ -39,8 +59,9 @@
 .login-title h3 {
     display: flex;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     margin: 0px;
+    font-weight: 600;
 }
 
 .login-content {
@@ -52,6 +73,7 @@
 .login-form {
     display: grid;
     grid-template-rows: repeat(3, 60px);
+    margin-bottom: 70px;
 }
 
 .login-form input {
@@ -63,15 +85,39 @@
     padding-left: 10px;
 }
 
+.login-gaji {
+    display: grid;
+    grid-template-rows: 50px 1fr;
+    font-size: 1.1rem;
+}
+
+.login-gaji-p1, .login-gaji-p2 {
+    display: flex;
+    justify-content: center;
+    margin-top: 0px;
+    transition: all 0.2s ease-in-out;
+}
+
+.login-gaji-p2 {
+    width: 100px;
+    margin: auto;
+    margin-bottom: 60px;
+}
+
+.login-gaji-p2:hover {
+    transform: scale(1.2, 1.2);
+}
+
 /* Home Page */
 .home-content {
+    min-height: 100vh;
+    width: 100%;
     display: grid;
     grid-template-rows: repeat(2, 1fr);
-    height: 100vh;
     background-image: url("../assets/BG_Home.jpg");
+    background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
-
 }
 
 .welcome-title {
@@ -85,6 +131,8 @@
     color: white;
     font-size: 4.5rem;
     margin-bottom: 10px;
+    min-width: 1280px;
+    width: 100%;
 }
 
 .welcome-buttons {
@@ -100,6 +148,7 @@
 .welcome-buttons button {
     height: 60px;
     width: 280px;
+    min-width: 250px;
     border: none;
     border-radius: 35px;
     background-color: #1a284b;
@@ -196,14 +245,16 @@
 
 .bendahara-home {
     height: auto;
+    width: 100%;
     display: grid;
     grid-template-columns: 1fr 6fr;
-    padding-bottom: 25px;
+    padding-bottom: 0px;
 }
 
 .dash-tab {
     display: grid;
-    grid-template-rows: 1fr 6fr 1fr;
+    grid-template-rows: 1fr 6fr 80px;
+    min-width: 230px;
 }
 
 .dash-title {
@@ -274,9 +325,39 @@
 
   /* Adding Media Queries */
 @media screen and (max-width: 1280px) {
+    /* Sizing Login Page */
+    .login-bg {
+        margin-top: 30px;
+        width: 480px;
+    }
+    .login-title {
+        grid-template-rows: 78px 50px 1fr;
+    }
+    .title-1, .title-2 {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 0px;
+        margin-bottom: 0px;
+        font-size: 1.9rem;
+    }
+    .title-1 {
+        height: 70px;
+    }
+    .login-title h3 {
+        font-size: 1.5rem;
+    }
+    .login-gaji-p2 {
+        margin-bottom: 40px;
+    }
+
+
     /* Sizing Home Page */
-    .welcome-title {
-        margin-top: 5%;
+    .home-content{
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        overflow-x:scroll;
     }
 
     .welcome-title, .welcome-buttons button {
@@ -290,12 +371,13 @@
     /* Sizing Bendahara Page */
     .bendahara-home {
         grid-template-columns: 210px 1fr;
-        padding-bottom: 0px;
+        min-width: 1280px;
     }
 
     .dash-tab {
         display: grid;
         grid-template-rows: 1fr 5.5fr 70px;
+        min-width: 0px;
     }
 
     .dash-title {

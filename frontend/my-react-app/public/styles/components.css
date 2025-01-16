@@ -5,6 +5,7 @@
     height: 85px;
     background-color: #1a284b;
     color: white;
+    width: 100%;
 }
 
 .poriku-1 {
@@ -136,21 +137,23 @@
     background-color: #fdfdfd;
     margin: auto;
     margin-top: 20px;
-    height: 85px;
-    width: 90%;
+    height: 95px;
+    width: 92%;
     border: 1px solid rgb(214, 214, 214);
     border-radius: 12px;
     padding-left: 20px;
     padding-right: 20px;
     display: grid;
-    grid-template-columns: 150px 1fr 1fr 1fr;
+    grid-template-columns: 200px 1fr 1fr 1fr;
+    font-size: 1.1rem;
     font-weight: 600;
     color: #0a0f1b;
 }
 
 .info-ubah {
     display: flex;
-    padding: 20px;
+    padding-left: 50px;
+    padding-right: 50px;
     align-items: center;
     justify-content: space-evenly;
 }
@@ -164,10 +167,18 @@
     font-weight: 400;
 }
 
+.info.nomor {
+    padding-left: 35px;
+}
+
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1280px) {
     /* Styling Navbar */
+    .Nav-bar {
+        min-width: 1280px;
+    }
     .Nav-link {
         grid-template-columns: repeat(3, 220px);
     }
@@ -176,6 +187,9 @@
     }
 
     /* Styling Footer */
+    .footer {
+        min-width: 1280px;
+    }
     .footer p {
         transform: scale(0.9, 0.9);
     }
@@ -187,4 +201,16 @@
         margin: 5px 30px;
         padding-bottom: 10px;
     }
+
+    /* Styling Pengajuan-info */
+    .pengajuan-info {
+        height: 85px;
+        width: 90%;
+        font-size: 1rem;
+    }
+
+    .info-ubah {
+        padding: 20px;
+    }
+
 }

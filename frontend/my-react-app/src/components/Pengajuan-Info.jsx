@@ -11,7 +11,7 @@ function Pengajuan(props) {
         <div className="pengajuan-info">
             <div className="info nomor">
                 <p>ID Pengajuan</p>
-                <Avatar sx={{ bgcolor: "#0a0f1b", width: 28, height: 28, fontSize:"1rem", marginTop: "5px", marginLeft:"33px"}}>{props.numbers}</Avatar>
+                <Avatar className="info-avatar" sx={{ bgcolor: "#0a0f1b", width: 28, height: 28, fontSize:"1rem", marginTop: "5px", marginLeft:"35px"}}>{props.numbers}</Avatar>
             </div>
             <div className="info tanggal">
                 <p>Tanggal Pengajuan:</p>

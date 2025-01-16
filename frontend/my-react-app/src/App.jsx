@@ -14,8 +14,8 @@ function App() {
     <div>
       {/* <Navbar /> */}
       {/* <Home /> */}
-      {/* <Bendahara /> */}
-      {/* <Footer /> */}
+      {/* <Bendahara />
+      <Footer /> */}
       <Login />
     </div>
   )

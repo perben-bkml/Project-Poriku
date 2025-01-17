@@ -175,6 +175,11 @@
     padding-left: 35px;
 }
 
+/* Buat Pengajuan Style */
+.buat-pengajuan {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+}
 
 
 /* Trying to add media queries */

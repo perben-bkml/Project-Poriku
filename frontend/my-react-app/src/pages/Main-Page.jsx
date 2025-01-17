@@ -1,6 +1,7 @@
 import React, {useState} from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
+import BuatPengajuan from "../components/Buat-Pengajuan";
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 // Material UI icons
@@ -35,7 +36,8 @@ function MainPage(props) {
                 </div>
                 <div className="page-content">
                     <h1 className="content-title">{contentTitle[0]}</h1>
-                    <DaftarPengajuan />
+                    <BuatPengajuan />
+                    {/* <DaftarPengajuan /> */}
                 </div>
             </div>
             <Footer />

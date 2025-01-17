@@ -4,7 +4,6 @@
     grid-template-columns: 1fr 1fr;
     height: 85px;
     background-color: #1a284b;
-    color: white;
     width: 100%;
 }
 
@@ -18,6 +17,11 @@
     grid-template-columns: repeat(3, 1fr);
     max-width: 100%;
     margin-top: 0px;
+}
+
+.Nav-link a {
+    text-decoration: none;
+    color: white;
 }
 
 .Nav-link p {

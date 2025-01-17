@@ -1,4 +1,5 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
 
 function Login () {
     return (
@@ -17,7 +18,7 @@ function Login () {
                     <form className="login-form">
                         <input type="text" value="" placeholder="Username" name="username" />
                         <input type="text" value="" placeholder="Password" name="password" />
-                        <input type="submit" />
+                        <NavLink to="/home"><input type="submit" /></NavLink>
                     </form>
                 </div>
                 <div className="login-gaji">

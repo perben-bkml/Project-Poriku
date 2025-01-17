@@ -76,6 +76,10 @@
     margin-bottom: 70px;
 }
 
+.login-form a {
+    margin: auto;
+}
+
 .login-form input {
     margin: auto;
     height: 35px;
@@ -326,12 +330,16 @@
   /* Adding Media Queries */
 @media screen and (max-width: 1280px) {
     /* Sizing Login Page */
+    .login-logo {
+        height: 75px;
+        width: 75px;
+    }
     .login-bg {
         margin-top: 30px;
         width: 480px;
     }
     .login-title {
-        grid-template-rows: 78px 50px 1fr;
+        grid-template-rows: 63px 35px 1fr;
     }
     .title-1, .title-2 {
         display: flex;
@@ -339,16 +347,28 @@
         align-items: center;
         margin-top: 0px;
         margin-bottom: 0px;
-        font-size: 1.9rem;
+        font-size: 1.7rem;
     }
     .title-1 {
-        height: 70px;
+        height: 55px;
     }
     .login-title h3 {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
+    }
+    .login-form {
+        margin-bottom: 25px;
+        grid-template-rows: repeat(3, 50px);
+    }
+    .login-form input {
+        height: 32px;
+        width: 300px;
+    }
+    .login-gaji {
+        grid-template-rows: 30px 1fr;
+        font-size: 0.9rem;
     }
     .login-gaji-p2 {
-        margin-bottom: 40px;
+        margin-bottom: 30px;
     }
 
 
@@ -358,6 +378,10 @@
         top: 0;
         bottom: 0;
         overflow-x:scroll;
+    }
+
+    .welcome-title {
+        padding-top: 30px;
     }
 
     .welcome-title, .welcome-buttons button {

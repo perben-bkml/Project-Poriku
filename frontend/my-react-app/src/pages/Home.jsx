@@ -1,4 +1,5 @@
 import React from "react"
+import { NavLink } from "react-router-dom";
 
 function Home() {
     const satkerName = "Biro Umum";
@@ -10,8 +11,8 @@ function Home() {
                 <h1>{satkerName}!</h1>
             </div>
             <div className="welcome-buttons">
-                <button>Menu Bendahara</button>
-                <button>Menu Verifikasi</button>
+                <NavLink to="/menu-bendahara"><button>Menu Bendahara</button></NavLink>
+                <NavLink to="/menu-verifikasi"><button>Menu Verifikasi</button></NavLink>
                 <button>Login SIPKU</button>
             </div>
         </div>

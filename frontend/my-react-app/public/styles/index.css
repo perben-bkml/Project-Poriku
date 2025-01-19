@@ -1,4 +1,4 @@
-body, button {
+body, button, input, select {
     margin: 0px;
     font-family: "Outfit", serif;
     font-optical-sizing: auto;

@@ -83,7 +83,7 @@
 /* Daftar Pengajuan style */
 .bg-card {
     width: 94%;
-    height: 80%;
+    height: 86%;
     margin: 5px 50px;
     background-color: white;
     border: 1px solid rgb(214, 214, 214);
@@ -178,12 +178,119 @@
 /* Buat Pengajuan Style */
 .buat-pengajuan {
     display: grid;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: 70px 1fr;
+}
+
+.pengajuan-desc {
+    display: flex;
+    align-items: center;
+    margin-left: 35px;
+    margin-top: 0px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.pengajuan-desc button {
+    height: 30px;
+    width: 200px;
+    margin: auto;
+    margin-left: 30px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 1px;
+    border: 1px solid white;
+    background-color: #1a284b;
+    border-radius: 20px;
+    transition: all 0.2s ease-in-out;
+}
+
+.pengajuan-desc button:hover {
+    transform: scale(1.1, 1.1);
+}
+
+.pengajuan-form-textdata {
+    display: flex;
+    margin-left: 24px;
+    margin-right: 35px;
+    margin-bottom: 10px;
+}
+
+.pengajuan-form-textdata label {
+    display: flex;
+    align-items: center;
+    padding-left: 11px;
+}
+
+.pengajuan-form-textdata input {
+    margin: auto;
+    height: 20px;
+    width: 150px;
+}
+
+.pengajuan-form-textdata select {
+    margin: auto;
+    height: 29px;
+    width: 150px;
+}
+
+.pengajuan-form-tabledata {
+    display: grid;
+    grid-template-rows: 50px 1fr;
+    height: 100%;
+    margin-left: 35px;
+    margin-right: 35px;
+}
+
+.pengajuan-form-tableinfo {
+    display: flex;
+    align-items: center;
+}
+
+.pengajuan-form-tableinfo label {
+    margin-left: 50px;
+}
+
+.pengajuan-form-tableinfo input {
+    margin-left: 20px;
+    height: 20px;
+    width: 100px;
+}
+
+.head-data {
+    font-size: 100px;
+}
+
+.table-cell {
+    border: 0.8px solid rgb(214, 214, 214);
+}
+
+.table-cell textarea {
+    width: 100%;
+    border: none;
+    resize: none;
+    overflow: hidden;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: inherit;
+    margin: auto;
+}
+
+.form-submit {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.form-submit input {
+    height: 30px;
+    width: 200px;
 }
 
 
 /* Trying to add media queries */
-@media screen and (max-width: 1280px) {
+@media screen and (max-width: 1400px) {
     /* Styling Navbar */
     .Nav-bar {
         min-width: 1280px;
@@ -205,7 +312,7 @@
 
     /* Styling Daftar Pengajuan */
     .bg-card {
-        width: 980px;
+        max-width: 1280px;
         height: auto;
         margin: 5px 30px;
         padding-bottom: 10px;

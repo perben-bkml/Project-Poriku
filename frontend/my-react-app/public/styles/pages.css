@@ -223,7 +223,7 @@
     padding-left: 20px;
 }
 
-.dash-content button {
+.dash-button {
     display: flex;
     align-items: center;
     margin: 10px 10px 0px 10px;
@@ -236,8 +236,16 @@
     border-radius: 15px;
 }
 
-.dash-content button:hover {
+.dash-button:hover {
     background-color: #edeff4;
+}
+
+.btn-selected {
+    background-color: #d1d5d8;
+}
+
+.btn-selected:hover {
+    background-color: #b9bcbe;
 }
 
 .dash-user {

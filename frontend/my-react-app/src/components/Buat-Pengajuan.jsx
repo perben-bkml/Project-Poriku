@@ -8,6 +8,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import { TableFooter } from "@mui/material";
 
 function BuatPengajuan() {
     // Default column data. Will be stored elsewhere(?).
@@ -198,6 +199,7 @@ function BuatPengajuan() {
         });
     }
 
+    // Handle pasting data to cell
     function handlePaste(event, startRow, startCol) {
         event.preventDefault();
     
@@ -261,11 +263,32 @@ function BuatPengajuan() {
             case "Delete":
                 event.preventDefault();
                 clearSelectedCells();
+                break;
             default:
                 break;
         }
     }
 
+    // Handle footer table that sums up numbers
+    function calculateColumnTotal(columnIndex) {
+        return tableData.reduce((sum, row) => {
+            const value = parseInt(row[columnIndex].replace(/[^\d]/g, ""), 10);
+            return sum + (isNaN(value) ? 0 : value);
+        }, 0);
+    }
+    const summableColumns = {
+        tagihan: 4,
+        dpp: 5,
+        dppLain: 6,
+        ppn: 7,
+        pph21: 9,
+        pph22: 11,
+        pph23: 13,
+        pphf: 15,
+        terima: 17,
+    };
+
+    // Handle form submits
     function handleSubmit(event){
         event.preventDefault();
         // Grabbing input & select tag values
@@ -306,7 +329,7 @@ function BuatPengajuan() {
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
                         </div>
-                        <TableContainer className="table-container" sx={{maxHeight: 620}}>
+                        <TableContainer className="table-container" sx={{maxHeight: 595}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
                                     <TableRow className="table-row"> 
@@ -341,11 +364,21 @@ function BuatPengajuan() {
                                         </TableRow>
                                     ))}
                                 </TableBody>
+                                <TableFooter>
+                                    <TableRow>
+                                        {columns.map((col, colIndex) => (
+                                            <TableCell className="table-footer-cell" key={colIndex}>
+                                                {Object.values(summableColumns).includes(colIndex) ? numberFormats(calculateColumnTotal(colIndex).toString()) : ""}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                </TableFooter>
                             </Table>
                         </TableContainer>
                     </div>
                     <div className="form-submit">
-                        <input type="submit" value="Kirim Pengajuan"/>
+                        <input type="submit" value="Kirim Pengajuan" name="submit-all" />
+                        <input type="submit" value="Simpan Draft" name="save-draft" />
                     </div>
                 </form>
             </div>

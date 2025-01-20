@@ -7,7 +7,7 @@ import Pagination from '@mui/material/Pagination';
 
 function DaftarPengajuan(){
 
-    const testArray = ["1", "2", "3", "4", "5"]
+    const testArray = ["1", "2", "3", "4", "5",]
 
     const [filterSelect, setFilterSelect] = useState("")
 

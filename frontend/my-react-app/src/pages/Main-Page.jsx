@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, { useState } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
@@ -13,7 +13,38 @@ import Avatar from "@mui/material/Avatar";
 function MainPage(props) {
     const whatMenu = props.menu;
 
-    const contentTitle = ["Daftar Pengajuan", "Lihat Antrian"]
+    const [contentTitle, setContentTitle] = useState("Daftar Pengajuan")
+    const [buttonSelect, setButtonSelect] = useState("daftar-pengajuan")
+
+    // Dash button add and remove class to make it selected
+    function handleButtonClick(event) {
+        const allButton = document.querySelectorAll(".dash-content button");
+        allButton.forEach((btn) => btn.classList.remove("btn-selected"));
+        const detectButton = document.getElementsByName(event.name)[0];
+        detectButton.classList.add("btn-selected")
+
+        setButtonSelect(event.name)
+        formatText(event.name)
+    }
+    //Just converting into title name
+    function formatText(input) {
+        const newText = input.split("-") // Split the string by "-"
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
+          .join(" "); // Join the words with a space
+        
+        setContentTitle(newText)
+      }
+
+    function renderComponent() {
+        switch (buttonSelect) {
+            case "daftar-pengajuan":
+                return <DaftarPengajuan />;
+            case "buat-pengajuan":
+                return <BuatPengajuan />;
+            default:
+                return null;
+        }
+    }
 
     return (
         <div>
@@ -24,9 +55,9 @@ function MainPage(props) {
                         <h2>Menu<br /> {whatMenu}</h2>
                     </div>
                     <div className="dash-content">
-                        <button><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
-                        <button><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
-                        <button><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
+                        <button className="dash-button btn-selected" name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
+                        <button className="dash-button" name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
+                        <button className="dash-button" name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />
@@ -35,9 +66,8 @@ function MainPage(props) {
                     </div>
                 </div>
                 <div className="page-content">
-                    <h1 className="content-title">{contentTitle[0]}</h1>
-                    <BuatPengajuan />
-                    {/* <DaftarPengajuan /> */}
+                    <h1 className="content-title">{contentTitle}</h1>
+                    {renderComponent()}
                 </div>
             </div>
             <Footer />

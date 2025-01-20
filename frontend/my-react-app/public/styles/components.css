@@ -265,6 +265,11 @@
     border: 0.8px solid rgb(214, 214, 214);
 }
 
+.selected-cell {
+    background-color: #f1f1f1;
+    /* #d3eaff; */
+}
+
 .table-cell textarea {
     width: 100%;
     border: none;
@@ -314,8 +319,8 @@
     .bg-card {
         max-width: 1280px;
         height: auto;
-        margin: 5px 30px;
-        padding-bottom: 10px;
+        margin: 5px 30px 20px 30px;
+        padding-bottom: 20px;
     }
 
     /* Styling Pengajuan-info */
@@ -329,4 +334,28 @@
         padding: 20px;
     }
 
+    /* Styling Buat-Pengajuan */
+    .pengajuan-desc p {
+        font-size: 1rem;
+    }
+    .pengajuan-desc button {
+        width: 180px;
+        font-size: 0.9rem;
+    }
+    .pengajuan-form-textdata {
+        font-size: 0.9rem;
+    }
+    .pengajuan-form-textdata label {
+        width: 110px;
+    }
+    .pengajuan-form-textdata input {
+        width: 100px;
+        margin-left: 10px;
+    }
+    .pengajuan-form-textdata select {
+        width: 80px;
+    }
+    .pengajuan-form-tabledata {
+        margin-top: 20px;
+    }
 }

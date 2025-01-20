@@ -327,7 +327,7 @@
 
     .dash-tab {
         display: grid;
-        grid-template-rows: 1fr 5.5fr 70px;
+        grid-template-rows: 1fr 7fr 79px;
         min-width: 0px;
     }
 

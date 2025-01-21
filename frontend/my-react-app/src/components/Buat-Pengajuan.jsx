@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import * as math from "mathjs";
 
+// Import Components
+import Popup from "./Popup";
+
 // Import Table Material UI
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -43,6 +46,8 @@ function BuatPengajuan() {
     const emptyCell = Array(21).fill("");
     const initialRow = [1, ...emptyCell];
     const [tableData, setTableData] = useState([initialRow]);
+    //Popup State
+    const [isPopup, setIsPopup] = useState(false);
    
 
     function handleRowChange(event) {
@@ -288,9 +293,19 @@ function BuatPengajuan() {
         terima: 17,
     };
 
+    // Handle Popups
+    function handlePopup() {
+        if (!isPopup) {
+            setIsPopup(true);
+        } else {
+            setIsPopup(false);
+        }
+    }
+
     // Handle form submits
     function handleSubmit(event){
         event.preventDefault();
+        setIsPopup(false);
         // Grabbing input & select tag values
         const inputNama = document.getElementsByName("nama-pengisi")[0].value;
         const selectAjuan = document.getElementsByName("ajuan")[0].value;
@@ -377,11 +392,12 @@ function BuatPengajuan() {
                         </TableContainer>
                     </div>
                     <div className="form-submit">
-                        <input type="submit" value="Kirim Pengajuan" name="submit-all" />
+                        <input type="button" value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>
                         <input type="submit" value="Simpan Draft" name="save-draft" />
                     </div>
                 </form>
             </div>
+            {isPopup && <Popup whenClick={handleSubmit} cancel={handlePopup}/>}
         </div>
     )
 }

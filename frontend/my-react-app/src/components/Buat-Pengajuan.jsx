@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import * as math from "mathjs";
+import axios from "axios";
 
 // Import Components
 import Popup from "./Popup";
@@ -13,7 +14,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
-function BuatPengajuan() {
+function BuatPengajuan(props) {
     // Default column data. Will be stored elsewhere(?).
     const columns = [ 
         { id:"num", label: "No.", minWidth: 5 },
@@ -48,7 +49,6 @@ function BuatPengajuan() {
     const [tableData, setTableData] = useState([initialRow]);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
-   
 
     function handleRowChange(event) {
         const userRowValue = parseInt(event.target.value)
@@ -303,7 +303,7 @@ function BuatPengajuan() {
     }
 
     // Handle form submits
-    function handleSubmit(event){
+    async function handleSubmit(event){
         event.preventDefault();
         setIsPopup(false);
         // Grabbing input & select tag values
@@ -312,9 +312,20 @@ function BuatPengajuan() {
         const inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
         const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
         const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
-        console.log(inputArray);
-        // Grabbing table data values
-        console.log(tableData);
+        // Sending to backend
+        try {
+            const response = await axios.post("http://localhost:3000/bendahara/ajuan-table" , {
+                textdata: inputArray,
+                tabledata: tableData,
+            })
+            if (response.status === 200){
+                props.changeComponent("daftar-pengajuan")
+            }
+
+        } catch (err) {
+            console.log("Failed to send data.", err)
+        }
+
     }
 
     return (

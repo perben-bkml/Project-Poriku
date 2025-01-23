@@ -12,9 +12,11 @@ import Avatar from "@mui/material/Avatar";
 
 function MainPage(props) {
     const whatMenu = props.menu;
+    const getSubMenu = props.submenu;
 
-    const [contentTitle, setContentTitle] = useState("Daftar Pengajuan")
-    const [buttonSelect, setButtonSelect] = useState("daftar-pengajuan")
+    // const [contentTitle, setContentTitle] = useState("")
+    const [buttonSelect, setButtonSelect] = useState(getSubMenu)
+
 
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
@@ -31,8 +33,7 @@ function MainPage(props) {
         const newText = input.split("-") // Split the string by "-"
           .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
           .join(" "); // Join the words with a space
-        
-        setContentTitle(newText)
+        return newText
       }
 
     function renderComponent() {
@@ -40,7 +41,7 @@ function MainPage(props) {
             case "daftar-pengajuan":
                 return <DaftarPengajuan />;
             case "buat-pengajuan":
-                return <BuatPengajuan />;
+                return <BuatPengajuan changeComponent={setButtonSelect}/>;
             default:
                 return null;
         }
@@ -55,9 +56,9 @@ function MainPage(props) {
                         <h2>Menu<br /> {whatMenu}</h2>
                     </div>
                     <div className="dash-content">
-                        <button className="dash-button btn-selected" name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
-                        <button className="dash-button" name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
-                        <button className="dash-button" name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
+                        <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
+                        <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
+                        <button className={`dash-button ${buttonSelect === "lihat-pengajuan" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />
@@ -66,7 +67,7 @@ function MainPage(props) {
                     </div>
                 </div>
                 <div className="page-content">
-                    <h1 className="content-title">{contentTitle}</h1>
+                    <h1 className="content-title">{formatText(buttonSelect)}</h1>
                     {renderComponent()}
                 </div>
             </div>

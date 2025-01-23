@@ -14,7 +14,7 @@ function App() {
         <Routes>
           <Route exact path="/" element={<Login />} />
           <Route path="/home" element={<Home />} />
-          <Route path="/menu-bendahara" element={<MainPage menu="Bendahara"/>} />
+          <Route path="/menu-bendahara" element={<MainPage menu="Bendahara" submenu="daftar-pengajuan"/>} />
           <Route path="/menu-verifikasi" element={<MainPage menu="Verifikasi"/>} />
         </Routes>
       </BrowserRouter>

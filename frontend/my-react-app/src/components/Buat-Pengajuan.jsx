@@ -4,6 +4,7 @@ import axios from "axios";
 
 // Import Components
 import Popup from "./Popup";
+import columns from "./columns";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -15,38 +16,15 @@ import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
 function BuatPengajuan(props) {
-    // Default column data. Will be stored elsewhere(?).
-    const columns = [ 
-        { id:"num", label: "No.", minWidth: 5 },
-        { id:"kegiatan", label: "Nama Kegiatan", minWidth: 160 },
-        { id:"mak", label: "Kode MAK", minWidth: 120 },
-        { id:"spby", label: "Nomor SPBY", minWidth: 120 },
-        { id:"tagihan", label: "Nilai Tagihan", minWidth: 90 },
-        { id:"dpp", label: "DPP", minWidth: 80 },
-        { id:"dpplain", label: "DPP Nilai Lain", minWidth: 80 },
-        { id:"ppn", label: "PPN", minWidth: 65 },
-        { id:"bpt ppn", label: "Nomor Faktur PPN", minWidth: 85 },
-        { id:"pph21", label: "PPh 21", minWidth: 65 },
-        { id:"bpt-pph21", label: "Nomor Bupot PPh 21", minWidth: 87 },
-        { id:"pph22", label: "PPh 22", minWidth: 65 },
-        { id:"bpt-pph22", label: "Nomor Bupot PPh 22", minWidth: 87 },
-        { id:"pph23", label: "PPh 23", minWidth: 65 },
-        { id:"bpt-pph23", label: "Nomor Bupot PPh 23", minWidth: 87 },
-        { id:"pphf", label: "PPh Final", minWidth: 65 },
-        { id:"bpt-pphf", label: "Nomor Bupot PPh Final", minWidth: 87 },
-        { id:"terima", label: "Nilai Terima", minWidth: 90 },
-        { id:"penerima", label: "Penerima", minWidth: 80 },
-        { id:"bank", label: "Bank", minWidth: 50 },
-        { id:"rek", label: "Rekening", minWidth: 80 },
-        { id:"npwp", label: "NPWP", minWidth: 80 },
-    ];
-            //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
+    //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
     const columnsWithNumber = [4, 5, 6, 7, 9, 11, 13, 15, 17];
     //State
     const [rowNum, setRowNum] = useState(1);
     const emptyCell = Array(21).fill("");
     const initialRow = [1, ...emptyCell];
     const [tableData, setTableData] = useState([initialRow]);
+    const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
+    const [isSelecting, setIsSelecting] = useState(false);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
 
@@ -114,8 +92,7 @@ function BuatPengajuan(props) {
         setTableData(updatedData);
     }
     // The following function will make us able to select cells with mouse
-    const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
-    const [isSelecting, setIsSelecting] = useState(false);
+
 
     function handleCellMouseDown(rowIndex, colIndex) {
         setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
@@ -306,6 +283,9 @@ function BuatPengajuan(props) {
     async function handleSubmit(event){
         event.preventDefault();
         setIsPopup(false);
+        // Converting column info into data, then insert in existing tableData
+        const tableHead = columns.map(col => col.label)
+        const sendTable = [[...tableHead], ...tableData]
         // Grabbing input & select tag values
         const inputNama = document.getElementsByName("nama-pengisi")[0].value;
         const selectAjuan = document.getElementsByName("ajuan")[0].value;
@@ -316,7 +296,7 @@ function BuatPengajuan(props) {
         try {
             const response = await axios.post("http://localhost:3000/bendahara/ajuan-table" , {
                 textdata: inputArray,
-                tabledata: tableData,
+                tabledata: sendTable,
             })
             if (response.status === 200){
                 props.changeComponent("daftar-pengajuan")

@@ -384,7 +384,7 @@ function BuatPengajuan(props) {
                     </div>
                     <div className="form-submit">
                         <input type="button" value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>
-                        <input type="submit" value="Simpan Draft" name="save-draft" />
+                        {/* <input type="submit" value="Simpan Draft" name="save-draft" /> */}
                     </div>
                 </form>
             </div>

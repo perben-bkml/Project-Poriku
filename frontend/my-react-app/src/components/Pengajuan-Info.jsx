@@ -10,16 +10,20 @@ function Pengajuan(props) {
     return (
         <div className="pengajuan-info">
             <div className="info nomor">
-                <p>ID Pengajuan</p>
-                <Avatar className="info-avatar" sx={{ bgcolor: "#0a0f1b", width: 28, height: 28, fontSize:"1rem", marginTop: "5px", marginLeft:"35px"}}>{props.numbers}</Avatar>
+                <p>No. Pengajuan</p>
+                <Avatar className="info-avatar" sx={{ bgcolor: "#0a0f1b", width: 38, height: 38, fontSize:"0.9rem", marginTop: "2px", marginLeft:"35px"}}>{props.numbers}</Avatar>
             </div>
             <div className="info tanggal">
                 <p>Tanggal Pengajuan:</p>
-                <p className="info data">2000</p>
+                <p className="info data">{props.createDate}</p>
+            </div>
+            <div className="info setuju">
+                <p>Tanggal yang Disetujui:</p>
+                <p className="info data">{props.accDate}</p>
             </div>
             <div className="info status">
                 <p>Status Pengajuan:</p>
-                <p className="info data">Sudah</p>
+                <p className="info data">{props.status}</p>
             </div>
             <div className="info-ubah">
                 <RemoveRedEyeIcon sx={{fontSize: 30}}/>

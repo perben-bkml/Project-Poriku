@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 // Import components
 import Pengajuan from "./Pengajuan-Info"
 // Import material UI
@@ -6,11 +7,36 @@ import Pagination from '@mui/material/Pagination';
 
 
 function DaftarPengajuan(){
-
-    const testArray = ["1", "2", "3", "4", "5",]
-
+    // States
+    const [antrianData, setAntrianData] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("")
 
+    // Fetching antrian data from Google Sheets
+    const rowsPerPage = 5;
+    async function fetchAntrianData (page) {
+        try {
+            const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage }});
+            const { data: responseResult, realAllAntrianRows } = response.data;
+            setAntrianData(responseResult);
+            setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+        } catch (error) {
+            console.error("Error fetching data.", error);
+        }
+    }
+    useEffect(() => {
+        fetchAntrianData(currentPage); 
+    }, [currentPage])
+
+    // Handling Pagination Change
+    function hanldePaginationChange (event, value) {
+        setCurrentPage(value);
+    }
+
+    // const testArray = ["9999", "2", "3", "4", "5",]
+
+    // Handling Filters
     function handleFilterChange(event) {
         const option = event.target.value;
         setFilterSelect(option);
@@ -39,9 +65,16 @@ function DaftarPengajuan(){
                 </form>
             </div>
             <div className="pengajuan-content">
-                {testArray.reverse().map((data, index) => <Pengajuan key={index} numbers={data}/>)}
+                {antrianData.reverse().map((data, index) => 
+                    <Pengajuan 
+                    key={index} 
+                    numbers={data[0]}
+                    createDate={data[1]}
+                    accDate={data[6]}
+                    status={data[7]}
+                    />)}
             </div>
-            <Pagination className="pagination" size="medium" count={5} />
+            <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />
         </div>
     )
 }

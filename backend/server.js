@@ -65,7 +65,7 @@ app.post("/bendahara/ajuan-table", async (req, res) => {
         const request = await sheets.spreadsheets.values.get({spreadsheetId, range: allAntrianRange})
         const antrianRows = request.data.values;
         const lastFilledRows = antrianRows.length || 0;
-        // Add date to textdata
+        // Add date to beginning of textdata array
         textdata.unshift(d);
         // Handle tabledata
         const allTableRange = "'Write Table'!A:A"
@@ -101,6 +101,19 @@ app.post("/bendahara/ajuan-table", async (req, res) => {
             spreadsheetId,
             resource,
         });
+        // Assign Transaksi ID and Row number (Row number for edits)
+            // Getting posted Antrian Number
+        const newAntrianNumRange = `'Write Antrian'!A${startAntrianRow}:A${startAntrianRow}` 
+        const requestNewAntrianNum = await sheets.spreadsheets.values.get({spreadsheetId, range: newAntrianNumRange});
+        const getNewAntrianNum = requestNewAntrianNum.data.values;
+        const newAntrianNum = getNewAntrianNum[0][0]
+            // Getting posted Table row numbers
+        const postedTableRow = tabledata.length - 1;
+            // Writing it to desired table
+        const idAndRowNum = [ `TRANS_ID:${newAntrianNum}`, postedTableRow ];
+        const idAndRowNumRange = `'Write Table'!X${startTableRow}:Y${startTableRow}`;
+        resource = { values: [idAndRowNum] }
+        const writeIdAndRowNum = await sheets.spreadsheets.values.update({spreadsheetId, range: idAndRowNumRange, valueInputOption: "RAW", resource,})
 
         // Coloring Gsheet Table header & giving borders
         resource = "";

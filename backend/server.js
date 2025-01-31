@@ -182,6 +182,40 @@ app.post("/bendahara/ajuan-table", async (req, res) => {
 })
 
 
+// Find, get, and return existing data based on user input
+    // This part still has no frontend handler
+app.get("/bendahara/data-transaksi", async (req, res) => {
+    try {
+        const transaksiKeyword = req.query;
+        // Finding keyword range with data from X & Y columns on Write Table Sheet
+        const matchRange = "'Write Table'!X:Y";
+        const matchResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: matchRange });
+        const matchResponseRows = matchResponse.data.values || [];
+        // Matching range with user inputted keyword
+        let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
+        let keywordTableRow = null;
+        for (let i = 0; i < matchResponseRows.length; i++) {
+            if (matchResponseRows[i][0] === transaksiKeyword) {
+                keywordRow = i + 1 + 1; //Convert to 1-based row index. Add another +1 to exclude header when grabbing table data.
+                keywordTableRow = matchResponseRows[i][1];
+                break;
+            }
+        }
+        if (!keywordRow || !keywordTableRow){
+            return res.status(400).json({ error: "Keyword not found" })
+        }
+        // Fetch entire table data based on table row data
+        let endKeywordTableRow = keywordTableRow - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
+        const keywordTableRange = `'Write Table'!A${keywordRow}:V${endKeywordTableRow}`;
+        const keywordTableRespose = await sheets.spreadsheets.values.get({ spreadsheetId, range: keywordTableRange });
+        const keywordTableData = keywordTableRespose.data.values || [];
+        // Return back to only the grabbed table to frontend
+        res.json({ data: keywordTableData })
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+})
 
 
 // Ports

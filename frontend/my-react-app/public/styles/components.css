@@ -154,6 +154,13 @@
     color: #0a0f1b;
 }
 
+.info-avatar {
+    height: 100%;
+    width: 115px;
+    display: flex;
+    justify-content: center;
+}
+
 .info-ubah {
     display: flex;
     padding-left: 50px;
@@ -384,7 +391,12 @@
     .pengajuan-info {
         height: 85px;
         width: 90%;
-        font-size: 1rem;
+        font-size: 0.9rem;
+        padding-left: 10px;
+    }
+
+    .info-avatar {
+       width: 95px;
     }
 
     .info-ubah {

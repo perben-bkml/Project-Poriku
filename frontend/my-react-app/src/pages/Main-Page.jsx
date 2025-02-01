@@ -4,6 +4,7 @@ import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
 // Material UI icons
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ChecklistIcon from '@mui/icons-material/Checklist';
@@ -36,12 +37,23 @@ function MainPage(props) {
         return newText
       }
 
+    // Handle invisible component (invisible on button)
+    function handleInvisibleComponent(type) {
+        setButtonSelect(type)
+    }
+
+
+    // Rendering Components
     function renderComponent() {
         switch (buttonSelect) {
             case "daftar-pengajuan":
-                return <DaftarPengajuan />;
+                return <DaftarPengajuan invisible={handleInvisibleComponent} />;
             case "buat-pengajuan":
                 return <BuatPengajuan changeComponent={setButtonSelect}/>;
+            case "lihat-pengajuan":
+                return <EditPengajuan />
+            case "edit-pengajuan":
+                return <EditPengajuan />
             default:
                 return null;
         }

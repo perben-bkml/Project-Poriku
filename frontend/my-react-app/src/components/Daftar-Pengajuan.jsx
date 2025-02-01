@@ -6,7 +6,7 @@ import Pengajuan from "./Pengajuan-Info"
 import Pagination from '@mui/material/Pagination';
 
 
-function DaftarPengajuan(){
+function DaftarPengajuan(props){
     // States
     const [antrianData, setAntrianData] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -34,7 +34,6 @@ function DaftarPengajuan(){
         setCurrentPage(value);
     }
 
-    // const testArray = ["9999", "2", "3", "4", "5",]
 
     // Handling Filters
     function handleFilterChange(event) {
@@ -72,6 +71,7 @@ function DaftarPengajuan(){
                     createDate={data[1]}
                     accDate={data[6]}
                     status={data[7]}
+                    invisible={props.invisible}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />

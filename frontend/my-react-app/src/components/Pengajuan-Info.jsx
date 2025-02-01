@@ -29,8 +29,8 @@ function Pengajuan(props) {
                 <p className="info data">{props.status}</p>
             </div>
             <div className="info-ubah">
-                <RemoveRedEyeIcon sx={{fontSize: 30}}/>
-                <EditIcon sx={{fontSize: 30}} />
+                <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("lihat-pengajuan")}/>
+                <EditIcon sx={{fontSize: 30}} onClick={props.invisible("edit-pengajuan")}/>
                 <DeleteForeverIcon sx={{fontSize: 30}} />
 
             </div>

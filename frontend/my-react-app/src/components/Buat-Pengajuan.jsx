@@ -28,6 +28,7 @@ function BuatPengajuan(props) {
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
 
+    //Handle how many rows the user wants
     function handleRowChange(event) {
         const userRowValue = parseInt(event.target.value)
         setRowNum(userRowValue);
@@ -66,7 +67,7 @@ function BuatPengajuan(props) {
             return "Rumus tidak valid."
         }
     }
-
+    // Handling text area changes
     function handleCellChange(cellrowIndex, cellcolumnIndex, value, textareaRef) {
         const updatedData = [...tableData];
         updatedData[cellrowIndex][cellcolumnIndex] = value;
@@ -91,9 +92,8 @@ function BuatPengajuan(props) {
         updatedData[cellrowIndex][cellcolumnIndex] = updatedValue;
         setTableData(updatedData);
     }
+
     // The following function will make us able to select cells with mouse
-
-
     function handleCellMouseDown(rowIndex, colIndex) {
         setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
         setIsSelecting(true);
@@ -120,6 +120,7 @@ function BuatPengajuan(props) {
 
         return rowIndex >= rowStart && rowIndex <= rowEnd && colIndex >= colStart && colIndex <= colEnd;
     }
+    // Deleting all selected textarea contents
     function clearSelectedCells() {
         if (!mouseSelectRange.start || !mouseSelectRange.end) return;
 
@@ -139,8 +140,6 @@ function BuatPengajuan(props) {
 
         setTableData(updatedData);
     }
-
-
 
     // This functions enable to navigate through cells with arrow
     function focusCell(row, col) {
@@ -163,7 +162,6 @@ function BuatPengajuan(props) {
             textarea.classList.add("selected-cell")
             cell.classList.add("selected-cell")
         };
-
     }
         //Adding new row on the bottom of the page when pressing enter
     function addNewRow() {
@@ -203,7 +201,7 @@ function BuatPengajuan(props) {
         setTimeout(adjustAllHeight, 0);
     }
 
-    // This functions enable to navigate through cells with arrow
+    // Handling keyboard presses
     function handleCellKeyDown(event, rowIndex, colIndex) {
         const numRows = tableData.length;
         const numCols = tableData[0].length;
@@ -258,6 +256,7 @@ function BuatPengajuan(props) {
             return sum + (isNaN(value) ? 0 : value);
         }, 0);
     }
+    // Determining what columns that will accept numbers
     const summableColumns = {
         tagihan: 4,
         dpp: 5,

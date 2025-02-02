@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import * as math from "mathjs";
 import axios from "axios";
 
@@ -18,7 +18,9 @@ import { TableFooter } from "@mui/material";
 function EditPengajuan(props) {
     //Determining to see if we "lihat" or "edit"
     const [componentType, setComponentType] = useState("")
-    setComponentType(props.type)
+    useEffect(() => {
+        setComponentType(props.type);
+    }, [props.type] )
 
     //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
     const columnsWithNumber = [4, 5, 6, 7, 9, 11, 13, 15, 17];
@@ -32,11 +34,28 @@ function EditPengajuan(props) {
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
 
+
+    //Fetching table data from backend to be shown
+    async function fetchAntrianTable() {
+        try {
+            const tableKeyword = `TRANS_ID:${props.passedData[0]}`
+            const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
+            setTableData(response.data.data || []);
+            setRowNum(response.data.data.length);
+        } catch (error) {
+            console.log("Failed sending Keyword.", error)
+        }
+    }
+    useEffect(() => {
+        fetchAntrianTable();
+    }, [props.keyword])
+
+
+    //Handle how many rows the user wants
     function handleRowChange(event) {
         const userRowValue = parseInt(event.target.value)
         setRowNum(userRowValue);
     }
-
     function handleRowBlur(event) {
         const userRowValue = parseInt(event.target.value);
         setRowNum(userRowValue);
@@ -70,7 +89,7 @@ function EditPengajuan(props) {
             return "Rumus tidak valid."
         }
     }
-
+    // Handling text area changes
     function handleCellChange(cellrowIndex, cellcolumnIndex, value, textareaRef) {
         const updatedData = [...tableData];
         updatedData[cellrowIndex][cellcolumnIndex] = value;
@@ -79,7 +98,6 @@ function EditPengajuan(props) {
         textareaRef.style.height = "auto";
         textareaRef.style.height = textareaRef.scrollHeight + "px";
     }
-
     function handleCellBlur (cellrowIndex, cellcolumnIndex, value) {
         //This will detect if the content inside the textarea is normal number or a math equation
         let updatedValue = value;
@@ -95,9 +113,8 @@ function EditPengajuan(props) {
         updatedData[cellrowIndex][cellcolumnIndex] = updatedValue;
         setTableData(updatedData);
     }
+
     // The following function will make us able to select cells with mouse
-
-
     function handleCellMouseDown(rowIndex, colIndex) {
         setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
         setIsSelecting(true);
@@ -124,6 +141,7 @@ function EditPengajuan(props) {
 
         return rowIndex >= rowStart && rowIndex <= rowEnd && colIndex >= colStart && colIndex <= colEnd;
     }
+    // Deleting all selected textarea contents
     function clearSelectedCells() {
         if (!mouseSelectRange.start || !mouseSelectRange.end) return;
 
@@ -143,8 +161,6 @@ function EditPengajuan(props) {
 
         setTableData(updatedData);
     }
-
-
 
     // This functions enable to navigate through cells with arrow
     function focusCell(row, col) {
@@ -167,7 +183,6 @@ function EditPengajuan(props) {
             textarea.classList.add("selected-cell")
             cell.classList.add("selected-cell")
         };
-
     }
         //Adding new row on the bottom of the page when pressing enter
     function addNewRow() {
@@ -207,7 +222,7 @@ function EditPengajuan(props) {
         setTimeout(adjustAllHeight, 0);
     }
 
-    // This functions enable to navigate through cells with arrow
+    // Handling keyboard presses
     function handleCellKeyDown(event, rowIndex, colIndex) {
         const numRows = tableData.length;
         const numCols = tableData[0].length;
@@ -262,6 +277,7 @@ function EditPengajuan(props) {
             return sum + (isNaN(value) ? 0 : value);
         }, 0);
     }
+    // Determining what columns that will accept numbers
     const summableColumns = {
         tagihan: 4,
         dpp: 5,
@@ -291,12 +307,20 @@ function EditPengajuan(props) {
         const tableHead = columns.map(col => col.label)
         const sendTable = [[...tableHead], ...tableData]
         // Grabbing input & select tag values
-        const inputNama = document.getElementsByName("nama-pengisi")[0].value;
+        let inputNama = document.getElementsByName("nama-pengisi")[0].value;
         const selectAjuan = document.getElementsByName("ajuan")[0].value;
-        const inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
+        let inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
         const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
+        if (inputNama === "") {
+            inputNama = props.passedData[1];
+        }
+        if (inputJumlah === "") {
+            inputJumlah = props.passedData[3]
+        }
+
         const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
         // Sending to backend
+            // Need to edit so handle patch instead of post. No backend handler yet.
         try {
             const response = await axios.post("http://localhost:3000/bendahara/ajuan-table" , {
                 textdata: inputArray,
@@ -315,29 +339,42 @@ function EditPengajuan(props) {
     return (
         <div className="buat-pengajuan bg-card" onMouseUp={handleCellMouseUp}>
             <div className="pengajuan-desc">
-                <p>Ketentuan Pengajuan Pencairan GUP/TUP (Wajib Dibaca!):</p>
-                <button>Baca Ketentuan</button>
+                <p>Antrian Pengajuan Nomor: <span/> {props.passedData[5]}</p>
+                <p>Tanggal Pengajuan: <span/> {props.passedData[6]}</p>
+                <p>Tanggal Disetujui: <span/> {props.passedData[5]}</p>
+                <p>Status Pengajuan: <span/> {props.passedData[5]}</p>
             </div>
             <div className="pengajuan-content">
                 <form className="pengajuan-form" onSubmit={handleSubmit}>
-                    <div className="pengajuan-form-textdata">
+                    <div className="pengajuan-edit-textdata pengajuan-form-textdata">
                         <label htmlFor="aju-name">Nama Pengisi Form:</label>
-                        <input type="text" id="aju-name" name="nama-pengisi"required/>
+                        <input type="text" id="aju-name" name="nama-pengisi" required readOnly={componentType === "lihat"} placeholder={props.passedData[1]} />
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
-                        <select name="ajuan" id="ajuan">
-                            <option value="gup">GUP</option>
-                            <option value="ptup">PTUP</option>
+                        <select name="ajuan" id="ajuan" disabled={componentType === "lihat"}>
+                            <option value={props.passedData[2]}>{props.passedData[2].toUpperCase()}</option>
+                            <option value={props.passedData[2] === "gup"? "ptup": "gup"}>{props.passedData[2] === "gup" ? "PTUP" : "GUP"}</option>
                         </select>
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
-                        <input type="text" id="aju-number" placeholder="Di isi angka" name="jumlah-ajuan" onChange={(e)=> e.target.value = numberFormats(e.target.value.replace(/[^\d]/g, ""))} required/>
+                        <input type="text" id="aju-number" placeholder={props.passedData[3]} name="jumlah-ajuan"
+                            onChange={(e)=> e.target.value = numberFormats(e.target.value.replace(/[^\d]/g, ""))} 
+                            required
+                            readOnly={componentType === "lihat"}
+                            />
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
-                        <input type="date" id="aju-date" name="tanggal-ajuan"/>
+                        <input type="date" id="aju-date" name="tanggal-ajuan" readOnly={componentType === "lihat"} defaultValue={props.passedData[4]}/>
                     </div>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
                             <p style={{fontWeight: 600, fontSize: "1.1rem"}}>Input Data Pengajuan</p>
                             <label>Tentukan Jumlah Row Tabel:</label>
-                            <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
+                            <input 
+                                type="number"
+                                value={rowNum > 0 ? rowNum : ""}
+                                onChange={handleRowChange}
+                                onBlur={handleRowBlur}
+                                min="0" 
+                                readOnly={componentType === "lihat"}
+                                />
                         </div>
                         <TableContainer className="table-container" sx={{maxHeight: 595}}>
                             <Table stickyHeader aria-label="sticky table">
@@ -368,7 +405,9 @@ function EditPengajuan(props) {
                                                         onChange={(input) => handleCellChange(rowIndex, colIndex, input.target.value, input.target)}
                                                         onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
                                                         onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
-                                                        onPaste={(event) => handlePaste(event, rowIndex, colIndex)}/>
+                                                        onPaste={(event) => handlePaste(event, rowIndex, colIndex)}
+                                                        readOnly={componentType === "lihat"}
+                                                        />
                                                 </TableCell>
                                             ))}
                                         </TableRow>
@@ -387,7 +426,8 @@ function EditPengajuan(props) {
                         </TableContainer>
                     </div>
                     <div className="form-submit">
-                        <input type="button" value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>
+                        <input type="button" value="Kembali Ke Daftar" name="submit-all" onClick={props.invisible("daftar-pengajuan", {})}/>
+                        <input type="button" value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat"}/>
                     </div>
                 </form>
             </div>

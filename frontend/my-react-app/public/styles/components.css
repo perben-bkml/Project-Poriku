@@ -357,6 +357,17 @@
     align-items: center;
 }
 
+/* Lihat-Edit-Pengajuan Component Style */
+.pengajuan-edit-textdata {
+    margin-top: 10px;
+}
+.pengajuan-desc p {
+    margin-right: 80px;
+}
+.pengajuan-desc span {
+    padding-left: 20px;
+}
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {

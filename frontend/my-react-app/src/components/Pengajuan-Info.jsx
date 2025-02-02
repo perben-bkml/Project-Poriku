@@ -6,6 +6,16 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import Avatar from '@mui/material/Avatar';
 
 function Pengajuan(props) {
+    const passData = {
+        lastPage: props.userPagination,
+        keyword: props.numbers,
+        antriName: props.antriName,
+        antriType: props.antriType,
+        antriSum: props.antriSum,
+        antriDate: props.antriDate,
+        antriNum: props.numbers,
+        createDate: props.createDate,
+    }
 
     return (
         <div className="pengajuan-info">
@@ -29,10 +39,9 @@ function Pengajuan(props) {
                 <p className="info data">{props.status}</p>
             </div>
             <div className="info-ubah">
-                <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("lihat-pengajuan")}/>
-                <EditIcon sx={{fontSize: 30}} onClick={props.invisible("edit-pengajuan")}/>
+                <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("detail-pengajuan", passData)}/>
+                <EditIcon sx={{fontSize: 30}} onClick={props.invisible("edit-pengajuan", passData)}/>
                 <DeleteForeverIcon sx={{fontSize: 30}} />
-
             </div>
         </div>
     )

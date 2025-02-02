@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
@@ -15,8 +15,10 @@ function MainPage(props) {
     const whatMenu = props.menu;
     const getSubMenu = props.submenu;
 
-    // const [contentTitle, setContentTitle] = useState("")
-    const [buttonSelect, setButtonSelect] = useState(getSubMenu)
+    // States
+    const [buttonSelect, setButtonSelect] = useState(getSubMenu);
+    const [savedPagination, setSavedPagination] = useState(null);
+    const [antrianData, setAntrianData] = useState([]);
 
 
     // Dash button add and remove class to make it selected
@@ -28,6 +30,7 @@ function MainPage(props) {
 
         setButtonSelect(event.name)
         formatText(event.name)
+        setSavedPagination(null);
     }
     //Just converting into title name
     function formatText(input) {
@@ -38,22 +41,31 @@ function MainPage(props) {
       }
 
     // Handle invisible component (invisible on button)
-    function handleInvisibleComponent(type) {
-        setButtonSelect(type)
+    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate}) {
+        if (!lastPage) {
+            return () => {
+                setButtonSelect(compType);
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
+            }
+        } else {
+            return () => {
+                setButtonSelect(compType);
+                setSavedPagination(lastPage);
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
+            }
+        }   
     }
-
-
     // Rendering Components
     function renderComponent() {
         switch (buttonSelect) {
             case "daftar-pengajuan":
-                return <DaftarPengajuan invisible={handleInvisibleComponent} />;
+                return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination}/>;
             case "buat-pengajuan":
                 return <BuatPengajuan changeComponent={setButtonSelect}/>;
-            case "lihat-pengajuan":
-                return <EditPengajuan />
+            case "detail-pengajuan":
+                return <EditPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData}/>
             case "edit-pengajuan":
-                return <EditPengajuan />
+                return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData}/>
             default:
                 return null;
         }

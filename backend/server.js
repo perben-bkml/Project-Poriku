@@ -183,10 +183,9 @@ app.post("/bendahara/ajuan-table", async (req, res) => {
 
 
 // Find, get, and return existing data based on user input
-    // This part still has no frontend handler
 app.get("/bendahara/data-transaksi", async (req, res) => {
     try {
-        const transaksiKeyword = req.query;
+        const transaksiKeyword = req.query.tableKeyword;
         // Finding keyword range with data from X & Y columns on Write Table Sheet
         const matchRange = "'Write Table'!X:Y";
         const matchResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: matchRange });
@@ -205,10 +204,24 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
             return res.status(400).json({ error: "Keyword not found" })
         }
         // Fetch entire table data based on table row data
-        let endKeywordTableRow = keywordTableRow - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
+        let endKeywordTableRow = parseInt(keywordRow) + parseInt(keywordTableRow) - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
         const keywordTableRange = `'Write Table'!A${keywordRow}:V${endKeywordTableRow}`;
-        const keywordTableRespose = await sheets.spreadsheets.values.get({ spreadsheetId, range: keywordTableRange });
-        const keywordTableData = keywordTableRespose.data.values || [];
+        const keywordTableRespose = await sheets.spreadsheets.values.get({ 
+            spreadsheetId, 
+            range: keywordTableRange, 
+            majorDimension: "ROWS",  // Ensure data is returned row-wise
+            valueRenderOption: "UNFORMATTED_VALUE",  // Ensures empty cells are included
+        });
+        let keywordTableData = keywordTableRespose.data.values || [];
+        // Add empty rows to generate max 22 columns
+        const num_Columns = 22;
+        keywordTableData = keywordTableData.map(row => {
+            while (row.length < num_Columns) {
+                row.push("");
+            }
+            return row;
+        })
+        console.log(keywordTableData)
         // Return back to only the grabbed table to frontend
         res.json({ data: keywordTableData })
     } catch (error) {

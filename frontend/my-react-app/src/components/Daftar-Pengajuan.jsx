@@ -13,6 +13,13 @@ function DaftarPengajuan(props){
     const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("")
 
+    // Early pagination leftof
+    useEffect( () => {
+        if (props.userPagination) {
+            setCurrentPage(props.userPagination);
+        }
+    }, [props.userPagination]);
+
     // Fetching antrian data from Google Sheets
     const rowsPerPage = 5;
     async function fetchAntrianData (page) {
@@ -71,7 +78,13 @@ function DaftarPengajuan(props){
                     createDate={data[1]}
                     accDate={data[6]}
                     status={data[7]}
+                    userPagination={currentPage}
+                    // Below will be passed to Lihat-EditPengajuan
                     invisible={props.invisible}
+                    antriName={data[2]}
+                    antriType={data[3]}
+                    antriSum={data[4]}
+                    antriDate={data[5]}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />

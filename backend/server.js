@@ -8,7 +8,7 @@ import fs from "fs";
 
 // Initialize tools
 const app = express();
-const d = new Date();
+const d = new Date().getFullYear();
 // Middleware
 app.use(express.json());
 app.use(cors());
@@ -231,64 +231,141 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
 })
 
 // Patch/Updates table data based on edited data from user
-    app.patch("/bendahara/edit-table", async (req, res) => {
-        const {textdata, tabledata, tablePosition, antriPosition, lastTableEndRow} = req.body;
-        if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
-            return res.status(400).json({message: "Invalid Data."})  
-        }
-        try {
-            // Setting antrian data range
-            textdata.unshift(d);
-            const antrianColumnCount = textdata.length;
-            const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount);
-            const antrianRange = `'Write Antrian'!B${antriPosition}:${antrianColumnEnd}${antriPosition}`
-            // Setting table data range
-            const startTableRow = tablePosition;
-            const endTableRow = startTableRow + tabledata.length -1;
-            const tableColumnCount = tabledata[0].length;
-            const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
-            const tableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`;
-            // Getting existing tabledata to compare and adjust row number changes
-            const oldTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${lastTableEndRow}`;
-            let modifyRows = "";
-                // Getting sheet ID
-            const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
-            const sheet1 = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian");
-            const sheet2 = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
-            const antriSheetId = sheet1.properties.sheetId;
-            const tableSheetId = sheet2.properties.sheetId;
-                // Setting how many empty rows to add/delete
-            const endRowDifference = Math.abs(endTableRow - lastTableEndRow);
-            if (endTableRow > lastTableEndRow) {
-                modifyRows = { insertDimension: {
+app.patch("/bendahara/edit-table", async (req, res) => {
+    const {textdata, tabledata, tablePosition, antriPosition, lastTableEndRow} = req.body;
+    if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
+        return res.status(400).json({message: "Invalid Data."})  
+    }
+    try {
+        // Setting antrian data range
+        textdata.unshift(d);
+        const antrianColumnCount = textdata.length;
+        const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount);
+        const antrianRange = `'Write Antrian'!B${antriPosition}:${antrianColumnEnd}${antriPosition}`
+        // Setting table data range
+        const startTableRow = tablePosition;
+        const endTableRow = startTableRow + tabledata.length -1;
+        const tableColumnCount = tabledata[0].length;
+        const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
+        const tableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`;
+        // Getting existing tabledata to compare and adjust row number changes
+        const oldTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${lastTableEndRow}`;
+            // Getting sheet ID
+        // Get Sheet IDs
+        const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+        const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
+        const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
+
+        // For Border Style
+        const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
+
+        // Calculate Row Adjustments
+        const endRowDifference = Math.abs(endTableRow - lastTableEndRow);
+        let requests = [];
+
+        if (endTableRow > lastTableEndRow) {
+            // ADD empty rows if new data is longer
+            requests.push({
+                insertDimension: {
                     range: {
-                        sheetId: antriSheetId,
-                        dimensions: "ROWS",
-                        startIndex: lastTableEndRow, //Aiming the row below the last table Row, zero based index.
+                        sheetId: tableSheetId,
+                        dimension: "ROWS",
+                        startIndex: lastTableEndRow,
                         endIndex: lastTableEndRow + endRowDifference,
                     },
-                    inheritFromBefore: false
-                    }
+                    inheritFromBefore: false, // Ensures no formatting is copied
                 }
-            } else if (endTableRow < lastTableEndRow) {
-                modifyRows = { deleteDimension: {
+            });
+            // ADD border to style new empty rows
+            requests.push({
+                updateBorders: {
                     range: {
-                        sheetId: antriSheetId,
-                        dimensions: "ROWS",
-                        startIndex: lastTableEndRow - endRowDifference, //Aiming the row below the last table Row, zero based index.
-                        endIndex: endTableRow,
-                        },
-                    }
-                } 
-            }
-            console.log(antrianRange)
-            console.log(oldTableRange)
-            console.log(tableRange)
-        } catch (error) {
-            console.error("Error processing request:", error);
-            res.status(500).json({ message: "Server error." });
+                        sheetId: tableSheetId,
+                        startRowIndex: lastTableEndRow,  // Start from new rows
+                        endRowIndex: lastTableEndRow + endRowDifference, // Apply to inserted rows
+                        startColumnIndex: 0, //Starts from A
+                        endColumnIndex: tableColumnCount, // Apply to the whole table width
+                    },
+                    top: tableBorderStyle,
+                    bottom: tableBorderStyle,
+                    left: tableBorderStyle,
+                    right: tableBorderStyle,
+                    innerHorizontal: tableBorderStyle,
+                    innerVertical: tableBorderStyle,
+                }
+            })
+
+        } else if (endTableRow < lastTableEndRow) {
+            // DELETE extra rows if new data is shorter
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: tableSheetId,
+                        dimension: "ROWS",
+                        startIndex: endTableRow,
+                        endIndex: lastTableEndRow,
+                    },
+                }
+            });
         }
-    })
+
+        // Update Table Data (Preserves Formatting)
+        requests.push({
+            pasteData: {
+                coordinate: {
+                    sheetId: tableSheetId,
+                    rowIndex: startTableRow - 1, //Zero Based Index
+                    columnIndex: 0, //Start from A
+                },
+                data: tabledata.map(row => row.join("\t")).join("\n"),
+                type: "PASTE_VALUES", // Keeps formatting
+                delimiter: "\t",
+            },
+        });
+
+        // Update Antrian Data (Preserves Formatting)
+        requests.push({
+            pasteData: {
+                coordinate: {
+                    sheetId: antriSheetId,
+                    rowIndex: antriPosition - 1, //Zero based index
+                    columnIndex: 1, //Start from B
+                },
+                data: textdata.join("\t"),
+                type: "PASTE_VALUES",
+                delimiter: "\t",
+            },
+        });
+
+        // Update Row number info
+        requests.push({
+            pasteData: {
+                coordinate: {
+                    sheetId: tableSheetId,
+                    rowIndex: startTableRow - 1, //Zero based index
+                    columnIndex: 24, //Start from Y
+                },
+                data: `${tabledata.length - 1}`,
+                type: "PASTE_VALUES",
+                delimiter: "\t",
+            },
+        });
+
+        // Execute Batch Update
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            resource: { requests },
+        });
+
+        console.log("✅ Update successful!");
+
+        res.status(200).json({ message: "Table updated successfully." });
+
+    } catch (error) {
+        console.error("Error processing request:", error);
+        res.status(500).json({ message: "Server error." });
+    }
+})
 
 
 // Ports

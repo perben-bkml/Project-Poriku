@@ -278,7 +278,14 @@ function EditPengajuan(props) {
     // Handle footer table that sums up numbers
     function calculateColumnTotal(columnIndex) {
         return tableData.reduce((sum, row) => {
-            const value = parseInt(row[columnIndex].replace(/[^\d]/g, ""), 10);
+            const cellValue = row[columnIndex];
+    
+            // Ensure the value is a string before calling replace
+            const stringValue = typeof cellValue === "string" ? cellValue : String(cellValue || "0");
+    
+            // Remove non-digit characters and convert to number
+            const value = parseInt(stringValue.replace(/[^\d]/g, ""), 10);
+    
             return sum + (isNaN(value) ? 0 : value);
         }, 0);
     }

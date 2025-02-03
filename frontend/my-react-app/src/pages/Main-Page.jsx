@@ -63,9 +63,9 @@ function MainPage(props) {
             case "buat-pengajuan":
                 return <BuatPengajuan changeComponent={setButtonSelect}/>;
             case "detail-pengajuan":
-                return <EditPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData}/>
+                return <EditPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "edit-pengajuan":
-                return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData}/>
+                return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             default:
                 return null;
         }

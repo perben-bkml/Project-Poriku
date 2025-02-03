@@ -221,14 +221,74 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
             }
             return row;
         })
-        console.log(keywordTableData)
+
         // Return back to only the grabbed table to frontend
-        res.json({ data: keywordTableData })
+        res.json({ data: keywordTableData, keywordRowPos: keywordRow - 1, keywordEndRow: endKeywordTableRow })
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
+
+// Patch/Updates table data based on edited data from user
+    app.patch("/bendahara/edit-table", async (req, res) => {
+        const {textdata, tabledata, tablePosition, antriPosition, lastTableEndRow} = req.body;
+        if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
+            return res.status(400).json({message: "Invalid Data."})  
+        }
+        try {
+            // Setting antrian data range
+            textdata.unshift(d);
+            const antrianColumnCount = textdata.length;
+            const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount);
+            const antrianRange = `'Write Antrian'!B${antriPosition}:${antrianColumnEnd}${antriPosition}`
+            // Setting table data range
+            const startTableRow = tablePosition;
+            const endTableRow = startTableRow + tabledata.length -1;
+            const tableColumnCount = tabledata[0].length;
+            const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
+            const tableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`;
+            // Getting existing tabledata to compare and adjust row number changes
+            const oldTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${lastTableEndRow}`;
+            let modifyRows = "";
+                // Getting sheet ID
+            const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+            const sheet1 = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian");
+            const sheet2 = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
+            const antriSheetId = sheet1.properties.sheetId;
+            const tableSheetId = sheet2.properties.sheetId;
+                // Setting how many empty rows to add/delete
+            const endRowDifference = Math.abs(endTableRow - lastTableEndRow);
+            if (endTableRow > lastTableEndRow) {
+                modifyRows = { insertDimension: {
+                    range: {
+                        sheetId: antriSheetId,
+                        dimensions: "ROWS",
+                        startIndex: lastTableEndRow, //Aiming the row below the last table Row, zero based index.
+                        endIndex: lastTableEndRow + endRowDifference,
+                    },
+                    inheritFromBefore: false
+                    }
+                }
+            } else if (endTableRow < lastTableEndRow) {
+                modifyRows = { deleteDimension: {
+                    range: {
+                        sheetId: antriSheetId,
+                        dimensions: "ROWS",
+                        startIndex: lastTableEndRow - endRowDifference, //Aiming the row below the last table Row, zero based index.
+                        endIndex: endTableRow,
+                        },
+                    }
+                } 
+            }
+            console.log(antrianRange)
+            console.log(oldTableRange)
+            console.log(tableRange)
+        } catch (error) {
+            console.error("Error processing request:", error);
+            res.status(500).json({ message: "Server error." });
+        }
+    })
 
 
 // Ports

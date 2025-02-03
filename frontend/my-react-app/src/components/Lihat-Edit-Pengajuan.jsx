@@ -31,9 +31,12 @@ function EditPengajuan(props) {
     const [tableData, setTableData] = useState([initialRow]);
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
+    //State for reading and edit tabledata
+    const [keywordRowPos, setKeywordRowPos] = useState("");
+    const [keywordEndRow, setKeywordEndRow] = useState("");
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
-
+    //Container to send keyword row position
 
     //Fetching table data from backend to be shown
     async function fetchAntrianTable() {
@@ -42,6 +45,8 @@ function EditPengajuan(props) {
             const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
             setTableData(response.data.data || []);
             setRowNum(response.data.data.length);
+            setKeywordRowPos(response.data.keywordRowPos)
+            setKeywordEndRow(response.data.keywordEndRow)
         } catch (error) {
             console.log("Failed sending Keyword.", error)
         }
@@ -320,16 +325,18 @@ function EditPengajuan(props) {
 
         const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
         // Sending to backend
-            // Need to edit so handle patch instead of post. No backend handler yet.
+        const requestData = {
+            textdata: inputArray,
+            tabledata: sendTable,
+            tablePosition: keywordRowPos,
+            antriPosition: parseInt(props.passedData[5]) + 2,
+            lastTableEndRow: keywordEndRow,
+            };
         try {
-            const response = await axios.post("http://localhost:3000/bendahara/ajuan-table" , {
-                textdata: inputArray,
-                tabledata: sendTable,
-            })
+            const response = await axios.patch("http://localhost:3000/bendahara/edit-table" , requestData)
             if (response.status === 200){
                 props.changeComponent("daftar-pengajuan")
             }
-
         } catch (err) {
             console.log("Failed to send data.", err)
         }

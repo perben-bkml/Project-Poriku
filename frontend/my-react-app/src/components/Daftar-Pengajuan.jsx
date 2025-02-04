@@ -60,8 +60,8 @@ function DaftarPengajuan(props){
         // Send data to backend to be deleted
         console.log(delData)
         try {
-            const sendData = { delKeyword: delData.keyword }
-            const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { data: sendData })
+            const tableKeyword = delData.keyword
+            const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { params: { tableKeyword } })
         } catch (error) {
             console.log("Failed to send data.", error)
         }

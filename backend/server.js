@@ -33,21 +33,22 @@ app.get("/bendahara/antrian", async (req, res) => {
     try {
         const { page = 1, limit = 5 } = req.query;
 
-        // Finding out how many antrian rows exist
-        const getAllAntrianRange = "'Write Antrian'!A3:A"
-        const getAllAntrianRows = await sheets.spreadsheets.values.get({spreadsheetId, range: getAllAntrianRange,});
-        const allAntrianRows = getAllAntrianRows.data.values || [];
-        const realAllAntrianRows = allAntrianRows.length;
-
-        // Get data with pagination
+        // Set Pagination Range
         const startGetAntrianRow = ((page - 1) * limit + 1) + 2;  //Calculate start row with 1-based index, +2 because row starts from A3
         const endGetAntrianRow = startGetAntrianRow + Number(limit) -1;
         const getShowAntrianRange = `'Write Antrian'!A${startGetAntrianRow}:H${endGetAntrianRow}`;
-        const getAntrianResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: getShowAntrianRange, });
+        // Combine Pagination range
+        const antrianRanges = [
+            "'Write Antrian'!A3:A",  //all antrian range
+            getShowAntrianRange,
+        ];
+        const getAntrianResponses = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: antrianRanges, });
+        const allAntrianRow = getAntrianResponses.data.valueRanges[0].values || [];
+        const realAllAntrianRows = allAntrianRow.length; //Finding out how many antrian rows exist
 
-        const getPaginatedAntrian = getAntrianResponse.data.values || [];
-
-        res.json({ data: getPaginatedAntrian, realAllAntrianRows })
+        const paginatedAntrian = getAntrianResponses.data.valueRanges[1].values || []; //Get data with pagination
+        console.log(realAllAntrianRows)
+        res.json({ data: paginatedAntrian, realAllAntrianRows })
 
     } catch (error) {
         console.error(error);
@@ -369,26 +370,40 @@ app.patch("/bendahara/edit-table", async (req, res) => {
 
 // Delete Antrian and Tabledata based on keyword
 app.delete("/bendahara/delete-ajuan", async (req, res) => {
-    const {delKeyword} = req.body;
+    const delKeyword = req.query.tableKeyword;
+    const delTableKeyword = `TRANS_ID:${delKeyword}`
     try {
-        // Finding keyword range with data from X & Y columns on Write Table Sheet
-         const matchRange = "'Write Table'!X:Y";
-         const matchResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: matchRange });
-         const matchResponseRows = matchResponse.data.values || [];
+        // Finding keyword range with data from X & Y columns and A column on Write Table and Write Antrian Sheet 
+         const matchRange = [
+            "'Write Table'!X:Y",  //Table data Range
+            "'Write Antrian'!A:A", //Antrian data Range
+            ];
+         const matchResponse = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: matchRange });
+         const responseTable = matchResponse.data.valueRanges[0].values || [];
+         const responseAntrian = matchResponse.data.valueRanges[1].values || [];
          // Matching range with user inputted keyword
          let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
          let keywordTableRow = null;
-         for (let i = 0; i < matchResponseRows.length; i++) {
-             if (matchResponseRows[i][0] === transaksiKeyword) {
+         let keywordAntrian = null;
+         for (let i = 0; i < responseTable.length; i++) {
+             if (responseTable[i][0] === delTableKeyword) {
                  keywordRow = i + 1 ; //Convert to 1-based row index.
-                 keywordTableRow = matchResponseRows[i][1]; //Getting the number of rows stated on Column Y
+                 keywordTableRow = responseTable[i][1]; //Getting the number of rows stated on Column Y
                  break;
              }
          }
-         if (!keywordRow || !keywordTableRow){
+         for (let i = 0; i < responseAntrian.length; i++) {
+            if (responseAntrian[i][0] === delKeyword) {
+                keywordAntrian = i + 1; //Convert to 1-based row index
+                break;
+            }
+         }
+         if (!keywordRow || !keywordTableRow || !keywordAntrian){
              return res.status(400).json({ error: "Keyword not found" })
          }
-
+         console.log(keywordAntrian)
+         console.log(keywordRow)
+         console.log(keywordTableRow);
 
     } catch (error) {
         console.error("Error processing request:", error);

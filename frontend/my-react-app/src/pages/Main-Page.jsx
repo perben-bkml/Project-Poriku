@@ -5,6 +5,7 @@ import BuatPengajuan from "../components/Buat-Pengajuan";
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
+import Popup from "../components/Popup";
 // Material UI icons
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ChecklistIcon from '@mui/icons-material/Checklist';
@@ -70,7 +71,7 @@ function MainPage(props) {
                 return null;
         }
     }
-
+    
     return (
         <div>
             <Navbar />

@@ -367,6 +367,34 @@ app.patch("/bendahara/edit-table", async (req, res) => {
     }
 })
 
+// Delete Antrian and Tabledata based on keyword
+app.delete("/bendahara/delete-ajuan", async (req, res) => {
+    const {delKeyword} = req.body;
+    try {
+        // Finding keyword range with data from X & Y columns on Write Table Sheet
+         const matchRange = "'Write Table'!X:Y";
+         const matchResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: matchRange });
+         const matchResponseRows = matchResponse.data.values || [];
+         // Matching range with user inputted keyword
+         let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
+         let keywordTableRow = null;
+         for (let i = 0; i < matchResponseRows.length; i++) {
+             if (matchResponseRows[i][0] === transaksiKeyword) {
+                 keywordRow = i + 1 ; //Convert to 1-based row index.
+                 keywordTableRow = matchResponseRows[i][1]; //Getting the number of rows stated on Column Y
+                 break;
+             }
+         }
+         if (!keywordRow || !keywordTableRow){
+             return res.status(400).json({ error: "Keyword not found" })
+         }
+
+
+    } catch (error) {
+        console.error("Error processing request:", error);
+        res.status(500).json({ message: "Server error." });
+    }
+})
 
 // Ports
 app.listen(3000, () => {

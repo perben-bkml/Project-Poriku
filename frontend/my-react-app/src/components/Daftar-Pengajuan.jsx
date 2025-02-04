@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 // Import components
 import Pengajuan from "./Pengajuan-Info"
+import Popup from "./Popup";
 // Import material UI
 import Pagination from '@mui/material/Pagination';
 
@@ -12,6 +13,8 @@ function DaftarPengajuan(props){
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("")
+    const [isDelPopup, setIsDelPopup] = useState(false);
+    const [delData, setDelData] = useState({});
 
     // Early pagination leftof
     useEffect( () => {
@@ -39,6 +42,30 @@ function DaftarPengajuan(props){
     // Handling Pagination Change
     function hanldePaginationChange (event, value) {
         setCurrentPage(value);
+    }
+
+    // Handle delete button Popup
+    function handleDelPopup(passedData){
+        if (!isDelPopup) {
+            setIsDelPopup(true);
+            setDelData(passedData);
+        } else {
+            setIsDelPopup(false);
+        }
+    }
+    // Handle delete daftar-pengajuan
+    async function handleDelPengajuan(){
+        // Closing delete popup
+        handleDelPopup();
+        // Send data to backend to be deleted
+        console.log(delData)
+        try {
+            const sendData = { delKeyword: delData.keyword }
+            const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { data: sendData })
+        } catch (error) {
+            console.log("Failed to send data.", error)
+        }
+
     }
 
 
@@ -85,9 +112,11 @@ function DaftarPengajuan(props){
                     antriType={data[3]}
                     antriSum={data[4]}
                     antriDate={data[5]}
+                    handleDelPopup={handleDelPopup}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />
+            {isDelPopup && <Popup type="delete" whenCancel={handleDelPopup} whenDel={handleDelPengajuan}/>}
         </div>
     )
 }

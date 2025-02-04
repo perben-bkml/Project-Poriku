@@ -41,7 +41,7 @@ function Pengajuan(props) {
             <div className="info-ubah">
                 <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("detail-pengajuan", passData)}/>
                 <EditIcon sx={{fontSize: 30}} onClick={props.invisible("edit-pengajuan", passData)}/>
-                <DeleteForeverIcon sx={{fontSize: 30}} />
+                <DeleteForeverIcon sx={{fontSize: 30}} onClick={() => props.handleDelPopup(passData)} />
             </div>
         </div>
     )

@@ -47,7 +47,6 @@ app.get("/bendahara/antrian", async (req, res) => {
         const realAllAntrianRows = allAntrianRow.length; //Finding out how many antrian rows exist
 
         const paginatedAntrian = getAntrianResponses.data.valueRanges[1].values || []; //Get data with pagination
-        console.log(realAllAntrianRows)
         res.json({ data: paginatedAntrian, realAllAntrianRows })
 
     } catch (error) {
@@ -58,26 +57,32 @@ app.get("/bendahara/antrian", async (req, res) => {
 
 
 // Write data from table on sheet
-app.post("/bendahara/ajuan-table", async (req, res) => {
+app.post("/bendahara/buat-ajuan", async (req, res) => {
     const {textdata, tabledata} = req.body;
     if (textdata && tabledata) {
-        // Handle textdata/input data antrian
-        const allAntrianRange = "'Write Antrian'!A:A"
-        const request = await sheets.spreadsheets.values.get({spreadsheetId, range: allAntrianRange})
-        const antrianRows = request.data.values;
-        const lastFilledRows = antrianRows.length || 0;
+        // Get textdata/input data antrian and tabledata
+        const ranges = [
+            "'Write Antrian'!A:A",
+            "'Write Table'!A:A",
+            "'Write Antrian'!Q1:Q1"  //Getting antrian ID counter
+        ]
+        const allRequest = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: ranges });
+        const responseAntrian = allRequest.data.valueRanges[0].values || [];
+        const responseTable = allRequest.data.valueRanges[1].values || [];
+        const responseId = allRequest.data.valueRanges[2].values || [];
+
+        const lastFilledRows = responseAntrian.length || 0;
+        const lastTableRows = responseTable.length || [];
         // Add date to beginning of textdata array
         textdata.unshift(d);
-        // Handle tabledata
-        const allTableRange = "'Write Table'!A:A"
-        const request2 = await sheets.spreadsheets.values.get({spreadsheetId, range: allTableRange})
-        const tableRows = request2.data.values;
-        const lastTableRows = tableRows.length || [];
+        // Add counter increment and unshift to textdata
+        const newIdCounter = parseInt(responseId) + 1;
+        textdata.unshift(newIdCounter)
         // Posting on Write Antrian
         const startAntrianRow = lastFilledRows + 1;
         const antrianColumnCount = textdata.length;
-        const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount); //Convert to letter. No -1 because we start writing from B.
-        const newAntrianRange = `'Write Antrian'!B${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
+        const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount); //Convert to letter.
+        const newAntrianRange = `'Write Antrian'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
         // Posting on Write Table
         const startTableRow = lastTableRows + 3;
         const endTableRow = startTableRow + tabledata.length -1;
@@ -94,6 +99,10 @@ app.post("/bendahara/ajuan-table", async (req, res) => {
                 {
                     range: newTableRange,
                     values: tabledata,
+                },
+                {
+                    range: "'Write Antrian'!Q1:Q1",
+                    values: [[newIdCounter]],
                 },
             ],
             valueInputOption: "RAW",
@@ -383,8 +392,8 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
          const responseAntrian = matchResponse.data.valueRanges[1].values || [];
          // Matching range with user inputted keyword
          let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
-         let keywordTableRow = null;
-         let keywordAntrian = null;
+         let keywordTableRow = null;  //To get how long the row is on the keyword table data.
+         let keywordAntrian = null; //To get antrian row range.
          for (let i = 0; i < responseTable.length; i++) {
              if (responseTable[i][0] === delTableKeyword) {
                  keywordRow = i + 1 ; //Convert to 1-based row index.
@@ -401,9 +410,43 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
          if (!keywordRow || !keywordTableRow || !keywordAntrian){
              return res.status(400).json({ error: "Keyword not found" })
          }
-         console.log(keywordAntrian)
-         console.log(keywordRow)
-         console.log(keywordTableRow);
+        //  Delete Rows
+            // Find Sheets ID
+        const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+        const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
+        const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
+            // Create the batch update request
+        const batchRequest = {
+            requests: [
+                { // Delete row in Antri Sheet
+                    deleteDimension: {
+                        range: {
+                            sheetId: antriSheetId,
+                            dimension: "ROWS",
+                            startIndex: keywordAntrian - 1,  //Zero-based index
+                            endIndex: keywordAntrian
+                        }
+                    }
+                },
+                { // Delete row in Table Sheet
+                    deleteDimension: {
+                        range: {
+                            sheetId: tableSheetId,
+                            dimension: "ROWS",
+                            startIndex: keywordRow - 3, //Zero based index. Add -2 to delete two columns above
+                            endIndex: parseInt(keywordRow) + parseInt(keywordTableRow) //Zero based index.
+                        }
+                    }
+                }
+            ]
+        };
+        // Send the batch update request
+        const result = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            resource: batchRequest
+        });
+        console.log("Successfully delete data.")
+        res.status(200).json({ message: "Table Deleted successfully." });
 
     } catch (error) {
         console.error("Error processing request:", error);

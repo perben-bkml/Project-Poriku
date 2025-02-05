@@ -62,6 +62,9 @@ function DaftarPengajuan(props){
         try {
             const tableKeyword = delData.keyword
             const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { params: { tableKeyword } })
+            if (response.status === 200){
+                fetchAntrianData(currentPage);
+            }
         } catch (error) {
             console.log("Failed to send data.", error)
         }

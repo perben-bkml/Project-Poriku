@@ -293,7 +293,7 @@ function BuatPengajuan(props) {
         const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
         // Sending to backend
         try {
-            const response = await axios.post("http://localhost:3000/bendahara/ajuan-table" , {
+            const response = await axios.post("http://localhost:3000/bendahara/buat-ajuan" , {
                 textdata: inputArray,
                 tabledata: sendTable,
             })

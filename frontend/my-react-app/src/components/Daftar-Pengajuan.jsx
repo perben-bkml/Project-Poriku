@@ -58,7 +58,6 @@ function DaftarPengajuan(props){
         // Closing delete popup
         handleDelPopup();
         // Send data to backend to be deleted
-        console.log(delData)
         try {
             const tableKeyword = delData.keyword
             const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { params: { tableKeyword } })

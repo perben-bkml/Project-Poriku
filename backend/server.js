@@ -31,12 +31,12 @@ const spreadsheetId = "1IepWjVRt8qKtZ2X3UxPIyPZC_TziOXU9iqF9UQreFDk";
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
     try {
-        const { page = 1, limit = 5 } = req.query;
+        const { page = 1, limit = 5 } = req.query; //Page=1 limit=5 is default. changed by req.query.
 
         // Set Pagination Range
         const startGetAntrianRow = ((page - 1) * limit + 1) + 2;  //Calculate start row with 1-based index, +2 because row starts from A3
         const endGetAntrianRow = startGetAntrianRow + Number(limit) -1;
-        const getShowAntrianRange = `'Write Antrian'!A${startGetAntrianRow}:H${endGetAntrianRow}`;
+        const getShowAntrianRange = `'Write Antrian'!A${startGetAntrianRow}:L${endGetAntrianRow}`;
         // Combine Pagination range
         const antrianRanges = [
             "'Write Antrian'!A3:A",  //all antrian range
@@ -46,7 +46,15 @@ app.get("/bendahara/antrian", async (req, res) => {
         const allAntrianRow = getAntrianResponses.data.valueRanges[0].values || [];
         const realAllAntrianRows = allAntrianRow.length; //Finding out how many antrian rows exist
 
-        const paginatedAntrian = getAntrianResponses.data.valueRanges[1].values || []; //Get data with pagination
+        let paginatedAntrian = getAntrianResponses.data.valueRanges[1].values || []; //Get data with pagination
+         // Add empty rows to generate max 12 columns
+         const num_Columns = 12;
+         paginatedAntrian = paginatedAntrian.map(row => {
+             while (row.length < num_Columns) {
+                 row.push("");
+             }
+             return row;
+         })
         res.json({ data: paginatedAntrian, realAllAntrianRows })
 
     } catch (error) {

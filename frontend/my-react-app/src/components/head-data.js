@@ -23,4 +23,18 @@ const columns = [
     { id:"npwp", label: "NPWP", minWidth: 80 },
 ];
 
-export default columns;
+const columns2 = [ 
+    { id:"num", label: "No.", minWidth: 5 },
+    { id:"getdate", label: "Tanggal diajukan", minWidth: 40 },
+    { id:"nama", label: "Nama", minWidth: 40 },
+    { id:"jenis", label: "Jenis", minWidth: 40 },
+    { id:"nominal", label: "Nominal", minWidth: 60 },
+    { id:"reqdate", label: "Request Tanggal", minWidth: 40 },
+    { id:"accdate", label: "Tanggal Disetujui", minWidth: 40 },
+    { id:"stat", label: "Status", minWidth: 40 },
+    { id:"drpp", label: "No. DRPP", minWidth: 40 },
+    { id:"spp", label: "No. SPP", minWidth: 40 },
+    { id:"spm", label: "No. SPM", minWidth: 40 },
+    { id:"ukerja", label: "Unit Kerja", minWidth: 40 },
+]
+export { columns, columns2 };

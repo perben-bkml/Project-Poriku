@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Import Components
 import Popup from "./Popup";
-import columns from "./columns";
+import { columns } from "./head-data";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';

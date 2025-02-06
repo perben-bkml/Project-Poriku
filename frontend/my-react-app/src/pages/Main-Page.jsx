@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
+import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
+import LihatAntrian from "../components/Lihat-Antrian";
+// Import Static Component
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
-import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
-import Popup from "../components/Popup";
 // Material UI icons
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ChecklistIcon from '@mui/icons-material/Checklist';
@@ -67,6 +68,8 @@ function MainPage(props) {
                 return <EditPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "edit-pengajuan":
                 return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
+            case "lihat-antrian":
+                return <LihatAntrian />
             default:
                 return null;
         }
@@ -83,7 +86,7 @@ function MainPage(props) {
                     <div className="dash-content">
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
-                        <button className={`dash-button ${buttonSelect === "lihat-pengajuan" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
+                        <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />

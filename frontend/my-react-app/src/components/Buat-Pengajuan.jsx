@@ -4,7 +4,7 @@ import axios from "axios";
 
 // Import Components
 import Popup from "./Popup";
-import columns from "./columns";
+import { columns } from "./head-data";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -334,7 +334,7 @@ function BuatPengajuan(props) {
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
                         </div>
-                        <TableContainer className="table-container" sx={{maxHeight: 595}}>
+                        <TableContainer className="table-container" sx={{maxHeight: 600}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
                                     <TableRow className="table-row"> 

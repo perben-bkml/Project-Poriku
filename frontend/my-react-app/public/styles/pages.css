@@ -178,14 +178,18 @@
     min-height: 100vh;
     max-width: 100%;
     display: grid;
-    grid-template-columns: 1fr 6fr;
+    grid-template-columns: 240px auto;
     padding-bottom: 0px;
+    align-items: start;
+    grid-template-rows: 1fr;
 }
 
 .dash-tab {
-    display: grid;
-    grid-template-rows: 1fr 7fr 75px;
-    min-width: 230px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%; /* Ensures sidebar takes full height of the viewport */
+    height: auto;
+    background-color: #f5f6fa;
 }
 
 .dash-title {
@@ -198,6 +202,9 @@
 }
 
 .page-content {
+    max-width: 100%; /* Prevents content from overflowing */
+    overflow-x: hidden; /* Allows scrolling instead of overflow */
+    word-wrap: break-word; /* Ensures text doesn't push the width */
     grid-column: 2/3;
     grid-row: 1/4;
     background-color: #fcfcfc;
@@ -211,9 +218,10 @@
 }
 
 .dash-content {
-    height: auto;
-    display: grid;
-    grid-template-rows: repeat(3, 50px);
+    height: 100vh;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
     background-color: #f5f6fa;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
@@ -228,6 +236,8 @@
     align-items: center;
     margin: 10px 10px 0px 10px;
     padding-left: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
     font-size: 1rem;
     background-color: #f5f6fa;
     color: #0a0f1b;
@@ -328,17 +338,6 @@
     }
 
     /* Sizing Main Page */
-    .bendahara-home {
-        grid-template-columns: 210px 1fr;
-        min-width: 1280px;
-    }
-
-    .dash-tab {
-        display: grid;
-        grid-template-rows: 1fr 7fr 79px;
-        min-width: 0px;
-    }
-
     .dash-title {
         padding-left: 25px;
     }

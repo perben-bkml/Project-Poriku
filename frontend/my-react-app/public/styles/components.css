@@ -368,6 +368,19 @@
     padding-left: 20px;
 }
 
+/* Styling Lihat-Antrian */
+.lihat-antri-table {
+    margin: auto;
+    margin-top: 20px;
+    max-width: 95%;
+    max-height: 100%;
+    margin-bottom: 10px;
+}
+.lihat-antri-pagination {
+    display: flex;
+    justify-content: center;
+}
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {

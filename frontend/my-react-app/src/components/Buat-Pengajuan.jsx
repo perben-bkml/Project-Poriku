@@ -15,6 +15,9 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
+// Import Progress Material UI
+import CircularProgress from '@mui/material/CircularProgress';
+
 function BuatPengajuan(props) {
     //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
     const columnsWithNumber = [4, 5, 6, 7, 9, 11, 13, 15, 17];
@@ -27,6 +30,7 @@ function BuatPengajuan(props) {
     const [isSelecting, setIsSelecting] = useState(false);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     //Handle how many rows the user wants
     function handleRowChange(event) {
@@ -291,6 +295,8 @@ function BuatPengajuan(props) {
         const inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
         const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
         const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
+        // Set loading state
+        setIsLoading(true);
         // Sending to backend
         try {
             const response = await axios.post("http://localhost:3000/bendahara/buat-ajuan" , {
@@ -299,6 +305,7 @@ function BuatPengajuan(props) {
             })
             if (response.status === 200){
                 props.changeComponent("daftar-pengajuan")
+                setIsLoading(false);
             }
 
         } catch (err) {
@@ -334,7 +341,7 @@ function BuatPengajuan(props) {
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
                         </div>
-                        <TableContainer className="table-container" sx={{maxHeight: 600}}>
+                        <TableContainer className="table-container" sx={{maxHeight: 750}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
                                     <TableRow className="table-row"> 
@@ -388,6 +395,7 @@ function BuatPengajuan(props) {
                 </form>
             </div>
             {isPopup && <Popup whenClick={handleSubmit} cancel={handlePopup}/>}
+            {isLoading && <div className="loading"><CircularProgress size="80px" thickness={4}/></div>}
         </div>
     )
 }

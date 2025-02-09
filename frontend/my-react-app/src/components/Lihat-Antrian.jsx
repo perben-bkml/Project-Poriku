@@ -14,21 +14,29 @@ import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 import Pagination from '@mui/material/Pagination';
 
+// Import Progress Material UI
+import CircularProgress from '@mui/material/CircularProgress';
+
 function LihatAntrian() {
 
     // States
     const [antrianData, setAntrianData] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Fetching antrian data from Google Sheets
     const rowsPerPage = 10;
     async function fetchAntrianData (page) {
         try {
+            setIsLoading(true);
             const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage }});
-            const { data: responseResult, realAllAntrianRows } = response.data;
-            setAntrianData(responseResult);
-            setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+            if (response.status === 200){
+                const { data: responseResult, realAllAntrianRows } = response.data;
+                setAntrianData(responseResult);
+                setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+            }
+            setIsLoading(false);
         } catch (error) {
             console.error("Error fetching data.", error);
         }
@@ -45,6 +53,7 @@ function LihatAntrian() {
 
     return (
         <div className="bg-card">
+            {isLoading ? <div className="loading-antri"><CircularProgress size="60px" thickness={4}/></div>:
             <div className="lihat-antri-table">
                 <TableContainer>
                     <Table stickyHeader aria-label="sticky table">
@@ -67,6 +76,7 @@ function LihatAntrian() {
                     </Table>
                 </TableContainer>
             </div>
+            }
             <div className="lihat-antri-pagination">
                 <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />
             </div>

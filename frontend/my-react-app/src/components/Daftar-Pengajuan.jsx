@@ -5,6 +5,8 @@ import Pengajuan from "./Pengajuan-Info"
 import Popup from "./Popup";
 // Import material UI
 import Pagination from '@mui/material/Pagination';
+// Import Progress Material UI
+import CircularProgress from '@mui/material/CircularProgress';
 
 
 function DaftarPengajuan(props){
@@ -15,6 +17,7 @@ function DaftarPengajuan(props){
     const [filterSelect, setFilterSelect] = useState("")
     const [isDelPopup, setIsDelPopup] = useState(false);
     const [delData, setDelData] = useState({});
+    const [isLoading, setIsLoading] = useState(false);
 
     // Early pagination leftof
     useEffect( () => {
@@ -27,10 +30,15 @@ function DaftarPengajuan(props){
     const rowsPerPage = 5;
     async function fetchAntrianData (page) {
         try {
+            setAntrianData([]);
+            setIsLoading(true);
             const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage }});
-            const { data: responseResult, realAllAntrianRows } = response.data;
-            setAntrianData(responseResult);
-            setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+            if (response.status === 200){
+                const { data: responseResult, realAllAntrianRows } = response.data;
+                setIsLoading(false);
+                setAntrianData(responseResult);
+                setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+            }
         } catch (error) {
             console.error("Error fetching data.", error);
         }
@@ -59,6 +67,8 @@ function DaftarPengajuan(props){
         handleDelPopup();
         // Send data to backend to be deleted
         try {
+            setAntrianData([]);
+            setIsLoading(true);
             const tableKeyword = delData.keyword
             const response = await axios.delete("http://localhost:3000/bendahara/delete-ajuan", { params: { tableKeyword } })
             if (response.status === 200){
@@ -100,6 +110,7 @@ function DaftarPengajuan(props){
                 </form>
             </div>
             <div className="pengajuan-content">
+                {isLoading && <div className="loading-daftar"><CircularProgress size="60px" thickness={4}/></div>}
                 {antrianData.reverse().map((data, index) => 
                     <Pengajuan 
                     key={index} 

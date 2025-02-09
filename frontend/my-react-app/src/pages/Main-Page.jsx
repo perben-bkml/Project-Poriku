@@ -21,6 +21,7 @@ function MainPage(props) {
     const [buttonSelect, setButtonSelect] = useState(getSubMenu);
     const [savedPagination, setSavedPagination] = useState(null);
     const [antrianData, setAntrianData] = useState([]);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
 
     // Dash button add and remove class to make it selected
@@ -78,10 +79,16 @@ function MainPage(props) {
     return (
         <div>
             <Navbar />
-            <div className="bendahara-home">
-                <div className="dash-tab">
+            <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
+                <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
                     <div className="dash-title">
                         <h2>Menu<br /> {whatMenu}</h2>
+                        {/* Button inside dash-title when sidebar is open */}
+                        <button 
+                            className="toggle-sidebar-btn inside-sidebar" 
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                            ❮❮
+                        </button>
                     </div>
                     <div className="dash-content">
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
@@ -94,7 +101,15 @@ function MainPage(props) {
                         <p>Biro Umum</p>
                     </div>
                 </div>
-                <div className="page-content">
+                {/* Button outside when sidebar is hidden */}
+                {!isSidebarOpen && (
+                    <button 
+                        className="toggle-sidebar-btn outside-sidebar" 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                        ❯❯
+                    </button>
+                )}
+                <div className={`page-content ${isSidebarOpen ? "" : "full-width"}`}>
                     <h1 className="content-title">{formatText(buttonSelect)}</h1>
                     {renderComponent()}
                 </div>

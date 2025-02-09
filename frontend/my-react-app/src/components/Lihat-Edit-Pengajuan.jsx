@@ -15,6 +15,9 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
+// Import Progress Material UI
+import CircularProgress from '@mui/material/CircularProgress';
+
 function EditPengajuan(props) {
     //Determining to see if we "lihat" or "edit"
     const [componentType, setComponentType] = useState("")
@@ -31,6 +34,8 @@ function EditPengajuan(props) {
     const [tableData, setTableData] = useState([initialRow]);
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
+    const [isLoading1, setIsLoading1] = useState(false);
+    const [isLoading2, setIsLoading2] = useState(false);
     //State for reading and edit tabledata
     const [keywordRowPos, setKeywordRowPos] = useState("");
     const [keywordEndRow, setKeywordEndRow] = useState("");
@@ -41,12 +46,16 @@ function EditPengajuan(props) {
     //Fetching table data from backend to be shown
     async function fetchAntrianTable() {
         try {
+            setIsLoading1(true);
             const tableKeyword = `TRANS_ID:${props.passedData[0]}`
             const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
-            setTableData(response.data.data || []);
-            setRowNum(response.data.data.length);
-            setKeywordRowPos(response.data.keywordRowPos)
-            setKeywordEndRow(response.data.keywordEndRow)
+            if (response.status === 200) {
+                setTableData(response.data.data || []);
+                setRowNum(response.data.data.length);
+                setKeywordRowPos(response.data.keywordRowPos)
+                setKeywordEndRow(response.data.keywordEndRow)
+                setIsLoading1(false);
+            }
         } catch (error) {
             console.log("Failed sending Keyword.", error)
         }
@@ -340,8 +349,10 @@ function EditPengajuan(props) {
             lastTableEndRow: keywordEndRow,
             };
         try {
+            setIsLoading2(true);
             const response = await axios.patch("http://localhost:3000/bendahara/edit-table" , requestData)
             if (response.status === 200){
+                setIsLoading2(false);
                 props.changeComponent("daftar-pengajuan")
             }
         } catch (err) {
@@ -390,6 +401,7 @@ function EditPengajuan(props) {
                                 readOnly={componentType === "lihat"}
                                 />
                         </div>
+                        {isLoading1 ? <div className="loading-lihat-edit"><CircularProgress size="60px" thickness={4}/></div> : 
                         <TableContainer className="table-container" sx={{maxHeight: 595}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
@@ -438,6 +450,7 @@ function EditPengajuan(props) {
                                 </TableFooter>
                             </Table>
                         </TableContainer>
+                        }
                     </div>
                     <div className="form-submit">
                         <input type="button" value="Kembali Ke Daftar" name="submit-all" onClick={props.invisible("daftar-pengajuan", {})}/>
@@ -446,6 +459,7 @@ function EditPengajuan(props) {
                 </form>
             </div>
             {isPopup && <Popup whenClick={handleSubmit} cancel={handlePopup}/>}
+            {isLoading2 && <div className="loading"><CircularProgress size="80px" thickness={4}/></div>}
         </div>
     )
 }

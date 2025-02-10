@@ -26,6 +26,7 @@ const auth = new google.auth.JWT(
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
 const spreadsheetId = "1IepWjVRt8qKtZ2X3UxPIyPZC_TziOXU9iqF9UQreFDk";
+const spreadsheetIdCariSPM = "1-NTqDvZFQU8a2l1GEPInzf8EXiRLNc_iGYWB65Qg-wU";
 
 //Endpoints
 // Render data antrian
@@ -459,6 +460,40 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     } catch (error) {
         console.error("Error processing request:", error);
         res.status(500).json({ message: "Server error." });
+    }
+})
+
+// Handling interaction with PEMBAYARAN BP 2025 Sheet
+// Cari SPM
+app.patch("/bendahara/cari-spm", async (req, res) => {
+    try {
+        const { data } = req.body;
+        const cariRange = "'DASHBOARD'!D8"
+        await sheets.spreadsheets.values.update({
+            spreadsheetId: spreadsheetIdCariSPM,
+            range: cariRange,
+            valueInputOption: "USER_ENTERED",
+            resource: { values: [[data]] },
+        })
+        res.status(200).json({ message: "Table Deleted successfully." });
+    } catch (error) {
+        console.log("Error fetching data.", error)
+        res.status(500).json({error: "Failed to update cell." });
+    }
+})
+// SPM Belum Bayar
+app.get("/bendahara/spm-belum-bayar", async (req, res) => {
+    try {
+        const range = "'MACHINE DB'!AE3:AM"
+        const response = await sheets.spreadsheets.values.get({ 
+            spreadsheetId: spreadsheetIdCariSPM, 
+            range,
+        })
+        const result = response.data.values;
+        res.json({ data: result })
+    } catch (error) {
+        console.log("Error fetching data.", error)
+        res.status(500).json({error: "Failed to fetch data." });
     }
 })
 

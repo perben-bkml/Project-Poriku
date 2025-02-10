@@ -437,23 +437,100 @@
     border-radius: 20px;
 }
 
+/* Styling Info SPM Bendahara */
+.spm-titles {
+    margin-left: 30px;
+    margin-bottom: 10px;
+}
+.cari-label {
+    margin-left: 30px;
+}
+.cari-input {
+    width: 100px;
+    margin-left: 10px;
+    height: 20px;
+    font-size: 1rem;
+    border: none;
+    margin-bottom: 20px;
+    outline: none;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.spm-button {
+    margin-left: 50px;
+    color: white;
+    font-weight: 500;
+    height: 25px;
+    width: 80px;
+    border: 1px solid white;
+    background-color: #1a284b;
+    border-radius: 20px;
+}
+
+.spm-button:hover {
+    transform: scale(1.1, 1.1);
+}
+
+.embed-container-1 {
+    width: 95%;
+    height: 70px;
+    position: relative;
+    overflow: hidden;
+    border: 0.8px solid rgb(214, 214, 214);
+    margin: auto;
+    margin-bottom: 20px;
+}
+.cari-spm {
+    position: absolute;
+    top: -30px;
+    left: 0;
+    display: flex;
+    justify-self: center;
+    align-self: center;
+    height: 140px;
+    width: 100%;
+    margin-bottom: 15px;
+    border: none;
+}
+.rincian-filter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    width: 98%;
+    margin: auto;
+}
+.rincian-filter-title {
+    display: flex;
+    justify-self: center;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+.rincian-filter-details {
+    display: flex;
+    justify-content: space-between;
+    width: 90%;
+    margin: auto;
+}
+.rincian-filter-details select {
+    font-size: 0.68rem;
+    height: 22px;
+}
+.spm-button.rincian {
+    margin-top: 10px;
+    margin-left: 30px;
+}
+
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {
     /* Styling Navbar */
-    .Nav-bar {
-        min-width: 1280px;
-    }
-    .Nav-link {
-        grid-template-columns: repeat(3, 220px);
-    }
     .Nav-link p {
         transform: scale(0.8, 0.8);
     }
 
     /* Styling Footer */
-    .footer {
-        min-width: 1280px;
-    }
     .footer p {
         transform: scale(0.9, 0.9);
     }

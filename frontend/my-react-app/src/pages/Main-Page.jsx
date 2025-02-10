@@ -4,6 +4,7 @@ import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
 import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
 import LihatAntrian from "../components/Lihat-Antrian";
+import InfoSPMBendahara from "../components/SPM-Bend";
 // Import Static Component
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -12,6 +13,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
 import Avatar from "@mui/material/Avatar";
+import FindInPageIcon from '@mui/icons-material/FindInPage';
 
 function MainPage(props) {
     const whatMenu = props.menu;
@@ -71,6 +73,8 @@ function MainPage(props) {
                 return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "lihat-antrian":
                 return <LihatAntrian />
+            case "SPM-bendahara":
+                return <InfoSPMBendahara /> 
             default:
                 return null;
         }
@@ -94,6 +98,7 @@ function MainPage(props) {
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
+                        <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />

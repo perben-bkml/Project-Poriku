@@ -148,7 +148,7 @@
     padding-left: 20px;
     padding-right: 20px;
     display: grid;
-    grid-template-columns: 200px 1fr 1fr 1fr 1fr;
+    grid-template-columns: 190px 1fr 1fr 1fr 1fr;
     font-size: 1.1rem;
     font-weight: 600;
     color: #0a0f1b;
@@ -415,6 +415,7 @@
     align-items: center;
     margin: auto;
     margin-top: 20px;
+    margin-bottom: 20px;
     width: 98%;
     height: 200px;
     background: rgba(0, 0, 0, 0.247);
@@ -438,6 +439,9 @@
 }
 
 /* Styling Info SPM Bendahara */
+.spm-bend {
+    margin-bottom: 40px;
+}
 .spm-titles {
     margin-left: 30px;
     margin-bottom: 10px;
@@ -474,14 +478,20 @@ input[type="number"]::-webkit-inner-spin-button {
     transform: scale(1.1, 1.1);
 }
 
-.embed-container-1 {
-    width: 95%;
+.embed-container {
+    width: 1040px;
     height: 70px;
     position: relative;
     overflow: hidden;
     border: 0.8px solid rgb(214, 214, 214);
     margin: auto;
+    margin-top: 10px;
     margin-bottom: 20px;
+}
+.embed-container.embed2 {
+    width: 700px;
+    height: 432px;
+    margin-top: 25px;
 }
 .cari-spm {
     position: absolute;
@@ -494,6 +504,9 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 100%;
     margin-bottom: 15px;
     border: none;
+}
+.cari-spm.rincian-spm {
+    height: 500px;
 }
 .rincian-filter {
     display: grid;
@@ -582,5 +595,13 @@ input[type="number"]::-webkit-inner-spin-button {
     }
     .pengajuan-form-tabledata {
         margin-top: 20px;
+    }
+    
+    /* Styling Info Bendahara */
+    .embed-container {
+        width: 95%;
+    }
+    .embed-container.embed2 {
+        width: 72%;
     }
 }

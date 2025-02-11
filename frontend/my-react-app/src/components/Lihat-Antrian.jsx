@@ -11,7 +11,6 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import { TableFooter } from "@mui/material";
 import Pagination from '@mui/material/Pagination';
 
 // Import Progress Material UI
@@ -55,12 +54,12 @@ function LihatAntrian() {
         <div className="bg-card">
             {isLoading ? <div className="loading-antri"><CircularProgress size="60px" thickness={4}/></div>:
             <div className="lihat-antri-table">
-                <TableContainer>
-                    <Table stickyHeader aria-label="sticky table">
+                <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+                    <Table>
                         <TableHead>
-                            <TableRow>
+                            <TableRow sx={{ backgroundColor: "#1a284b" }}>
                             {columns2.map((cols) => (
-                                <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, fontSize:"1.1rem"}} align="center">{cols.label}</TableCell>                                            
+                                <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: 550, minWidth: cols.minWidth, fontSize:"1.1rem", color:"white"}} align="center">{cols.label}</TableCell>                                            
                             ))}
                             </TableRow>
                         </TableHead>

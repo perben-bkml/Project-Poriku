@@ -27,15 +27,15 @@ function Pengajuan(props) {
                 
             </div>
             <div className="info tanggal">
-                <p>Tanggal Pengajuan:</p>
+                <p>Tgl. Pengajuan:</p>
                 <p className="info data">{props.createDate}</p>
             </div>
             <div className="info setuju">
-                <p>Tanggal yang Disetujui:</p>
+                <p>Tgl. Pencairan:</p>
                 <p className="info data">{props.accDate}</p>
             </div>
             <div className="info status">
-                <p>Status Pengajuan:</p>
+                <p>Status:</p>
                 <p className="info data">{props.status}</p>
             </div>
             <div className="info-ubah">

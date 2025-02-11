@@ -3,6 +3,7 @@ import cors from "cors";
 import { google } from "googleapis";
 import bodyParser from "body-parser";
 import fs from "fs";
+import { start } from "repl";
 
 // Date
 
@@ -494,6 +495,70 @@ app.get("/bendahara/spm-belum-bayar", async (req, res) => {
     } catch (error) {
         console.log("Error fetching data.", error)
         res.status(500).json({error: "Failed to fetch data." });
+    }
+})
+// Find and Return Rincian SPM
+app.post("/bendahara/cari-rincian", async (req, res) => {
+    try {
+        const {startDate, endDate, selectJenis, selectStatus, satkerName} = req.body;
+        const cariRanges = [
+            "'DASHBOARD'!P17", //start date
+            "'DASHBOARD'!P19", //end date
+            "'DASHBOARD'!T17", //satkerName
+            "'DASHBOARD'!T19", //select jenis
+            "'DASHBOARD'!T21", //select status
+        ]
+        var resource = {
+            data: [
+                {
+                    range: cariRanges[0],
+                    values: [[startDate]],
+                },
+                {
+                    range: cariRanges[1],
+                    values: [[endDate]],
+                },
+                {
+                    range: cariRanges[2],
+                    values: [[satkerName]],
+                },
+                {
+                    range: cariRanges[3],
+                    values: [[selectJenis]],
+                },
+                {
+                    range: cariRanges[4],
+                    values: [[selectStatus]],
+                },
+            ],
+            valueInputOption: "USER_ENTERED",
+        }
+        const postResponse = await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: spreadsheetIdCariSPM,
+            resource,
+        });
+        try {
+            const getResponse = await sheets.spreadsheets.values.get({ 
+                spreadsheetId: spreadsheetIdCariSPM, 
+                range: "'MACHINE DB'!AT3:BD",
+            })
+            let result = getResponse.data.values;
+                // Add empty rows to generate max 11 columns
+            const maxColumns = 11;
+            result = result.map(row => {
+                while (row.length < maxColumns) {
+                    row.push("");
+                }
+                return row;
+            })
+            res.json({ data: result })
+        } catch (error) {
+            console.log("Failed fecthing results.", error)
+            res.status(500).json({error: "Failed fecthing results." });
+        }
+    } catch (error) {
+        console.log("Failed handling data.", error)
+        res.status(500).json({error: "Failed handling data." });
     }
 })
 

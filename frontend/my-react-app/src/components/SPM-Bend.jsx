@@ -7,7 +7,8 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import { e } from 'mathjs';
+// Other Material UI components
+import CircularProgress from '@mui/material/CircularProgress';
 
 function InfoSPMBendahara() {
     // State
@@ -20,6 +21,9 @@ function InfoSPMBendahara() {
         selectStatus: "DANA BELUM MASUK", //Default select option
         satkerName: "BIRO UMUM"
     })
+    const [rincianData, setRincianData] = useState([]);
+    const [isLoading1, setIsLoading1] = useState(false);
+    const [isLoading2, setIsLoading2] = useState(false);
     // Other holders
     const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
     const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
@@ -27,9 +31,11 @@ function InfoSPMBendahara() {
     // Fetch data SPM yang belum selesai dibayarkan
     async function fetchNotPaidSPM() {
         try {
+            setIsLoading1(true);
             const response = await axios.get("http://localhost:3000/bendahara/spm-belum-bayar")
             if (response.status === 200){
                 setNotPaidSPM(response.data.data)
+                setIsLoading1(false);
             }
 
         } catch (error) {
@@ -68,13 +74,22 @@ function InfoSPMBendahara() {
     // Cari Rincian SPM
     async function handleRincianSubmit(event) {
         event.preventDefault();
-        console.log(rincianSearch)
+        try {
+            setIsLoading2(true);
+            const response = await axios.post("http://localhost:3000/bendahara/cari-rincian", rincianSearch)
+            if (response.status === 200) {
+                setRincianData(response.data.data);
+                setIsLoading2(false);
+            }
+        } catch (error) {
+            console.log("Error Sending Rincian.", error)
+        }
     }
 
 
     return (
         <div className='spm-bend-container'>
-            <div className='bg-card'>
+            <div className='bg-card spm-bend'>
                 <div className='cari spm-container'>
                     <h2 className='spm-titles'>Cari SPM </h2>
                     <label className='cari-label'>Masukkan Nomor SPM: </label>
@@ -82,7 +97,7 @@ function InfoSPMBendahara() {
                     <button className='cari spm-button' onClick={handleCariBtn}>Cari</button>
                     <button className='cari spm-button' onClick={() => setSheetTimer(Date.now())}>Refresh</button>
                 </div>
-                <div className='embed-container-1'>
+                <div className='embed-container'>
                     <iframe 
                         className='cari-spm'
                         key={sheetTimer}
@@ -90,14 +105,15 @@ function InfoSPMBendahara() {
                     ></iframe>
                 </div>
             </div>
-            <div className='bg-card'>
+            <div className='bg-card spm-bend'>
                 <h2 className='spm-titles'>SPM Yang Belum Selesai Dibayarkan</h2>
-                <TableContainer>
+                {isLoading1 ? <div className="loading-antri"><CircularProgress size="60px" thickness={4}/></div>:
+                <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"20px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
                     <Table>
                         <TableHead>
-                            <TableRow>
+                            <TableRow sx={{ backgroundColor: "#1a284b" }}>
                                 {notPaidSPM.length > 0 && notPaidSPM[0].map((col, colIndex) => (
-                                    <TableCell key={colIndex}>{col}</TableCell>
+                                    <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white"}} align="center">{col}</TableCell>
                                 ))}
                             </TableRow>
                         </TableHead>
@@ -105,15 +121,16 @@ function InfoSPMBendahara() {
                             {notPaidSPM.length > 0 && notPaidSPM.slice(1).map((row, rowIndex) => (
                                 <TableRow key={rowIndex}>
                                     {row.map((cell, cellIndex) => (
-                                        <TableCell key={cellIndex}>{cell}</TableCell>
+                                        <TableCell className="table-cell" key={cellIndex}>{cell}</TableCell>
                                     ))}
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 </TableContainer>
+                }
             </div>
-            <div className='bg-card'>
+            <div className='bg-card spm-bend'>
                 <h2 className='spm-titles'>Rincian SPM Melalui Bendahara</h2>
                 <form id="filter-form" className='rincian-filter' onSubmit={handleRincianSubmit}>
                     <h3 className='rincian-filter-title'>Tanggal</h3>
@@ -139,7 +156,38 @@ function InfoSPMBendahara() {
                         </select>
                     </div>
                 </form>
-                <input type="submit" className='spm-button rincian' form="filter-form" value="Cari" />
+                <input type="submit" className='spm-button rincian' form="filter-form" value="Cari" style={{marginBottom: "20px"}}/>
+                {isLoading2 ? <div className="loading-antri"><CircularProgress size="60px" thickness={4}/></div>:
+                    <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"10px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+                        <Table>
+                            <TableHead>
+                                <TableRow sx={{ backgroundColor: "#1a284b" }}>
+                                    {rincianData.length > 0 && rincianData[0].map((col, colIndex) => (
+                                        <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white"}} align="center">{col}</TableCell>
+                                    ))}
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                            {rincianData.length > 0 && rincianData.slice(1).map((row, rowIndex) => (
+                                <TableRow key={rowIndex}>
+                                    {row.map((cell, cellIndex) => (
+                                        <TableCell className="table-cell" key={cellIndex}>{cell}</TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                }
+            </div>
+            <div className='bg-card spm-bend'>
+                <h2 className='spm-titles'>Informasi Rekening Koran</h2>
+                <div className='embed-container embed2'>
+                    <iframe 
+                        className='cari-spm rincian-spm'
+                        src={`https://docs.google.com/spreadsheets/d/e/2PACX-1vSR6HX2hJILNVE3RJjvDNVK27mvdScy09EzM1wnwi1J42CMUi1H9eI02VwKfLcKdndCZQIUPTXqDkAJ/pub?output=html&gid=1715874875&range=B48:H70&amp;single=true&amp;widget=true&amp;headers=false`}
+                    ></iframe>
+                </div>
             </div>
         </div>
     )

@@ -23,6 +23,7 @@ function DaftarPengajuan(props){
     useEffect( () => {
         if (props.userPagination) {
             setCurrentPage(props.userPagination);
+            console.log("User pagination is: ", props.userPagination);
         }
     }, [props.userPagination]);
 
@@ -44,8 +45,8 @@ function DaftarPengajuan(props){
         }
     }
     useEffect(() => {
-        fetchAntrianData(currentPage); 
-    }, [currentPage])
+        fetchAntrianData(props.userPagination || currentPage); 
+    }, [props.userPagination, currentPage]);
 
     // Handling Pagination Change
     function hanldePaginationChange (event, value) {
@@ -111,7 +112,7 @@ function DaftarPengajuan(props){
             </div>
             <div className="pengajuan-content">
                 {isLoading && <div className="loading-daftar"><CircularProgress size="60px" thickness={4}/></div>}
-                {antrianData.reverse().map((data, index) => 
+                {[...antrianData].reverse().map((data, index) => 
                     <Pengajuan 
                     key={index} 
                     numbers={data[0]}
@@ -128,7 +129,7 @@ function DaftarPengajuan(props){
                     handleDelPopup={handleDelPopup}
                     />)}
             </div>
-            <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />
+            <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={hanldePaginationChange} />
             {isDelPopup && <Popup type="delete" whenCancel={handleDelPopup} whenDel={handleDelPengajuan}/>}
         </div>
     )

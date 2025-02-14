@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
-import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
 import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
 // Import Static Component
@@ -53,7 +52,7 @@ function MainPage(props) {
                 setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
             }
         } else {
-            return () => {
+            return () =>{
                 setButtonSelect(compType);
                 setSavedPagination(lastPage);
                 setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
@@ -66,11 +65,11 @@ function MainPage(props) {
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination}/>;
             case "buat-pengajuan":
-                return <BuatPengajuan changeComponent={setButtonSelect}/>;
+                return <BuatPengajuan type="buat" changeComponent={setButtonSelect} />;
             case "detail-pengajuan":
-                return <EditPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
+                return <BuatPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "edit-pengajuan":
-                return <EditPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
+                return <BuatPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "lihat-antrian":
                 return <LihatAntrian />
             case "SPM-bendahara":

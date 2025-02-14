@@ -3,7 +3,6 @@ import cors from "cors";
 import { google } from "googleapis";
 import bodyParser from "body-parser";
 import fs from "fs";
-import { start } from "repl";
 
 // Date
 
@@ -35,20 +34,23 @@ app.get("/bendahara/antrian", async (req, res) => {
     try {
         const { page = 1, limit = 5 } = req.query; //Page=1 limit=5 is default. changed by req.query.
 
-        // Set Pagination Range
-        const startGetAntrianRow = ((page - 1) * limit + 1) + 2;  //Calculate start row with 1-based index, +2 because row starts from A3
-        const endGetAntrianRow = startGetAntrianRow + Number(limit) -1;
-        const getShowAntrianRange = `'Write Antrian'!A${startGetAntrianRow}:L${endGetAntrianRow}`;
-        // Combine Pagination range
-        const antrianRanges = [
-            "'Write Antrian'!A3:A",  //all antrian range
-            getShowAntrianRange,
-        ];
-        const getAntrianResponses = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: antrianRanges, });
-        const allAntrianRow = getAntrianResponses.data.valueRanges[0].values || [];
-        const realAllAntrianRows = allAntrianRow.length; //Finding out how many antrian rows exist
+        // Fetch total rows first
+        const getAllRowsResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Write Antrian'!A3:A", // Only fetch the first column to determine row count
+        });
+        const totalRows = getAllRowsResponse.data.values.length;
 
-        let paginatedAntrian = getAntrianResponses.data.valueRanges[1].values || []; //Get data with pagination
+        // Set rows to fetch from the end of the sheet
+        const endRow = totalRows - (page - 1) * limit + 2; // +2 to account for the starting row at A3
+        const startRow = Math.max(endRow - limit + 1, 3); // Ensure we don't go below row 3
+        const fetchRowRange= `'Write Antrian'!A${startRow}:L${endRow}`;
+
+        // Fetch Paginated Data
+        const getAntrianResponses = await sheets.spreadsheets.values.get({ spreadsheetId, range: fetchRowRange, });
+
+        //Handle empty rows
+        let paginatedAntrian = getAntrianResponses.data.values || [];
          // Add empty rows to generate max 12 columns
          const num_Columns = 12;
          paginatedAntrian = paginatedAntrian.map(row => {
@@ -57,7 +59,7 @@ app.get("/bendahara/antrian", async (req, res) => {
              }
              return row;
          })
-        res.json({ data: paginatedAntrian, realAllAntrianRows })
+        res.json({ data: paginatedAntrian, realAllAntrianRows: totalRows })
 
     } catch (error) {
         console.error(error);
@@ -257,19 +259,25 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         return res.status(400).json({message: "Invalid Data."})  
     }
     try {
+        
         // Setting antrian data range
         textdata.unshift(d);
-        const antrianColumnCount = textdata.length;
-        const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount);
-        const antrianRange = `'Write Antrian'!B${antriPosition}:${antrianColumnEnd}${antriPosition}`
+        const antriResponse = await sheets.spreadsheets.values.get({spreadsheetId, range: "'Write Antrian'!A3:A"});
+        const matchResult = antriResponse.data.values || [];
+        let antriRow = null;
+        for (let i = 0; i < matchResult.length; i++) {
+            if (String(matchResult[i][0]) === String(antriPosition)) {
+                antriRow = i + 1 + 2; //Convert to 1-based row index. +2 to exclude header and start from A3
+                break;
+            }
+        }
+        if (!antriRow) {
+            return res.status(400).json({ error: "Keyword not found" });
+        }
         // Setting table data range
         const startTableRow = tablePosition;
         const endTableRow = startTableRow + tabledata.length -1;
         const tableColumnCount = tabledata[0].length;
-        const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
-        const tableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`;
-        // Getting existing tabledata to compare and adjust row number changes
-        const oldTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${lastTableEndRow}`;
             // Getting sheet ID
         // Get Sheet IDs
         const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
@@ -348,7 +356,7 @@ app.patch("/bendahara/edit-table", async (req, res) => {
             pasteData: {
                 coordinate: {
                     sheetId: antriSheetId,
-                    rowIndex: antriPosition - 1, //Zero based index
+                    rowIndex: antriRow - 1, //Zero based index
                     columnIndex: 1, //Start from B
                 },
                 data: textdata.join("\t"),

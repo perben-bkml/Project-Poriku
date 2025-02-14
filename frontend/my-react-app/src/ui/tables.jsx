@@ -5,61 +5,6 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-// Import utility functions
-import { numberFormats } from '../lib/utils';
-
-// BuatPengajuan.jsx
-export function TableBuatPengajuan(columns, tableData, handleCellChange, handleCellBlur, handleCellKeyDown, handlePaste, handleCellMouseDown, handleCellMouseOver, isCellSelected) {
-    return (
-        <TableContainer className="table-container" sx={{maxHeight: 750}}>
-            <Table stickyHeader aria-label="sticky table">
-                <TableHead className="table-head">
-                    <TableRow className="table-row"> 
-                        {props.columns.map((cols) => (
-                            <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth}} align="center">{cols.label}</TableCell>                                            
-                        ))}
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {props.tableData.map((row, rowIndex) => (
-                        <TableRow key={rowIndex}>
-                            {row.map((cell, colIndex) => (
-                                <TableCell className={`table-cell ${props.isCellSelected(rowIndex, colIndex) ? "selected-cell" : ""}`}
-                                    key={colIndex}
-                                    data-row={rowIndex}
-                                    data-col={colIndex}
-                                    onMouseDown={()=> props.handleCellMouseDown(rowIndex, colIndex)}
-                                    onMouseOver={()=> props.handleCellMouseOver(rowIndex, colIndex)}
-                                    sx={{minHeight:20, minWidth: props.columns[colIndex].minWidth, padding:"8px"}}
-                                    align={colIndex === 0 ? "center" : "left"}>
-                                    <textarea 
-                                        className={`${props.isCellSelected(rowIndex, colIndex) ? "selected-cell" : ""}`}
-                                        value={cell}
-                                        data-row={rowIndex}
-                                        data-col={colIndex}
-                                        onChange={(input) => props.handleCellChange(rowIndex, colIndex, input.target.value, input.target)}
-                                        onBlur={(input) => props.handleCellBlur(rowIndex, colIndex, input.target.value)}
-                                        onKeyDown={(event) => props.handleCellKeyDown(event, rowIndex, colIndex)}
-                                        onPaste={(event) => props.handlePaste(event, rowIndex, colIndex)}/>
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    ))}
-                </TableBody>
-                <TableFooter>
-                    <TableRow>
-                        {props.columns.map((col, colIndex) => (
-                            <TableCell className="table-footer-cell" key={colIndex}>
-                                {Object.values(props.summableColumns).includes(colIndex) ? numberFormats(calculateColumnTotal(colIndex).toString()) : ""}
-                            </TableCell>
-                        ))}
-                    </TableRow>
-                </TableFooter>
-            </Table>
-        </TableContainer>
-    )
-}
-
 
 // SPM-Bend.jsx
 export function TableSpmBendahara(props) {

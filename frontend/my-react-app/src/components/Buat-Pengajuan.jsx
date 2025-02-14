@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import * as math from "mathjs";
 import axios from "axios";
 
 // Import Components
 import Popup from "../ui/Popup";
 import { columns } from "./head-data";
-import { TableBuatPengajuan } from "../ui/tables";
-// Import utility functions
+import LoadingAnimate from "../ui/loading";
+import { SubmitButton } from "../ui/buttons";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -21,6 +21,8 @@ import { TableFooter } from "@mui/material";
 import CircularProgress from '@mui/material/CircularProgress';
 
 function BuatPengajuan(props) {
+    //Determining if this component is being used for viewing, editing, or creating new pengajuan
+    const [componentType, setComponentType] = useState("")
     //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
     const columnsWithNumber = [4, 5, 6, 7, 9, 11, 13, 15, 17];
     //State
@@ -30,9 +32,39 @@ function BuatPengajuan(props) {
     const [tableData, setTableData] = useState([initialRow]);
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
+    //State for reading and edit tabledata
+    const [keywordRowPos, setKeywordRowPos] = useState("");
+    const [keywordEndRow, setKeywordEndRow] = useState("");
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoading2, setIsLoading2] = useState(false);
+
+    //Fetching table data from backend to be shown
+    async function fetchAntrianTable() {
+        try {
+            setIsLoading2(true);
+            const tableKeyword = `TRANS_ID:${props.passedData[0]}`
+            const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
+            if (response.status === 200) {
+                setTableData(response.data.data || []);
+                setRowNum(response.data.data.length);
+                setKeywordRowPos(response.data.keywordRowPos)
+                setKeywordEndRow(response.data.keywordEndRow)
+                setIsLoading2(false);
+            }
+        } catch (error) {
+            console.log("Failed sending Keyword.", error)
+        }
+    }
+    useEffect(() => {
+        const newComponentType = props.type;
+        setComponentType(newComponentType);
+    
+        if (newComponentType !== "buat") {
+            fetchAntrianTable();
+        }
+    }, [props.type]);
 
     //Handle how many rows the user wants
     function handleRowChange(event) {
@@ -258,7 +290,14 @@ function BuatPengajuan(props) {
     // Handle footer table that sums up numbers
     function calculateColumnTotal(columnIndex) {
         return tableData.reduce((sum, row) => {
-            const value = parseInt(row[columnIndex].replace(/[^\d]/g, ""), 10);
+            const cellValue = row[columnIndex];
+    
+            // Ensure the value is a string before calling replace
+            const stringValue = typeof cellValue === "string" ? cellValue : String(cellValue || "0");
+    
+            // Remove non-digit characters and convert to number
+            const value = parseInt(stringValue.replace(/[^\d]/g, ""), 10);
+    
             return sum + (isNaN(value) ? 0 : value);
         }, 0);
     }
@@ -313,48 +352,101 @@ function BuatPengajuan(props) {
         } catch (err) {
             console.log("Failed to send data.", err)
         }
-
     }
 
+    //Handle form submits when editing
+    async function handleSubmitEdit(event){
+        event.preventDefault();
+        setIsPopup(false);
+        // Converting column info into data, then insert in existing tableData
+        const tableHead = columns.map(col => col.label)
+        const sendTable = [[...tableHead], ...tableData]
+        // Grabbing input & select tag values
+        let inputNama = document.getElementsByName("nama-pengisi")[0].value;
+        const selectAjuan = document.getElementsByName("ajuan")[0].value;
+        let inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
+        const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
+        if (inputNama === "") {
+            inputNama = props.passedData[1];
+        }
+        if (inputJumlah === "") {
+            inputJumlah = props.passedData[3]
+        }
+
+        const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
+        // Sending to backend
+        const requestData = {
+            textdata: inputArray,
+            tabledata: sendTable,
+            tablePosition: keywordRowPos,
+            antriPosition: parseInt(props.passedData[5]),
+            lastTableEndRow: keywordEndRow,
+            };
+        try {
+            setIsLoading(true);
+            const response = await axios.patch("http://localhost:3000/bendahara/edit-table" , requestData)
+            if (response.status === 200){
+                setIsLoading(false);
+                props.changeComponent("daftar-pengajuan")
+            }
+        } catch (err) {
+            console.log("Failed to send data.", err)
+        }
+    }
     return (
         <div className="buat-pengajuan bg-card" onMouseUp={handleCellMouseUp}>
+            {componentType === "buat" ? (
             <div className="pengajuan-desc">
                 <p>Ketentuan Pengajuan Pencairan GUP/TUP (Wajib Dibaca!):</p>
                 <button>Baca Ketentuan</button>
-            </div>
+            </div> )
+            :
+            (props.passedData && (<div className="pengajuan-desc">
+                <p>Antrian Pengajuan Nomor: <span/> {props.passedData[5]}</p>
+                <p>Tanggal Pengajuan: <span/> {props.passedData[6]}</p>
+                <p>Tanggal Disetujui: <span/> {props.passedData[5]}</p>
+                <p>Status Pengajuan: <span/> {props.passedData[5]}</p>
+            </div>))
+            }
             <div className="pengajuan-content">
-                <form className="pengajuan-form" onSubmit={handleSubmit}>
+                <form className="pengajuan-form" onSubmit={componentType === "buat" ? handleSubmit : handleSubmitEdit}>
                     <div className="pengajuan-form-textdata">
                         <label htmlFor="aju-name">Nama Pengisi Form:</label>
-                        <input type="text" id="aju-name" name="nama-pengisi"required/>
+                        <input type="text" id="aju-name" name="nama-pengisi" 
+                            readOnly={componentType === "lihat"}
+                            placeholder={componentType === "buat"? null : (props.passedData && props.passedData[1]) }
+                            required/>
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
+                        {componentType === "buat" ?
                         <select name="ajuan" id="ajuan">
                             <option value="gup">GUP</option>
                             <option value="ptup">PTUP</option>
                         </select>
+                        :
+                        (props.passedData && (<select name="ajuan" id="ajuan" disabled={componentType === "lihat"}>
+                            <option value={props.passedData[2]}>{props.passedData[2].toUpperCase()}</option>
+                            <option value={props.passedData[2] === "gup"? "ptup": "gup"}>{props.passedData[2] === "gup" ? "PTUP" : "GUP"}</option>
+                        </select>))
+                        }
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
-                        <input type="text" id="aju-number" placeholder="Di isi angka" name="jumlah-ajuan" onChange={(e)=> e.target.value = numberFormats(e.target.value.replace(/[^\d]/g, ""))} required/>
+                        <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan" 
+                            onChange={(e)=> e.target.value = numberFormats(e.target.value.replace(/[^\d]/g, ""))}
+                            readOnly={componentType === "lihat"} 
+                            required/>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
-                        <input type="date" id="aju-date" name="tanggal-ajuan"/>
+                        <input type="date" id="aju-date" name="tanggal-ajuan"
+                            readOnly={componentType === "lihat"}
+                            defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
                     </div>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
                             <p style={{fontWeight: 600, fontSize: "1.1rem"}}>Input Data Pengajuan</p>
                             <label>Tentukan Jumlah Row Tabel:</label>
-                            <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
+                            <input type="number" value={rowNum > 0 ? rowNum : ""} 
+                                onChange={handleRowChange} onBlur={handleRowBlur} 
+                                readOnly={componentType === "lihat"} min="0" />
                         </div>
-                        <TableBuatPengajuan
-                            columns={columns}
-                            tableData={tableData}
-                            handleCellChange={handleCellChange}
-                            handleCellBlur={handleCellBlur}
-                            handleCellKeyDown={handleCellKeyDown}
-                            handlePaste={handlePaste}
-                            handleCellMouseDown={handleCellMouseDown}
-                            handleCellMouseOver={handleCellMouseOver}
-                            isCellSelected={isCellSelected}
-                            summableColumns={summableColumns}
-                         />
+                        {isLoading2 ? <LoadingAnimate /> :
                         <TableContainer className="table-container" sx={{maxHeight: 750}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
@@ -401,14 +493,21 @@ function BuatPengajuan(props) {
                                 </TableFooter>
                             </Table>
                         </TableContainer>
+                        }  
                     </div>
+                    {componentType === "buat" ?
                     <div className="form-submit">
-                        <input type="button" value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>
-                        {/* <input type="submit" value="Simpan Draft" name="save-draft" /> */}
+                        <SubmitButton value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>
                     </div>
+                    :
+                    <div className="form-submit">
+                        <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={props.invisible && props.invisible("daftar-pengajuan", props.passedData)}/>
+                        <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat"}/>
+                    </div>    
+                        }
                 </form>
             </div>
-            {isPopup && <Popup whenClick={handleSubmit} cancel={handlePopup}/>}
+            {isPopup && (<Popup whenClick={componentType === "buat"? handleSubmit : handleSubmitEdit} cancel={handlePopup}/>)}
             {isLoading && <div className="loading"><CircularProgress size="80px" thickness={4}/></div>}
         </div>
     )

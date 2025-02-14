@@ -3,8 +3,10 @@ import * as math from "mathjs";
 import axios from "axios";
 
 // Import Components
-import Popup from "./Popup";
+import Popup from "../ui/Popup";
 import { columns } from "./head-data";
+import { TableBuatPengajuan } from "../ui/tables";
+// Import utility functions
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -341,6 +343,18 @@ function BuatPengajuan(props) {
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} onChange={handleRowChange} onBlur={handleRowBlur} min="0" />
                         </div>
+                        <TableBuatPengajuan
+                            columns={columns}
+                            tableData={tableData}
+                            handleCellChange={handleCellChange}
+                            handleCellBlur={handleCellBlur}
+                            handleCellKeyDown={handleCellKeyDown}
+                            handlePaste={handlePaste}
+                            handleCellMouseDown={handleCellMouseDown}
+                            handleCellMouseOver={handleCellMouseOver}
+                            isCellSelected={isCellSelected}
+                            summableColumns={summableColumns}
+                         />
                         <TableContainer className="table-container" sx={{maxHeight: 750}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">

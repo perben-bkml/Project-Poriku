@@ -3,7 +3,7 @@ import * as math from "mathjs";
 import axios from "axios";
 
 // Import Components
-import Popup from "./Popup";
+import Popup from "../ui/Popup";
 import { columns } from "./head-data";
 
 // Import Table Material UI

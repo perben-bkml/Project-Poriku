@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 // Import components
-import Pengajuan from "./Pengajuan-Info"
-import Popup from "./Popup";
+import Pengajuan from "../ui/Pengajuan-Info";
+import Popup from "../ui/Popup";
 // Import material UI
 import Pagination from '@mui/material/Pagination';
 // Import Progress Material UI

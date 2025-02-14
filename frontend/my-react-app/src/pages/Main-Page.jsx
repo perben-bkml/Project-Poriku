@@ -6,8 +6,8 @@ import EditPengajuan from "../components/Lihat-Edit-Pengajuan";
 import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
 // Import Static Component
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
+import Navbar from '../ui/Navbar'
+import Footer from '../ui/Footer'
 // Material UI icons
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ChecklistIcon from '@mui/icons-material/Checklist';

@@ -37,4 +37,10 @@ const columns2 = [
     { id:"spm", label: "No. SPM", minWidth: 40 },
     { id:"ukerja", label: "Unit Kerja", minWidth: 40 },
 ]
-export { columns, columns2 };
+
+//For SPM-Bend.jsx
+const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
+const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
+
+export { columns, columns2, jenisSPM, statusSPM };
+

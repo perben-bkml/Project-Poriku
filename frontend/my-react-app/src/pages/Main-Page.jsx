@@ -23,6 +23,7 @@ function MainPage(props) {
     const [savedPagination, setSavedPagination] = useState(null);
     const [antrianData, setAntrianData] = useState([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [alertMessage, setAlertMessage] = useState("");
 
 
     // Dash button add and remove class to make it selected
@@ -45,17 +46,17 @@ function MainPage(props) {
       }
 
     // Handle invisible component (invisible on button)
-    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate}) {
+    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status}) {
         if (!lastPage) {
             return () => {
                 setButtonSelect(compType);
-                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status])
             }
         } else {
             return () =>{
                 setButtonSelect(compType);
                 setSavedPagination(lastPage);
-                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate])
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status])
             }
         }   
     }
@@ -63,13 +64,13 @@ function MainPage(props) {
     function renderComponent() {
         switch (buttonSelect) {
             case "daftar-pengajuan":
-                return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination}/>;
+                return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":
-                return <BuatPengajuan type="buat" changeComponent={setButtonSelect} />;
+                return <BuatPengajuan type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />;
             case "detail-pengajuan":
                 return <BuatPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
             case "edit-pengajuan":
-                return <BuatPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
+                return <BuatPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect} alertMessage={setAlertMessage}/>
             case "lihat-antrian":
                 return <LihatAntrian />
             case "SPM-bendahara":
@@ -78,7 +79,6 @@ function MainPage(props) {
                 return null;
         }
     }
-    
     return (
         <div>
             <Navbar />

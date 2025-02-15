@@ -51,8 +51,8 @@ function BuatPengajuan(props) {
                 setRowNum(response.data.data.length);
                 setKeywordRowPos(response.data.keywordRowPos)
                 setKeywordEndRow(response.data.keywordEndRow)
-                setIsLoading2(false);
             }
+            setIsLoading2(false);
         } catch (error) {
             console.log("Failed sending Keyword.", error)
         }
@@ -345,10 +345,10 @@ function BuatPengajuan(props) {
                 tabledata: sendTable,
             })
             if (response.status === 200){
+                props.alertMessage("Data berhasil dibuat.")
                 props.changeComponent("daftar-pengajuan")
-                setIsLoading(false);
             }
-
+            setIsLoading(false);
         } catch (err) {
             console.log("Failed to send data.", err)
         }
@@ -386,9 +386,10 @@ function BuatPengajuan(props) {
             setIsLoading(true);
             const response = await axios.patch("http://localhost:3000/bendahara/edit-table" , requestData)
             if (response.status === 200){
-                setIsLoading(false);
-                props.changeComponent("daftar-pengajuan")
+                props.alertMessage("Data berhasil diubah.");
+                props.changeComponent("daftar-pengajuan");
             }
+            setIsLoading(false);
         } catch (err) {
             console.log("Failed to send data.", err)
         }
@@ -402,10 +403,10 @@ function BuatPengajuan(props) {
             </div> )
             :
             (props.passedData && (<div className="pengajuan-desc">
-                <p>Antrian Pengajuan Nomor: <span/> {props.passedData[5]}</p>
+                <p>Nomor Antrian: <span/> {props.passedData[5]}</p>
                 <p>Tanggal Pengajuan: <span/> {props.passedData[6]}</p>
-                <p>Tanggal Disetujui: <span/> {props.passedData[5]}</p>
-                <p>Status Pengajuan: <span/> {props.passedData[5]}</p>
+                <p>Tanggal Disetujui: <span/> {props.passedData[7]}</p>
+                <p>Status Pengajuan: <span/> {props.passedData[8]}</p>
             </div>))
             }
             <div className="pengajuan-content">

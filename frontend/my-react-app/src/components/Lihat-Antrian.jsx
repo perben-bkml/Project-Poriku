@@ -3,6 +3,7 @@ import axios from "axios";
 
 // Import components
 import { columns2 } from './head-data'
+import LoadingAnimate from "../ui/loading";
 
 // Import Material UI Table & Pagination
 import Table from '@mui/material/Table';
@@ -52,7 +53,7 @@ function LihatAntrian() {
 
     return (
         <div className="bg-card">
-            {isLoading ? <div className="loading-antri"><CircularProgress size="60px" thickness={4}/></div>:
+            {isLoading ? <LoadingAnimate /> :
             <div className="lihat-antri-table">
                 <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
                     <Table>
@@ -64,7 +65,7 @@ function LihatAntrian() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {antrianData.reverse().map((rows, rowIndex) => (
+                            {[...antrianData].reverse().map((rows, rowIndex) => (
                                 <TableRow key={rowIndex}>
                                     {rows.map((cells, cellIndex) => (
                                         <TableCell className="table-cell" key={cellIndex}>{cells}</TableCell>

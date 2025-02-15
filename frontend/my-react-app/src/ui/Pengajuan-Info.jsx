@@ -15,6 +15,8 @@ function Pengajuan(props) {
         antriDate: props.antriDate,
         antriNum: props.numbers,
         createDate: props.createDate,
+        accDate: props.accDate,
+        status: props.status,
     }
 
     return (
@@ -24,19 +26,30 @@ function Pengajuan(props) {
                 <div className="info-avatar">
                     <Avatar className="info-avatar" sx={{ bgcolor: "#0a0f1b", width: 36, height: 36, fontSize:"0.8rem", marginTop: "4px"}}>{props.numbers}</Avatar>
                 </div>
-                
+            </div>
+            <div className="info jenis">
+                <p>Jenis:</p>
+                <p className="info data">{props.antriType.toUpperCase()}</p>
+            </div>
+            <div className="info nominal">
+                <p>Nominal:</p>
+                <p className="info data">{props.antriSum}</p>
             </div>
             <div className="info tanggal">
-                <p>Tgl. Pengajuan:</p>
+                <p>Tgl. Ajuan:</p>
                 <p className="info data">{props.createDate}</p>
             </div>
             <div className="info setuju">
-                <p>Tgl. Pencairan:</p>
+                <p>Tgl. Proses:</p>
                 <p className="info data">{props.accDate}</p>
             </div>
             <div className="info status">
                 <p>Status:</p>
                 <p className="info data">{props.status}</p>
+            </div>
+            <div className="info status">
+                <p>DRPP:</p>
+                <p className="info data">{props.drpp}</p>
             </div>
             <div className="info-ubah">
                 <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("detail-pengajuan", passData)}/>

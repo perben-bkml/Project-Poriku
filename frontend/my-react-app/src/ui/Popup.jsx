@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 // import icons material ui
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import Alert from '@mui/material/Alert';
+import Fade from "@mui/material/Fade";
 
 function Popup(props) {
     const [popupType, setPopupType] = useState(true)
@@ -31,3 +33,20 @@ function Popup(props) {
 
 export default Popup;
 
+export function PopupAlert(props) {
+    return (
+        <div style={{
+            position: "fixed",
+            top: "100px",
+            right: "16px",
+            zIndex: 1300, // Ensure it's above other components
+        }}>
+            <Fade in={props.isAlert}>
+                <Alert severity={props.severity}  
+                    sx={{ width: "280px"}}>
+                    {props.message}
+                </Alert>
+            </Fade>
+        </div>
+    )
+}

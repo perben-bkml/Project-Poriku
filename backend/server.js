@@ -8,7 +8,14 @@ import fs from "fs";
 
 // Initialize tools
 const app = express();
-const d = new Date().getFullYear();
+const getFormattedDate = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+const d = getFormattedDate();
 // Middleware
 app.use(express.json());
 app.use(cors());
@@ -66,6 +73,64 @@ app.get("/bendahara/antrian", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
+
+// Filter data antrian based on keyword
+app.get("/bendahara/filter-date", async (req, res) => {
+    const { datePrefix, page = 1, limit = 5 } = req.query;
+
+    if (!datePrefix || typeof datePrefix !== 'string') {
+        return res.status(400).json({ message: "Invalid date prefix." });
+    }
+
+    try {
+        // Fetch the entire column B from Google Sheets
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Write Antrian'!B:B", // Adjust to your sheet name and range
+        });
+
+        // Get all rows from column B
+        const allRows = response.data.values || [];
+
+        // Filter rows that match the date prefix
+        const filteredRows = allRows
+            .map((row, index) => ({ date: row[0], rowIndex: index + 1 })) // Add row index for reference
+            .filter(row => row.date && row.date.startsWith(datePrefix));
+        // Error handling if no keyword found
+        if (filteredRows.length === 0) {
+            return res.status(404).json({ error: "No matching rows found." });
+        }
+        // Sort rows in reverse order (latest dates first)
+        filteredRows.reverse();
+
+        // Calculate pagination
+        const totalRows = filteredRows.length;
+        const startIndex = (page - 1) * limit;
+        const paginatedRows = filteredRows.slice(startIndex, startIndex + limit);
+
+        // Fetch full row data for the paginated rows
+        const rowRanges = paginatedRows.map(row => `'Write Antrian'!A${row.rowIndex}:L${row.rowIndex}`); // Adjust range if needed
+        const batchGetResponse = await sheets.spreadsheets.values.batchGet({
+            spreadsheetId,
+            ranges: rowRanges,
+        });
+
+        // Combine row data
+        const rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
+        const totalPages = Math.ceil(totalRows / limit)
+
+        // Send paginated data and total rows count for pagination
+        res.json({
+            data: rowData,
+            totalPages
+        });
+
+    } catch (error) {
+        console.error("Error fetching filtered data:", error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+});
+
 
 
 // Write data from table on sheet

@@ -145,10 +145,10 @@
     width: 92%;
     border: 1px solid rgb(214, 214, 214);
     border-radius: 12px;
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 10px;
+    padding-right: 10px;
     display: grid;
-    grid-template-columns: 190px 1fr 1fr 1fr 1fr;
+    grid-template-columns: 190px 130px repeat(6, 1fr);
     font-size: 1.1rem;
     font-weight: 600;
     color: #0a0f1b;

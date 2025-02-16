@@ -1,7 +1,40 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 function Login () {
+    //States
+    const [credentials, setCredentials] = useState({
+        username: "",
+        password: "",
+    })
+    //Setting up useNavigate
+    const navigate = useNavigate();
+    
+    //Handling user input changes
+    function handleInputChange(event) {
+        setCredentials({
+            ...credentials,
+            [event.target.name]: event.target.value,
+        })
+    }    
+
+    async function handleSubmit(event) {
+        event.preventDefault();
+        try {
+            const response = await axios.post("http://localhost:3000/login-auth", credentials)
+            if (response.status === 200) {
+                navigate("/home")
+            } 
+        } catch (error) {
+            if (error.status === 401) {
+                console.log("Invalid Username or Password.")
+            } else {
+                console.log("Error sending data to backend.", error)
+           }
+        }
+    }
+
     return (
         <div className="login-home">
             <div className="login-bg">
@@ -15,10 +48,10 @@ function Login () {
                     <h3>Login</h3>
                 </div>
                 <div className="login-content">
-                    <form className="login-form">
-                        <input type="text" value="" placeholder="Username" name="username" />
-                        <input type="text" value="" placeholder="Password" name="password" />
-                        <NavLink to="/home"><input type="submit" /></NavLink>
+                    <form className="login-form" onSubmit={handleSubmit}>
+                        <input type="text" value={credentials.username} placeholder="Username" name="username" onChange={handleInputChange} />
+                        <input type="password" value={credentials.password} placeholder="Password" name="password" onChange={handleInputChange} />
+                        <input type="submit" />
                     </form>
                 </div>
                 <div className="login-gaji">

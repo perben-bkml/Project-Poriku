@@ -3,6 +3,10 @@ import cors from "cors";
 import { google } from "googleapis";
 import bodyParser from "body-parser";
 import fs from "fs";
+import postgres from "postgres";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import cookieParser from "cookie-parser";
 
 // Date
 
@@ -19,14 +23,23 @@ const d = getFormattedDate();
 // Middleware
 app.use(express.json());
 app.use(cors());
+app.use(cookieParser())
+
+// Setting Up Postgres
+const dbCredentials = JSON.parse(fs.readFileSync("./credentials/database.json"));
+const sql = postgres(dbCredentials);
+
+// JWT Secret Key
+const JWT_SECRET = JSON.parse(fs.readFileSync("./credentials/jwt_secret.json"));
+const JWT_SECRET_KEY = JWT_SECRET.jwt_secret;
 
 // Credentials
-const credentials = JSON.parse(fs.readFileSync("./credentials/project-import-gsheet-keu-27df045eec2e.json"))
+const gsheetCredentials = JSON.parse(fs.readFileSync("./credentials/project-import-gsheet-keu-27df045eec2e.json"))
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 const auth = new google.auth.JWT(
-    credentials.client_email,
+    gsheetCredentials.client_email,
     null,
-    credentials.private_key,
+    gsheetCredentials.private_key,
     SCOPES
 );
 
@@ -36,6 +49,47 @@ const spreadsheetId = "1IepWjVRt8qKtZ2X3UxPIyPZC_TziOXU9iqF9UQreFDk";
 const spreadsheetIdCariSPM = "1-NTqDvZFQU8a2l1GEPInzf8EXiRLNc_iGYWB65Qg-wU";
 
 //Endpoints
+// Login page
+app.post("/login-auth", async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        //Note: i do 12 salting rounds!
+        // const hashedPassword = await bcrypt.hash(password, 12)
+
+        //Get user data
+        const userData= await sql`
+            SELECT * FROM poriku_users WHERE username = ${username}
+        `;
+        //Check if user exist
+        if (userData.length === 0 ){
+            return res.status(401).json({ message: "Invalid username or password" });
+        }
+        //Verify Password
+        const validPassword = await bcrypt.compare(password, userData[0].password);
+        if (!validPassword) {
+            return res.status(401).json({ message: "Invalid username or password" });
+        }
+        //Create JWT Token
+        const token = jwt.sign(
+            { id: userData[0].id, username: userData[0].username, role: userData[0].role },
+            JWT_SECRET_KEY,
+            { expiresIn: "3h" }
+        );
+
+            // Set cookie with the token
+        res.cookie("auth_token", token, {
+            httpOnly: true, // Prevent JavaScript access
+            secure: false, // Set to true in production (requires HTTPS)
+            maxAge: 3 * 60 * 60 * 1000, // 3 hours
+        });
+
+        res.json({message: "User Entered!"})
+    } catch (error) {
+        console.log("Error sending data to DB.", error)
+        res.status(500).json({error: "Can't write data to DB."})
+    }
+})
+
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
     try {

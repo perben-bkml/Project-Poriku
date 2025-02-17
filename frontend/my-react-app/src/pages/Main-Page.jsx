@@ -16,10 +16,9 @@ import FindInPageIcon from '@mui/icons-material/FindInPage';
 
 function MainPage(props) {
     const whatMenu = props.menu;
-    const getSubMenu = props.submenu;
 
     // States
-    const [buttonSelect, setButtonSelect] = useState(getSubMenu);
+    const [buttonSelect, setButtonSelect] = useState(props.submenu);
     const [savedPagination, setSavedPagination] = useState(null);
     const [antrianData, setAntrianData] = useState([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);

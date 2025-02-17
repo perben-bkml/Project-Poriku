@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../lib/AuthContext";
 
 function Login () {
     //States
@@ -8,9 +9,9 @@ function Login () {
         username: "",
         password: "",
     })
-    //Setting up useNavigate
+    //Setting up useNavigate and createContex
     const navigate = useNavigate();
-    
+    const { setIsAuthenticated } = useContext(AuthContext)
     //Handling user input changes
     function handleInputChange(event) {
         setCredentials({
@@ -22,8 +23,12 @@ function Login () {
     async function handleSubmit(event) {
         event.preventDefault();
         try {
-            const response = await axios.post("http://localhost:3000/login-auth", credentials)
+            const response = await axios.post("http://localhost:3000/login-auth", credentials, {
+                withCredentials: true, //Ensure cookies are sent
+            })
             if (response.status === 200) {
+                setIsAuthenticated(true)
+                console.log(response.data.data)
                 navigate("/home")
             } 
         } catch (error) {

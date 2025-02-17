@@ -20,9 +20,15 @@ const getFormattedDate = () => {
     return `${year}-${month}-${day}`;
 }
 const d = getFormattedDate();
+// Allowing CORS to get request and cookies from frontend
+const corsOption = {
+    origin: "http://localhost:5173",
+    credentials: true,
+}
+
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors(corsOption));
 app.use(cookieParser())
 
 // Setting Up Postgres
@@ -77,18 +83,34 @@ app.post("/login-auth", async (req, res) => {
         );
 
             // Set cookie with the token
-        res.cookie("auth_token", token, {
+        res.cookie("auth_token", token, {   // The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
             secure: false, // Set to true in production (requires HTTPS)
+            sameSite: "lax", //Helps with cross site request
             maxAge: 3 * 60 * 60 * 1000, // 3 hours
         });
 
-        res.json({message: "User Entered!"})
+        res.json({data: userData, message: "Login Success!"})
     } catch (error) {
         console.log("Error sending data to DB.", error)
         res.status(500).json({error: "Can't write data to DB."})
     }
 })
+
+//Check user cookies
+app.get("/check-auth", (req, res) => {
+    const token = req.cookies.auth_token;
+    if (!token) {
+        return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET_KEY);
+        res.status(200).json({ user: decoded });
+    } catch (error) {
+        res.status(400).json({ message: "Invalid token" });
+    }
+});
 
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {

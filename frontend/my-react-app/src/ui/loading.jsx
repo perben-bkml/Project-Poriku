@@ -7,3 +7,11 @@ export default function LoadingAnimate({ size = "60px", thickness = 4 }) {
         </div>
     );
 }
+
+export function LoadingScreen() {
+    return (
+    <div className="loading">
+        <CircularProgress size="80px" thickness={4}/>
+    </div>
+    )
+}

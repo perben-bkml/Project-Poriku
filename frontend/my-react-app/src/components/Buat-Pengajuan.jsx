@@ -5,7 +5,7 @@ import axios from "axios";
 // Import Components
 import Popup from "../ui/Popup";
 import { columns } from "./head-data";
-import LoadingAnimate from "../ui/loading";
+import LoadingAnimate, { LoadingScreen } from "../ui/loading";
 import { SubmitButton } from "../ui/buttons";
 
 // Import Table Material UI
@@ -509,7 +509,7 @@ function BuatPengajuan(props) {
                 </form>
             </div>
             {isPopup && (<Popup whenClick={componentType === "buat"? handleSubmit : handleSubmitEdit} cancel={handlePopup}/>)}
-            {isLoading && <div className="loading"><CircularProgress size="80px" thickness={4}/></div>}
+            {isLoading && <LoadingScreen />}
         </div>
     )
 }

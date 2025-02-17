@@ -17,9 +17,6 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
-// Import Progress Material UI
-import CircularProgress from '@mui/material/CircularProgress';
-
 function BuatPengajuan(props) {
     //Determining if this component is being used for viewing, editing, or creating new pengajuan
     const [componentType, setComponentType] = useState("")
@@ -35,6 +32,10 @@ function BuatPengajuan(props) {
     //State for reading and edit tabledata
     const [keywordRowPos, setKeywordRowPos] = useState("");
     const [keywordEndRow, setKeywordEndRow] = useState("");
+    //State for "formula mode"
+    const [targetReference, setTargetReference] = useState(null);
+    const [currentEditableCell, setCurrentEditableCell] = useState(null);
+    const [isFormulaMode, setIsFormulaMode] = useState(false);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -88,25 +89,38 @@ function BuatPengajuan(props) {
         if (!num) {
             return "";
         } else {
-            return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+            return num.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
         }
     }
     
     //Function handling Math equations
-    function evaluateEquation(equation) {
+    function evaluateEquation(equation, rowIndex, colIndex) {
         try {
-            //Remove = as leading equation like excel
+            //Remove = and , as leading equation like excel
             const equ = equation.trim().startsWith("=") ? equation.slice(1) : equation;
+            const sanitizeEqu = equ.replace(/,/g, "");
             //Evaluate/count equations
-            const result = Math.ceil(math.evaluate(equ));
+            const result = Math.ceil(math.evaluate(sanitizeEqu));
+            const stringResult = numberFormats(result.toString());
             //Returning formatted result
-            return numberFormats(result.toString());
+            const newData = [...tableData];
+            newData[rowIndex][colIndex] = stringResult;
+            setTableData(newData);
         } catch {
             return "Rumus tidak valid."
         }
     }
+
     // Handling text area changes
     function handleCellChange(cellrowIndex, cellcolumnIndex, value, textareaRef) {
+        if (value.startsWith("=")) {
+            setIsFormulaMode(true);
+            setCurrentEditableCell({ row: cellrowIndex, col: cellcolumnIndex });
+        } else {
+            setIsFormulaMode(false);
+            setCurrentEditableCell(null)
+        }
+
         const updatedData = [...tableData];
         updatedData[cellrowIndex][cellcolumnIndex] = value;
         setTableData(updatedData);
@@ -118,23 +132,61 @@ function BuatPengajuan(props) {
     function handleCellBlur (cellrowIndex, cellcolumnIndex, value) {
         //This will detect if the content inside the textarea is normal number or a math equation
         let updatedValue = value;
-        if (columnsWithNumber.includes(cellcolumnIndex)) {
             if (value.startsWith("=")) {
-                updatedValue = evaluateEquation(value);
+                null;
             } else {
                 const numericValue = value.replace(/[^\d]/g, "");
                 updatedValue = numberFormats(numericValue);
+                const updatedData = [...tableData];
+                updatedData[cellrowIndex][cellcolumnIndex] = updatedValue;
+                setTableData(updatedData);
+            }
+    }
+
+    // Handling formula mode
+    function handleCellClick(rowIndex, colIndex) {
+        if (isFormulaMode && targetReference) {
+            if (currentEditableCell.col !== colIndex || currentEditableCell.row !== rowIndex){
+                const targetCellValue = tableData[rowIndex][colIndex] || "";
+                
+                const originData = [...tableData];
+                const originCellData = originData[currentEditableCell.row][currentEditableCell.col] || "=";
+                
+                // Check if the last character is an operator
+                const lastChar = originCellData[originCellData.length - 1];
+                const isLastCharOperator = /[\+\-\*\/=]$/.test(lastChar);
+
+                let updatedFormula;
+
+                if (isLastCharOperator) {
+                    // Append the new cell reference if the last character is an operator
+                    updatedFormula = originCellData + targetCellValue;
+                } else {
+                    // Find the position of the last operator or "="
+                    const lastOperatorMatch = originCellData.match(/[\+\-\*\/=]/g);
+                    const lastOperatorPos = lastOperatorMatch
+                        ? originCellData.lastIndexOf(lastOperatorMatch[lastOperatorMatch.length - 1]) + 1
+                        : originCellData.length;
+
+                    // Replace the value after the last operator
+                    updatedFormula = originCellData.substring(0, lastOperatorPos) + targetCellValue;
+                }
+
+                // Update the table with the new formula
+                originData[currentEditableCell.row][currentEditableCell.col] = updatedFormula;
+                setTableData(originData);
+      
             }
         }
-        const updatedData = [...tableData];
-        updatedData[cellrowIndex][cellcolumnIndex] = updatedValue;
-        setTableData(updatedData);
     }
+
 
     // The following function will make us able to select cells with mouse
     function handleCellMouseDown(rowIndex, colIndex) {
-        setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
-        setIsSelecting(true);
+        if (!isFormulaMode){
+            setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
+            setIsSelecting(true);
+        } 
     }
     function handleCellMouseOver(rowIndex, colIndex) {
         if (isSelecting) {
@@ -263,10 +315,11 @@ function BuatPengajuan(props) {
                 break;
             case "Enter":
                 event.preventDefault();
+                evaluateEquation(event.target.value, rowIndex, colIndex)
+                setIsFormulaMode(false);
+                setCurrentEditableCell(null); 
+                setTargetReference(null);
                 if (rowIndex < numRows - 1) {
-                    focusCell(rowIndex + 1, colIndex);
-                } else {
-                    addNewRow();
                     focusCell(rowIndex + 1, colIndex);
                 }
                 break;
@@ -467,6 +520,10 @@ function BuatPengajuan(props) {
                                                     data-col={colIndex}
                                                     onMouseDown={()=>handleCellMouseDown(rowIndex, colIndex)}
                                                     onMouseOver={()=>handleCellMouseOver(rowIndex, colIndex)}
+                                                    onClick={() => {
+                                                        setTargetReference({ row: rowIndex, col: colIndex });
+                                                        handleCellClick(rowIndex, colIndex);
+                                                    }}
                                                     sx={{minHeight:20, minWidth: columns[colIndex].minWidth, padding:"8px"}}
                                                     align={colIndex === 0 ? "center" : "left"}>
                                                     <textarea 
@@ -475,9 +532,13 @@ function BuatPengajuan(props) {
                                                         data-row={rowIndex}
                                                         data-col={colIndex}
                                                         onChange={(input) => handleCellChange(rowIndex, colIndex, input.target.value, input.target)}
-                                                        onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
+                                                        // onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
                                                         onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
-                                                        onPaste={(event) => handlePaste(event, rowIndex, colIndex)}/>
+                                                        onPaste={(event) => handlePaste(event, rowIndex, colIndex)}
+                                                        readOnly={
+                                                            currentEditableCell !== null && (currentEditableCell.row !== rowIndex || currentEditableCell.col !== colIndex)
+                                                            }
+                                                        />
                                                 </TableCell>
                                             ))}
                                         </TableRow>

@@ -36,6 +36,7 @@ function BuatPengajuan(props) {
     const [targetReference, setTargetReference] = useState(null);
     const [currentEditableCell, setCurrentEditableCell] = useState(null);
     const [isFormulaMode, setIsFormulaMode] = useState(false);
+    const [currentTextareaRef, setCurrentTextareaRef] = useState(null);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -101,7 +102,10 @@ function BuatPengajuan(props) {
             const sanitizeEqu = equ.replace(/,/g, "");
             //Evaluate/count equations
             const result = Math.ceil(math.evaluate(sanitizeEqu));
-            const stringResult = numberFormats(result.toString());
+            let stringResult = numberFormats(result.toString());
+            if (stringResult == "NaN") {
+                stringResult = "";
+            }
             //Returning formatted result
             const newData = [...tableData];
             newData[rowIndex][colIndex] = stringResult;
@@ -113,12 +117,15 @@ function BuatPengajuan(props) {
 
     // Handling text area changes
     function handleCellChange(cellrowIndex, cellcolumnIndex, value, textareaRef) {
+        handleDppCount(cellrowIndex, cellcolumnIndex);
         if (value.startsWith("=")) {
             setIsFormulaMode(true);
             setCurrentEditableCell({ row: cellrowIndex, col: cellcolumnIndex });
+            setCurrentTextareaRef(textareaRef);
         } else {
             setIsFormulaMode(false);
-            setCurrentEditableCell(null)
+            setCurrentEditableCell(null);
+            setCurrentTextareaRef(null);
         }
 
         const updatedData = [...tableData];
@@ -130,17 +137,23 @@ function BuatPengajuan(props) {
     }
 
     function handleCellBlur (cellrowIndex, cellcolumnIndex, value) {
-        //This will detect if the content inside the textarea is normal number or a math equation
-        let updatedValue = value;
-            if (value.startsWith("=")) {
-                null;
-            } else {
-                const numericValue = value.replace(/[^\d]/g, "");
-                updatedValue = numberFormats(numericValue);
-                const updatedData = [...tableData];
-                updatedData[cellrowIndex][cellcolumnIndex] = updatedValue;
-                setTableData(updatedData);
-            }
+        // Check if the value starts with "=" (formula mode)
+        if (value.startsWith("=")) {
+            // No formatting should occur in formula mode
+            return;
+        }
+
+        // Only format if the value is numeric
+        const numericValue = value.replace(/,/g, ""); // Remove any existing commas
+        if (!isNaN(numericValue) && numericValue.trim() !== "") {
+            // Format the number with commas for thousands
+            const formattedValue = numberFormats(numericValue);
+
+            // Update the table data with the formatted value
+            const updatedData = [...tableData];
+            updatedData[cellrowIndex][cellcolumnIndex] = formattedValue;
+            setTableData(updatedData);
+        }   
     }
 
     // Handling formula mode
@@ -175,17 +188,31 @@ function BuatPengajuan(props) {
                 // Update the table with the new formula
                 originData[currentEditableCell.row][currentEditableCell.col] = updatedFormula;
                 setTableData(originData);
+
+                // Retain focus on the current editing cell
+                if (currentTextareaRef) {
+                    currentTextareaRef.focus();
+                    currentTextareaRef.setSelectionRange(updatedFormula.length, updatedFormula.length);
+                }
       
             }
         }
     }
 
+    // Handle Automatic DPP & DPP Nilai lain calculation
+    function handleDppCount(rowIndex, colIndex) {
+        if (colIndex === 5) {
+            const getNilaiTagihan = [...tableData][rowIndex][4];
+            
+        }
+    }
 
-    // The following function will make us able to select cells with mouse
+    // The following function will make us able to select many cells with mouse
     function handleCellMouseDown(rowIndex, colIndex) {
         if (!isFormulaMode){
             setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
             setIsSelecting(true);
+            focusCell(rowIndex, colIndex)
         } 
     }
     function handleCellMouseOver(rowIndex, colIndex) {
@@ -299,19 +326,27 @@ function BuatPengajuan(props) {
         switch (event.key) {
             case "ArrowUp":
                 event.preventDefault();
-                if (rowIndex > 0) {focusCell(rowIndex - 1, colIndex)};
+                if (!isFormulaMode){
+                    if (rowIndex > 0) {focusCell(rowIndex - 1, colIndex)};
+                }
                 break;
             case "ArrowDown":
                 event.preventDefault();
-                if (rowIndex < numRows - 1) {focusCell(rowIndex + 1, colIndex)};
+                if (!isFormulaMode){
+                    if (rowIndex < numRows - 1) {focusCell(rowIndex + 1, colIndex)};
+                }
                 break;
             case "ArrowLeft":
                 event.preventDefault();
-                if (colIndex > 0) {focusCell(rowIndex, colIndex - 1)};
+                if (!isFormulaMode){
+                    if (colIndex > 0) {focusCell(rowIndex, colIndex - 1)};
+                }
                 break;
             case "ArrowRight":
                 event.preventDefault();
-                if (colIndex < numCols - 1) {focusCell(rowIndex, colIndex + 1)};
+                if (!isFormulaMode){
+                    if (colIndex < numCols - 1) {focusCell(rowIndex, colIndex + 1)};
+                }
                 break;
             case "Enter":
                 event.preventDefault();
@@ -325,6 +360,12 @@ function BuatPengajuan(props) {
                 break;
             case "Tab":
                 event.preventDefault();
+                if (isFormulaMode) {
+                    evaluateEquation(event.target.value, rowIndex, colIndex)
+                    setIsFormulaMode(false);
+                    setCurrentEditableCell(null); 
+                    setTargetReference(null);
+                }
                 if (colIndex < numCols - 1) {
                     focusCell(rowIndex, colIndex + 1);
                 } else if (rowIndex < numRows - 1) {
@@ -532,7 +573,7 @@ function BuatPengajuan(props) {
                                                         data-row={rowIndex}
                                                         data-col={colIndex}
                                                         onChange={(input) => handleCellChange(rowIndex, colIndex, input.target.value, input.target)}
-                                                        // onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
+                                                        onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
                                                         onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
                                                         onPaste={(event) => handlePaste(event, rowIndex, colIndex)}
                                                         readOnly={

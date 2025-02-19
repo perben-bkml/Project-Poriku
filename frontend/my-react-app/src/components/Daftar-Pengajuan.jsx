@@ -108,7 +108,7 @@ function DaftarPengajuan(props){
         try {
             setAntrianData([]);
             setIsLoading(true);
-            const response = await axios.get("http://localhost:3000/bendahara/filter-date", { params:{ datePrefix, page: currentPage, limit: rowsPerPage }});
+            const response = await axios.get("http://localhost:3000/bendahara/filter-date", { params:{ datePrefix, page: 1, limit: rowsPerPage }});
             if (response.status === 200){
                 const { data: rowData, totalPages } = response.data;
                 setAntrianData(rowData);

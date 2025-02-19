@@ -79,7 +79,7 @@ app.post("/login-auth", async (req, res) => {
         const token = jwt.sign(
             { id: userData[0].id, username: userData[0].username, role: userData[0].role },
             JWT_SECRET_KEY,
-            { expiresIn: "3h" }
+            { expiresIn: "6h" }
         );
 
             // Set cookie with the token

@@ -4,6 +4,7 @@ import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
 import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
+import KelolaPengajuan from "../components/Kelola-Pengajuan";
 // Import Static Component
 import Navbar from '../ui/Navbar'
 import Footer from '../ui/Footer'
@@ -13,6 +14,7 @@ import ChecklistIcon from '@mui/icons-material/Checklist';
 import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
 import Avatar from "@mui/material/Avatar";
 import FindInPageIcon from '@mui/icons-material/FindInPage';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 function MainPage(props) {
     const whatMenu = props.menu;
@@ -64,6 +66,8 @@ function MainPage(props) {
     // Rendering Components
     function renderComponent() {
         switch (buttonSelect) {
+            case "kelola-pengajuan":
+                return <KelolaPengajuan />
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":
@@ -95,6 +99,7 @@ function MainPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
+                        <button className={`dash-button ${buttonSelect === "kelola-pengajuan" ? "btn-selected" : ""}`} name="kelola-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><MenuBookIcon fontSize="small"/><span className="padd-span-bend"/>Kelola Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>

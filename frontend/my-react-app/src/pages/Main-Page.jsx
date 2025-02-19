@@ -35,6 +35,7 @@ function MainPage(props) {
         setButtonSelect(event.name)
         formatText(event.name)
         setSavedPagination(null);
+        setAlertMessage("");
     }
     //Just converting into title name
     function formatText(input) {
@@ -56,6 +57,7 @@ function MainPage(props) {
                 setButtonSelect(compType);
                 setSavedPagination(lastPage);
                 setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status])
+                setAlertMessage(null);
             }
         }   
     }

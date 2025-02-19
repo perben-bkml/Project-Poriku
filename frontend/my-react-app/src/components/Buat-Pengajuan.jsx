@@ -39,6 +39,7 @@ function BuatPengajuan(props) {
     const [currentTextareaRef, setCurrentTextareaRef] = useState(null);
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
+    const [isKetentuan, setIsKetentuan] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoading2, setIsLoading2] = useState(false);
 
@@ -99,9 +100,10 @@ function BuatPengajuan(props) {
         try {
             //Remove = and , as leading equation like excel
             const equ = equation.trim().startsWith("=") ? equation.slice(1) : equation;
-            const sanitizeEqu = equ.replace(/,/g, "");
+            const sanitizeEqu = equ.replace(/\./g, "")
+            const sanitizeEqu2 = sanitizeEqu.replace(/,/g, "");
             //Evaluate/count equations
-            const result = Math.ceil(math.evaluate(sanitizeEqu));
+            const result = Math.ceil(math.evaluate(sanitizeEqu2));
             let stringResult = numberFormats(result.toString());
             if (stringResult == "NaN") {
                 stringResult = "";
@@ -417,6 +419,14 @@ function BuatPengajuan(props) {
         }
     }
 
+    function handleKetentuanPopup() {
+        if (!isKetentuan) {
+            setIsKetentuan(true);
+        } else {
+            setIsKetentuan(false);
+        }
+    }
+
     // Handle form submits
     async function handleSubmit(event){
         event.preventDefault();
@@ -493,7 +503,7 @@ function BuatPengajuan(props) {
             {componentType === "buat" ? (
             <div className="pengajuan-desc">
                 <p>Ketentuan Pengajuan Pencairan GUP/TUP (Wajib Dibaca!):</p>
-                <button>Baca Ketentuan</button>
+                <button onClick={handleKetentuanPopup}>Baca Ketentuan</button>
             </div> )
             :
             (props.passedData && (<div className="pengajuan-desc">
@@ -535,7 +545,7 @@ function BuatPengajuan(props) {
                     </div>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
-                            <p style={{fontWeight: 600, fontSize: "1.1rem"}}>Input Data Pengajuan</p>
+                            <p>Input Data Pengajuan</p>
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} 
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
@@ -604,13 +614,16 @@ function BuatPengajuan(props) {
                     </div>
                     :
                     <div className="form-submit">
-                        <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={props.invisible && props.invisible("daftar-pengajuan", props.passedData)}/>
-                        <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat"}/>
+                        <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={ ()=>
+                            props.invisible("daftar-pengajuan", props.passedData)
+                        }/>
+                        <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat" ? true : false}/>
                     </div>    
                         }
                 </form>
             </div>
-            {isPopup && (<Popup whenClick={componentType === "buat"? handleSubmit : handleSubmitEdit} cancel={handlePopup}/>)}
+            {isKetentuan && (<Popup whenClick={() => setIsKetentuan(false)} type="ketentuan-bendahara"/>)}
+            {isPopup && (<Popup whenClick={componentType === "buat"? handleSubmit : handleSubmitEdit} cancel={handlePopup} type="submit"/>)}
             {isLoading && <LoadingScreen />}
         </div>
     )

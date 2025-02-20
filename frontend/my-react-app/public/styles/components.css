@@ -573,6 +573,8 @@ input[type="number"]::-webkit-inner-spin-button {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     margin-right: 40px;
+    width: 97%;
+    margin-bottom: 30px;
 }
 .card-title {
     display: flex;
@@ -583,6 +585,17 @@ input[type="number"]::-webkit-inner-spin-button {
     display: flex;
     justify-content: center;
     font-size: 1.3rem;
+}
+.wide-card {
+    margin-top: 40px;
+    margin-bottom: 40px;
+}
+.wide-card-title {
+    margin-left: 30px;
+    font-size: 2rem;
+}
+.wide-card-content {
+    margin-bottom: 20px;
 }
 
 
@@ -647,5 +660,10 @@ input[type="number"]::-webkit-inner-spin-button {
     }
     .embed-container.embed2 {
         width: 72%;
+    }
+
+    /* Styling card ui */
+    .card-title {
+        font-size: 1.08rem;
     }
 }

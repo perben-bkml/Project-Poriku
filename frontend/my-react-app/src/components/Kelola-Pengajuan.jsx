@@ -1,6 +1,6 @@
 import React from 'react';
 //Import components
-import { Card } from '../ui/cards';
+import { Card, WideTableCard } from '../ui/cards';
 
 function KelolaPengajuan() {
 
@@ -13,6 +13,10 @@ function KelolaPengajuan() {
                     <Card key={index} title={data} content="999"/>
                 ))}
             </div>
+            <WideTableCard title="Pengajuan Belum Verifikasi"/>
+            <WideTableCard title="Sudah Verifikasi"/>
+            <WideTableCard title="Ajuan Hari Ini"/>
+            <WideTableCard title="Sudah Diajukan Bulan Ini"/>
         </div>
     )
 };

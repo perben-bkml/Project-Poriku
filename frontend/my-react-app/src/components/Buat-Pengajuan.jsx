@@ -614,8 +614,8 @@ function BuatPengajuan(props) {
                     </div>
                     :
                     <div className="form-submit">
-                        <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={ ()=>
-                            props.invisible("daftar-pengajuan", props.passedData)
+                        <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={ 
+                           props.invisible && props.invisible("daftar-pengajuan", props.passedData)
                         }/>
                         <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat" ? true : false}/>
                     </div>    

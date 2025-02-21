@@ -14,12 +14,23 @@ import cookieParser from "cookie-parser";
 const app = express();
 const getFormattedDate = () => {
     const date = new Date();
+    // Get date in yyyy-mm-dd
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+    const prevMonth = String(date.getMonth()).padStart(2, '0'); // Prev Month
     const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const fullDateFormat = `${year}-${month}-${day}`;
+    // Date in yyyy-mm
+    const MonthDateFormat = `${year}-${month}`;
+    // Previous Month
+    const PrevMonthDate =  `${year}-${prevMonth}`;
+    return {
+        fullDateFormat,
+        MonthDateFormat,
+        PrevMonthDate,
+    }
 }
-const d = getFormattedDate();
+const { fullDateFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
 // Allowing CORS to get request and cookies from frontend
 const corsOption = {
     origin: "http://localhost:5173",
@@ -227,7 +238,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
         const lastFilledRows = responseAntrian.length || 0;
         const lastTableRows = responseTable.length || [];
         // Add date to beginning of textdata array
-        textdata.unshift(d);
+        textdata.unshift(fullDateFormat);
         // Add counter increment and unshift to textdata
         const newIdCounter = parseInt(responseId) + 1;
         textdata.unshift(newIdCounter)
@@ -709,6 +720,28 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
         console.log("Failed handling data.", error)
         res.status(500).json({error: "Failed handling data." });
     }
+})
+
+//Kelola-Pengajuan handlers
+app.get("/bendahara/kelola-ajuan", async (req, res) => {
+    const datePrefixes = [MonthDateFormat, PrevMonthDate];
+      try {
+        // Fetch entire column B from Google Sheets
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Write Antrian'!B:B",
+        })
+        // Get all rows
+        const allRows = response.data.values || [];
+
+        // Filter rows based on this month and previous month
+        const filteredRows = allRows
+            .map((row, index) => ({ date: row[0], rowIndex: index + 1 })) // Add row index for reference
+            .filter(row => row.date && datePrefixes.some(prefix => row.date.startsWith(prefix)));
+        
+      } catch (error) {
+
+      } 
 })
 
 // Ports

@@ -81,7 +81,7 @@ export function TableKelola(props) {
                 <TableHead>
                     <TableRow sx={{ backgroundColor: "#1a284b" }}>
                         <TableCell sx={{width: "30px"}}></TableCell>
-                    {headData.map((data, index) => (
+                    {props.header.map((data, index) => (
                         <TableCell key={index} sx={{ fontSize:"1rem", fontWeight: 550, color: "white"}}>{data}</TableCell>
                     ))}
                     </TableRow>

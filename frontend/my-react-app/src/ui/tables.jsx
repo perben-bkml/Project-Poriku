@@ -11,6 +11,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { IconButton } from '@mui/material';
 import Collapse from '@mui/material/Collapse';
+// Components
+import LoadingAnimate from './loading';
 
 // SPM-Bend.jsx
 export function TableSpmBendahara(props) {
@@ -40,7 +42,9 @@ export function TableSpmBendahara(props) {
 
 //Kelola-Pengajuan.jsx
 export function TableKelola(props) {
-
+    if (!props.content || props.content.length === 0) {
+        return <LoadingAnimate />
+    }
     //Container
     const headData = ["Timestamp", "Nama", "Jenis", "Nominal", "Req. Tanggal", "Unit Kerja", "Status"]
     const bodyData = [["2025-02-20", "Alex", "GUP", "10,000,000", "2025-02-24", "Biro Umum", "Dalam Antrian"], ["2025-02-21", "Jane", "PTUP", "20,000,000", "2025-02-26", "Biro Umum", "Dalam Antrian"] ]
@@ -65,7 +69,7 @@ export function TableKelola(props) {
                     ))}
                 </TableRow>
                 <TableRow>
-                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={bodyData.length + 1}>
+                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={props.rowData[0].length + 1}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
                             <h2>Test</h2>
                         </Collapse>
@@ -87,7 +91,7 @@ export function TableKelola(props) {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {bodyData.map((row, index) => (
+                    {props.content.map((row, index) => (
                         <Row key={index} rowData={row}/>
                     ))}
                 </TableBody>

@@ -228,7 +228,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
         const ranges = [
             "'Write Antrian'!A:A",
             "'Write Table'!A:A",
-            "'Write Antrian'!Q1:Q1"  //Getting antrian ID counter
+            "'Write Antrian'!R1:R1"  //Getting antrian ID counter
         ]
         const allRequest = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: ranges });
         const responseAntrian = allRequest.data.valueRanges[0].values || [];
@@ -265,7 +265,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     values: tabledata,
                 },
                 {
-                    range: "'Write Antrian'!Q1:Q1",
+                    range: "'Write Antrian'!R1:R1",
                     values: [[newIdCounter]],
                 },
             ],
@@ -738,9 +738,42 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const filteredRows = allRows
             .map((row, index) => ({ date: row[0], rowIndex: index + 1 })) // Add row index for reference
             .filter(row => row.date && datePrefixes.some(prefix => row.date.startsWith(prefix)));
-        
-      } catch (error) {
+        // Error handling if no keyword found
+        if (filteredRows.length === 0) {
+            return res.status(404).json({ error: "No matching rows found." });
+        }
+        // Sort rows in reverse order (latest dates first)
+        const reversedRows = filteredRows.reverse();
+        // Fetch full row data for the selected month
+        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:P${row.rowIndex}`); // Adjust range if needed
+        const batchGetResponse = await sheets.spreadsheets.values.batchGet({
+            spreadsheetId,
+            ranges: rowRanges,
+        });
 
+        let rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
+        const num_Columns = 16;
+        rowData = rowData.map(row => {
+            while (row.length < num_Columns) {
+                row.push("");
+            }
+            return row;
+        })
+        // Function to filter arrays
+        function filterByStatus(array, status) {
+            return array.filter(row => row.includes(status));
+        }
+        // Filtering to separate into 6 array
+        const dalamAntrian = filterByStatus(rowData, "Dalam Antrian");
+        const sedangVerif = filterByStatus(rowData, "Sedang Di Verifikasi");
+        const sudahVerif = filterByStatus(rowData, "Sudah Di Verifikasi");
+        const ajuanHariIni = filterByStatus(rowData, "Diajukan Hari Ini");
+        const terbitDRPP = filterByStatus(rowData, "Sudah Diterbitkan DRPP");
+        const diajukanKPPN = filterByStatus(rowData, "Sudah Diajukan ke KPPN");
+        res.json({ data: [dalamAntrian, sedangVerif, sudahVerif, ajuanHariIni, terbitDRPP, diajukanKPPN] });
+
+      } catch (error) {
+            console.log("Error fetching data.", error)
       } 
 })
 

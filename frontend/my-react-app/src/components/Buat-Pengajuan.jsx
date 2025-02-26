@@ -491,7 +491,7 @@ function BuatPengajuan(props) {
             const response = await axios.patch("http://localhost:3000/bendahara/edit-table" , requestData)
             if (response.status === 200){
                 props.alertMessage("Data berhasil diubah.");
-                props.changeComponent("daftar-pengajuan");
+                props.changeComponent(props.fallbackTo);
             }
             setIsLoading(false);
         } catch (err) {
@@ -615,7 +615,7 @@ function BuatPengajuan(props) {
                     :
                     <div className="form-submit">
                         <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={ 
-                           props.invisible && props.invisible("daftar-pengajuan", props.passedData)
+                           props.invisible && props.invisible(props.fallbackTo, props.passedData)
                         }/>
                         <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat" ? true : false}/>
                     </div>    

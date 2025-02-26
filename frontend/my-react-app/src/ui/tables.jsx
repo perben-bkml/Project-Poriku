@@ -1,4 +1,4 @@
-import React, { useState, Fragment } from 'react';
+import React, { useState, Fragment, useEffect } from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -40,14 +40,27 @@ export function TableSpmBendahara(props) {
     )
 }
 
-//Kelola-Pengajuan.jsx
+//Kelola-Pengajuan.jsx & Aksi-Pengajuan.jsx
 export function TableKelola(props) {
-    if (!props.content || props.content.length === 0) {
+    //State
+    const [tableType, setTableType] = useState("")
+    useEffect(() => {
+        setTableType(props.type);
+    }, [props.type])
+
+    if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
         return <LoadingAnimate />
     }
-    //Container
-    const headData = ["Timestamp", "Nama", "Jenis", "Nominal", "Req. Tanggal", "Unit Kerja", "Status"]
-    const bodyData = [["2025-02-20", "Alex", "GUP", "10,000,000", "2025-02-24", "Biro Umum", "Dalam Antrian"], ["2025-02-21", "Jane", "PTUP", "20,000,000", "2025-02-26", "Biro Umum", "Dalam Antrian"] ]
+
+
+    function handleAksiClick(index) {
+        if (props.type === "kelola") {
+            props.changeComponent("aksi-pengajuan")
+            props.aksiData(props.fullContent[index][0])
+        } else if (props.type === "aksi") {
+            null
+        }
+    }
 
     function Row(props) {
         //State
@@ -55,6 +68,7 @@ export function TableKelola(props) {
         return (
             <Fragment>
                 <TableRow>
+                    {tableType === "kelola"? 
                     <TableCell>
                         <IconButton
                             aria-label="expand row"
@@ -64,14 +78,18 @@ export function TableKelola(props) {
                             {isOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                         </IconButton>
                     </TableCell>
+                    : null}
                     {props.rowData.map((data, index) => (
                         <TableCell key={index} >{data}</TableCell>
                     ))}
                 </TableRow>
+
                 <TableRow>
-                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={props.rowData[0].length + 1}>
+                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola"? props.rowData[0].length + 1 : 22}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                            <h2>Test</h2>
+                            <div className="collapsible">
+                                <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Aksi</button>
+                            </div>
                         </Collapse>
                     </TableCell>
                 </TableRow>
@@ -80,19 +98,24 @@ export function TableKelola(props) {
     }
 
     return (
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)" }}>
-            <Table>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 1200 }}>
+            <Table stickyHeader aria-label="sticky table">
                 <TableHead>
-                    <TableRow sx={{ backgroundColor: "#1a284b" }}>
-                        <TableCell sx={{width: "30px"}}></TableCell>
+                    <TableRow>
+                    {tableType === "kelola" ? <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}    
                     {props.header.map((data, index) => (
-                        <TableCell key={index} sx={{ fontSize:"1rem", fontWeight: 550, color: "white"}}>{data}</TableCell>
+                        <TableCell key={index} sx={
+                            tableType === "kelola" ?
+                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}
+                            :
+                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b", minWidth: data.minWidth}}>
+                            {tableType === "kelola" ? data : data.label}</TableCell>
                     ))}
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {props.content.map((row, index) => (
-                        <Row key={index} rowData={row}/>
+                        <Row key={index} rowData={row} rowIndex={index}/>
                     ))}
                 </TableBody>
             </Table>

@@ -5,6 +5,7 @@ import BuatPengajuan from "../components/Buat-Pengajuan";
 import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
 import KelolaPengajuan from "../components/Kelola-Pengajuan";
+import AksiPengajuan from "../components/Aksi-Pengajuan";
 // Import Static Component
 import Navbar from '../ui/Navbar'
 import Footer from '../ui/Footer'
@@ -25,6 +26,7 @@ function MainPage(props) {
     const [antrianData, setAntrianData] = useState([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [alertMessage, setAlertMessage] = useState("");
+    const [aksiData, setAksiData] = useState([]);
 
 
     // Dash button add and remove class to make it selected
@@ -67,15 +69,17 @@ function MainPage(props) {
     function renderComponent() {
         switch (buttonSelect) {
             case "kelola-pengajuan":
-                return <KelolaPengajuan />
+                return <KelolaPengajuan changeComponent={setButtonSelect} aksiData={setAksiData} />
+            case "aksi-pengajuan":
+                return <AksiPengajuan keyword={aksiData}/>
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":
                 return <BuatPengajuan type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />;
             case "detail-pengajuan":
-                return <BuatPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect}/>
+                return <BuatPengajuan type="lihat" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect} fallbackTo="daftar-pengajuan" />
             case "edit-pengajuan":
-                return <BuatPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect} alertMessage={setAlertMessage}/>
+                return <BuatPengajuan type="edit" invisible={handleInvisibleComponent} passedData={antrianData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} fallbackTo="daftar-pengajuan"/>
             case "lihat-antrian":
                 return <LihatAntrian />
             case "SPM-bendahara":

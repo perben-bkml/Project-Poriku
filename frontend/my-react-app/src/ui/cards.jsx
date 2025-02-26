@@ -17,7 +17,7 @@ export function WideTableCard(props) {
         <div className="bg-card wide-card">
             <h2 className="wide-card-title">{props.title}</h2>
             <div className="wide-card-content">
-                <TableKelola header={props.tableHead} content={props.tableContent}/>
+                <TableKelola type="kelola" header={props.tableHead} content={props.tableContent} fullContent={props.fullContent} changeComponent={props.changeComponent} aksiData={props.aksiData}/>
             </div>
         </div>
     )

@@ -598,6 +598,39 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 20px;
 }
 
+/* Kelola-Pengajuan Table Style */
+.collapsible {
+    padding: 15px 45px;
+}
+
+.btn-aksi {
+    color: white;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    font-weight: 500;
+    height: 30px;
+    width: 85px;
+    border: 1px solid white;
+    background-color: #1a284b;
+    border-radius: 20px;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-aksi:hover {
+    transform: scale(1.1, 1.1);
+}
+
+/* Aksi-Pengajuan */
+.aksi-content {
+    padding: 30px 10px;
+}
+.aksi-content-label {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(8, 1fr);
+}
+
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {

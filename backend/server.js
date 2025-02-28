@@ -413,7 +413,7 @@ app.patch("/bendahara/edit-table", async (req, res) => {
     try {
         
         // Setting antrian data range
-        textdata.unshift(d);
+        textdata.unshift(fullDateFormat);
         const antriResponse = await sheets.spreadsheets.values.get({spreadsheetId, range: "'Write Antrian'!A3:A"});
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;

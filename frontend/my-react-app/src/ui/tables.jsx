@@ -80,15 +80,15 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} >{data}</TableCell>
+                        <TableCell key={index} className={tableType === "kelola" ? null : "table-cell" } >{data}</TableCell>
                     ))}
                 </TableRow>
 
                 <TableRow>
-                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola"? props.rowData[0].length + 1 : 22}>
+                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola"? props.rowData[0].length + 2 : 22}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
                             <div className="collapsible">
-                                <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Aksi</button>
+                                <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Lihat</button>
                             </div>
                         </Collapse>
                     </TableCell>

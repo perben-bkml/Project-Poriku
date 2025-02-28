@@ -91,7 +91,7 @@ function BuatPengajuan(props) {
         if (!num) {
             return "";
         } else {
-            return num.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+            return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         }
     }
     
@@ -543,6 +543,7 @@ function BuatPengajuan(props) {
                             readOnly={componentType === "lihat"}
                             defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
                     </div>
+                    <br/>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
                             <p>Input Data Pengajuan</p>
@@ -587,7 +588,7 @@ function BuatPengajuan(props) {
                                                         onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
                                                         onPaste={(event) => handlePaste(event, rowIndex, colIndex)}
                                                         readOnly={
-                                                            currentEditableCell !== null && (currentEditableCell.row !== rowIndex || currentEditableCell.col !== colIndex)
+                                                            componentType == "lihat"
                                                             }
                                                         />
                                                 </TableCell>

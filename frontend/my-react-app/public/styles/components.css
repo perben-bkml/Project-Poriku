@@ -1,3 +1,8 @@
+/* Global tag styling */
+/* removing date placeholder */
+
+
+
 /* Navbar Component Style */
 .Nav-bar {
     display: grid;
@@ -241,6 +246,13 @@
     align-items: center;
     height: 25px;
     width: 190px;
+}
+
+.pengajuan-date::-webkit-calendar-picker-indicator {
+    position: relative;
+    right: -65px;
+    cursor: pointer;
+    opacity: 1;
 }
 
 .pengajuan-form-textdata select {
@@ -623,13 +635,76 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Aksi-Pengajuan */
 .aksi-content {
     padding: 30px 10px;
-}
-.aksi-content-label {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: repeat(8, 1fr);
+    margin-bottom: 40px;
 }
 
+.aksi-content-title {
+    margin-top: 0px;
+    margin-left: 25px;
+    margin-bottom: 5px;
+    font-size: 2.3rem;
+    color: #0a0f1b;
+}
+
+.aksi-submit {
+    margin-left: 100px;
+    transform: scale(1.1, 1.1);
+}
+
+.aksi-content-grab-data {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    row-gap: 12px;
+    column-gap: 10px;
+    padding: 10px 35px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-top: 0px;
+    margin-bottom: 10px;
+}
+
+.aksi-content-grab-data p {
+    display: flex;
+    align-self: center;
+}
+
+.aksi-content-label {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    row-gap: 12px;
+    column-gap: 10px;
+    padding: 10px 35px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 30px;
+}
+
+.type-btn {
+    height: 30px;
+    width: 230px;
+    border-radius: 20px;
+    padding-left: 10px;
+    border: solid 0.8px rgb(199, 199, 199);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.aksi-content-label input[type="date"].type-btn {
+    width: 220px;
+}
+
+.aksi-content-label input[type="number"].type-btn {
+    width: 220px;
+}
+
+.aksi-content-label input[type="date"]::-webkit-calendar-picker-indicator {
+    position: relative;
+    right: 10px;
+    cursor: pointer;
+    opacity: 1;
+}
 
 
 /* Trying to add media queries */

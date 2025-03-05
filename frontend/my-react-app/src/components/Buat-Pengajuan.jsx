@@ -539,7 +539,7 @@ function BuatPengajuan(props) {
                             readOnly={componentType === "lihat"} 
                             required/>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
-                        <input type="date" id="aju-date" name="tanggal-ajuan"
+                        <input type="date" id="aju-date" name="tanggal-ajuan" className="pengajuan-date"
                             readOnly={componentType === "lihat"}
                             defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
                     </div>

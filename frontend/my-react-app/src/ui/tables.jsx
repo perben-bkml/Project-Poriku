@@ -56,7 +56,7 @@ export function TableKelola(props) {
     function handleAksiClick(index) {
         if (props.type === "kelola") {
             props.changeComponent("aksi-pengajuan")
-            props.aksiData(props.fullContent[index][0])
+            props.aksiData(props.fullContent[index])
         } else if (props.type === "aksi") {
             null
         }

@@ -44,13 +44,26 @@ export function TableSpmBendahara(props) {
 export function TableKelola(props) {
     //State
     const [tableType, setTableType] = useState("")
+    const [isLoading, setIsLoading] = useState(true)
+
     useEffect(() => {
         setTableType(props.type);
     }, [props.type])
 
-    if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
+    useEffect(() => {
+        if (props.content && props.fullContent) {
+            setIsLoading(false);
+        }
+    }, [props.content, props.fullContent]);
+
+    if (isLoading) {
         return <LoadingAnimate />
+    } 
+
+    if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
+        return null
     }
+    
 
 
     function handleAksiClick(index) {
@@ -98,7 +111,7 @@ export function TableKelola(props) {
     }
 
     return (
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 1200 }}>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 970 }}>
             <Table stickyHeader aria-label="sticky table">
                 <TableHead>
                     <TableRow>

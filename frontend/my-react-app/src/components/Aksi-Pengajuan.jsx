@@ -3,14 +3,17 @@ import axios from "axios";
 //Import components;
 import { columns } from "./head-data";
 import { TableKelola } from "../ui/tables";
-import LoadingAnimate from "../ui/loading";
+import LoadingAnimate, { LoadingScreen } from "../ui/loading";
+import Popup from "../ui/Popup";
 
 function AksiPengajuan(props) {
     
     //States
     const [isLoading, setIsLoading] = useState(false)
+    const [isPopup, setIsPopup] = useState(false)
     const [tableData, setTableData] = useState([])
     const [antriData, setAntriData] = useState({
+        no_antri: "",
         ajuan_verifikasi: "",
         tgl_verifikasi: "",
         status_pajak: "",
@@ -42,13 +45,11 @@ function AksiPengajuan(props) {
 
     async function fetchAntrianTable() {
         try {
-            setIsLoading(true);
             const tableKeyword = `TRANS_ID:${props.fulldata[0]}`
             const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
             }
-            setIsLoading(false);
         } catch (error) {
             console.log("Failed sending Keyword.", error)
         }
@@ -56,8 +57,35 @@ function AksiPengajuan(props) {
 
     useEffect(() => {
         fetchAntrianTable();
-        console.log(props.fulldata)
+        setAntriData({
+            no_antri: props.fulldata[0],
+            ajuan_verifikasi: props.fulldata[14] === "" ? "FALSE" : "TRUE",
+            tgl_verifikasi: props.fulldata[15],
+            status_pajak: props.fulldata[12] ,
+            sedia_anggaran: props.fulldata[13],
+            tgl_setuju: props.fulldata[6],
+            drpp: props.fulldata[8],
+            spp: props.fulldata[9],
+            spm: props.fulldata[10],
+        })
+        
     }, [])
+
+    //Automatically change background color for select tag
+    useEffect(() => {
+        if (antriData.sedia_anggaran) {
+            const selectElement = document.getElementById("anggaran");
+            if (selectElement) {
+                selectAnggaranBackgroundColor(selectElement);
+            }
+        }
+        if (antriData.status_pajak) {
+            const selectElement = document.getElementById("sts-pajak");
+            if (selectElement) {
+                selectPajakBackgroundColor(selectElement);
+            }
+        }
+    }, [antriData.sedia_anggaran, antriData.status_pajak]);
 
     //Handle Select Tag style change
     function selectPajakBackgroundColor(select) {
@@ -78,13 +106,31 @@ function AksiPengajuan(props) {
         const {name, value} = event
         setAntriData({...antriData, 
             [name]: value 
-        })
+        });
+    }
+
+    //Handle Popup
+    function handlePopup() {
+        if (!isPopup) {
+            setIsPopup(true);
+        } else {
+            setIsPopup(false);
+        }
     }
 
     //Submit Handler
-    async function handleOnSubmit(event){
-        event.preventDefault()
-        console.log(antriData)
+    async function handleOnSubmit(){
+        try {
+            handlePopup();
+            setIsLoading(true);
+            const result = await axios.post("http://localhost:3000/bendahara/aksi-ajuan", antriData)
+            if (result.status === 200) {
+                props.changeComponent("kelola-pengajuan")
+                setIsLoading(false)
+            }
+        } catch (error) {
+            console.log("Failed sending Data.", error)
+        }
     }
 
     return (
@@ -93,55 +139,60 @@ function AksiPengajuan(props) {
                 <h2 className="aksi-content-title">Informasi Antrian</h2>
                 <div className="aksi-content-grab-data">
                     <h4>No. Antri:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[0]} disabled />
                     <h4>Nama:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[2]} disabled />
                     <h4>Jenis:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[3]} disabled />
                     <h4>Tgl. Antri:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[1]} disabled />
                     <h4>Status:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[7]} disabled />
                     <h4>Satker:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[11]} disabled />
                     <h4>Nominal:</h4>
-                    <p>test</p>
+                    <input type="text" value={props.fulldata[4]} disabled />
                     <h4>Tgl. Request:</h4>
-                    <p>Test</p>
+                    <input type="text" value={props.fulldata[5]} disabled />
                 </div>
-                <form onSubmit={e => handleOnSubmit(e)}>
+                <form>
                 <div className="aksi-content-label">
                     <label htmlFor="aju-verif">Sedang Di Verifikasi?</label>
-                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" onChange={e => handleInputChange(e.target)}> 
+                    {antriData.ajuan_verifikasi == "FALSE"?
+                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" onChange={e => handleInputChange(e.target)}>
                         <option value="FALSE">Belum</option>
                         <option value="TRUE">Iya</option>
+                    </select> :
+                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" onChange={e => handleInputChange(e.target)}>
+                        <option value="TRUE">Iya</option>
                     </select>
+                    }
                     <label htmlFor="tgl-verif">Tanggal Selesai Verifikasi</label>
-                    <input id="tgl-verif" className="type-btn" type="date" name="tgl_verifikasi"  onChange={e => handleInputChange(e.target)} />
+                    <input id="tgl-verif" className="type-btn" type="date" name="tgl_verifikasi" defaultValue={antriData.tgl_verifikasi} onChange={e => handleInputChange(e.target)} />
                     <label htmlFor="sts-pajak">Status Pajak</label>
-                    <select id="sts-pajak" className="type-btn" name="status_pajak" onChange={(e) => (selectPajakBackgroundColor(e.target), handleInputChange(e.target))}>
+                    <select id="sts-pajak" className="type-btn" name="status_pajak" value={!props.fulldata ? null : antriData.status_pajak} onChange={(e) => (selectPajakBackgroundColor(e.target), handleInputChange(e.target))}>
                         {optionPajak.map((data, index) => (
                             <option key={index} style={{backgroundColor: data.color, color: data.textcolor}} value={data.label}>{data.label}</option>
                         ))}
                     </select>
                     <label htmlFor="anggaran">Ketersediaan Anggaran</label>
-                    <select id="anggaran" className="type-btn" name="sedia_anggaran" onChange={(e) => (selectAnggaranBackgroundColor(e.target), handleInputChange(e.target))}>
+                    <select id="anggaran" className="type-btn" name="sedia_anggaran" value={!props.fulldata ? null : antriData.sedia_anggaran} onChange={(e) => (selectAnggaranBackgroundColor(e.target), handleInputChange(e.target))}>
                         {optionAnggaran.map((data, index) => (
                             <option key={index} style={{backgroundColor: data.color, color: data.textcolor}} value={data.label}>{data.label}</option>
                         ))}
                     </select>
                     <label htmlFor="tgl-acc">Tanggal Disetujui</label>
-                    <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" onChange={e => handleInputChange(e.target)}/>
+                    <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" defaultValue={antriData.tgl_setuju} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="drpp">Nomor DRPP</label>
-                    <input id="drpp" className="type-btn" type="number" name="drpp" onChange={e => handleInputChange(e.target)}/>
+                    <input id="drpp" className="type-btn" type="text" name="drpp" placeholder={antriData.drpp} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="spp">Nomor SPP</label>
-                    <input id="spp" className="type-btn" type="number" name="spp" onChange={e => handleInputChange(e.target)}/>
+                    <input id="spp" className="type-btn" type="number" name="spp" placeholder={antriData.spp} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="spm">Nomor SPM</label>
-                    <input id="spm" className="type-btn" type="number" name="spm" onChange={e => handleInputChange(e.target)}/>
+                    <input id="spm" className="type-btn" type="number" name="spm" placeholder={antriData.spm} onChange={e => handleInputChange(e.target)}/>
                 </div>
                 <div className="form-submit aksi-submit">
-                    <input type="submit" value="Kembali" />
-                    <input type="submit" value="Simpan" />
+                    <input type="button" value="Kembali" onClick={() => props.changeComponent("kelola-pengajuan")}/>
+                    <input type="button" value="Simpan" onClick={handlePopup} />
                 </div>
                 </form>
             </div>
@@ -149,6 +200,8 @@ function AksiPengajuan(props) {
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
                 <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData} />
             </div>
+            {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}
+            {isLoading && <LoadingScreen />}
         </div>
     )
 }

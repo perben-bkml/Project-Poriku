@@ -71,7 +71,7 @@ function MainPage(props) {
             case "kelola-pengajuan":
                 return <KelolaPengajuan changeComponent={setButtonSelect} aksiData={setAksiData} />
             case "aksi-pengajuan":
-                return <AksiPengajuan fulldata={aksiData}/>
+                return <AksiPengajuan fulldata={aksiData} changeComponent={setButtonSelect}/>
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":

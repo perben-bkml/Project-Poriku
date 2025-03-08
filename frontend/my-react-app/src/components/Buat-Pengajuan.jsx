@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import * as math from "mathjs";
 import axios from "axios";
 
@@ -20,8 +20,6 @@ import { TableFooter } from "@mui/material";
 function BuatPengajuan(props) {
     //Determining if this component is being used for viewing, editing, or creating new pengajuan
     const [componentType, setComponentType] = useState("")
-    //Determining if the edited cell is on row Nilai Tagihan, DPP, etc.
-    const columnsWithNumber = [4, 5, 6, 7, 9, 11, 13, 15, 17];
     //State
     const [rowNum, setRowNum] = useState(1);
     const emptyCell = Array(21).fill("");
@@ -42,6 +40,18 @@ function BuatPengajuan(props) {
     const [isKetentuan, setIsKetentuan] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoading2, setIsLoading2] = useState(false);
+    //Auto size textarea tag height after fetching data
+    const textAreaRefs = useRef([]); // Stores references to each textarea
+
+    // Auto-resize textareas when data is loaded
+    function resizeAllTextareas() {
+        textAreaRefs.current.forEach((textarea) => {
+            if (textarea) {
+                textarea.style.height = "auto"; // Reset height first
+                textarea.style.height = `${textarea.scrollHeight}px`; // Expand to fit content
+            }
+        });
+    }
 
     //Fetching table data from backend to be shown
     async function fetchAntrianTable() {
@@ -54,6 +64,7 @@ function BuatPengajuan(props) {
                 setRowNum(response.data.data.length);
                 setKeywordRowPos(response.data.keywordRowPos)
                 setKeywordEndRow(response.data.keywordEndRow)
+                setTimeout(() => resizeAllTextareas(), 0);
             }
             setIsLoading2(false);
         } catch (error) {
@@ -326,30 +337,30 @@ function BuatPengajuan(props) {
         const numCols = tableData[0].length;
     
         switch (event.key) {
-            case "ArrowUp":
-                event.preventDefault();
-                if (!isFormulaMode){
-                    if (rowIndex > 0) {focusCell(rowIndex - 1, colIndex)};
-                }
-                break;
-            case "ArrowDown":
-                event.preventDefault();
-                if (!isFormulaMode){
-                    if (rowIndex < numRows - 1) {focusCell(rowIndex + 1, colIndex)};
-                }
-                break;
-            case "ArrowLeft":
-                event.preventDefault();
-                if (!isFormulaMode){
-                    if (colIndex > 0) {focusCell(rowIndex, colIndex - 1)};
-                }
-                break;
-            case "ArrowRight":
-                event.preventDefault();
-                if (!isFormulaMode){
-                    if (colIndex < numCols - 1) {focusCell(rowIndex, colIndex + 1)};
-                }
-                break;
+            // case "ArrowUp":
+            //     event.preventDefault();
+            //     if (!isFormulaMode){
+            //         if (rowIndex > 0) {focusCell(rowIndex - 1, colIndex)};
+            //     }
+            //     break;
+            // case "ArrowDown":
+            //     event.preventDefault();
+            //     if (!isFormulaMode){
+            //         if (rowIndex < numRows - 1) {focusCell(rowIndex + 1, colIndex)};
+            //     }
+            //     break;
+            // case "ArrowLeft":
+            //     event.preventDefault();
+            //     if (!isFormulaMode){
+            //         if (colIndex > 0) {focusCell(rowIndex, colIndex - 1)};
+            //     }
+            //     break;
+            // case "ArrowRight":
+            //     event.preventDefault();
+            //     if (!isFormulaMode){
+            //         if (colIndex < numCols - 1) {focusCell(rowIndex, colIndex + 1)};
+            //     }
+            //     break;
             case "Enter":
                 event.preventDefault();
                 evaluateEquation(event.target.value, rowIndex, colIndex)
@@ -553,7 +564,7 @@ function BuatPengajuan(props) {
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
                         {isLoading2 ? <LoadingAnimate /> :
-                        <TableContainer className="table-container" sx={{maxHeight: 750}}>
+                        <TableContainer className="table-container" sx={{maxHeight: 950}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
                                     <TableRow className="table-row"> 
@@ -578,7 +589,8 @@ function BuatPengajuan(props) {
                                                     }}
                                                     sx={{minHeight:20, minWidth: columns[colIndex].minWidth, padding:"8px"}}
                                                     align={colIndex === 0 ? "center" : "left"}>
-                                                    <textarea 
+                                                    <textarea
+                                                        ref={(el) => (textAreaRefs.current[rowIndex * row.length + colIndex] = el)}
                                                         className={`${isCellSelected(rowIndex, colIndex) ? "selected-cell" : ""}`}
                                                         value={cell}
                                                         data-row={rowIndex}

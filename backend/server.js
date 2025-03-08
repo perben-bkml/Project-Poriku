@@ -62,8 +62,9 @@ const auth = new google.auth.JWT(
 
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
-const spreadsheetId = "1IepWjVRt8qKtZ2X3UxPIyPZC_TziOXU9iqF9UQreFDk";
-const spreadsheetIdCariSPM = "1-NTqDvZFQU8a2l1GEPInzf8EXiRLNc_iGYWB65Qg-wU";
+const sheetIds = JSON.parse(fs.readFileSync("./credentials/sheetid.json"))
+const spreadsheetId = sheetIds.spreadsheetId;
+const spreadsheetIdCariSPM = sheetIds.spreadsheetIdCariSPM;
 
 //Endpoints
 // Login page
@@ -775,6 +776,64 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
       } catch (error) {
             console.log("Error fetching data.", error)
       } 
+})
+
+//Aksi-Pengajuan Handler
+app.post("/bendahara/aksi-ajuan", async (req, res) => {
+    const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = req.body;
+    console.log(req.body);
+    try {
+        const getAntrianResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Write Antrian'!A:A"
+        });
+
+        const allRows = getAntrianResponse.data.values || [];
+        let rowIndex = null;
+
+        // Find the matching row based on no_antri
+        for (let i = 0; i < allRows.length; i++) {
+            if (allRows[i][0] === no_antri) { // Matching row found
+                rowIndex = i + 1; // Convert to 1-based index
+                break;
+            }
+        }
+
+        if (!rowIndex) {
+            return res.status(400).json({ error: "Keyword not found in column A" });
+        }
+        
+        const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? fullDateFormat : "";
+
+        // Update multiple columns in a single request
+        const updateData = [
+            [`'Write Antrian'!P${rowIndex}`, tgl_verifikasi],
+            [`'Write Antrian'!M${rowIndex}`, status_pajak],
+            [`'Write Antrian'!N${rowIndex}`, sedia_anggaran],
+            [`'Write Antrian'!G${rowIndex}`, tgl_setuju],
+            [`'Write Antrian'!I${rowIndex}`, drpp],
+            [`'Write Antrian'!J${rowIndex}`, spp],
+            [`'Write Antrian'!K${rowIndex}`, spm],
+            [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue], // Condition for column O
+        ];
+
+        await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+                valueInputOption: "USER_ENTERED", // Keep number formatting
+                data: updateData.map(([range, value]) => ({
+                    range,
+                    values: [[value]]
+                }))
+            }
+        });
+
+        res.json({ message: "Data updated successfully!" });
+
+    } catch (error) {
+        console.error("Error updating Google Sheet:", error);
+        res.status(500).json({ error: "Failed to update data." });
+    }
 })
 
 // Ports

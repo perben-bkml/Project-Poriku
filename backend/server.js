@@ -102,7 +102,10 @@ app.post("/login-auth", async (req, res) => {
             maxAge: 3 * 60 * 60 * 1000, // 3 hours
         });
 
-        res.json({data: userData, message: "Login Success!"})
+        // Make array to send only Name and Role
+        const sendData = [userData[0].name, userData[0].role]
+
+        res.json({data: sendData, message: "Login Success!"})
     } catch (error) {
         console.log("Error sending data to DB.", error)
         res.status(500).json({error: "Can't write data to DB."})

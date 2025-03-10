@@ -48,5 +48,9 @@ const headData2 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Tanggal Veri
 const headData3 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "Status"];
 const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "DRPP", "SPP", "SPM"];
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4 };
+//For Aksi-Pengajuan.jsx
+const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Satker", "Nominal", "Tgl. Request"]
+
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData };
 

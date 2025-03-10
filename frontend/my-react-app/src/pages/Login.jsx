@@ -11,7 +11,8 @@ function Login () {
     })
     //Setting up useNavigate and createContex
     const navigate = useNavigate();
-    const { setIsAuthenticated } = useContext(AuthContext)
+    const { setIsAuthenticated, setUser } = useContext(AuthContext)
+
     //Handling user input changes
     function handleInputChange(event) {
         setCredentials({
@@ -28,7 +29,10 @@ function Login () {
             })
             if (response.status === 200) {
                 setIsAuthenticated(true)
-                console.log(response.data.data)
+                setUser({
+                    name: response.data.data[0],
+                    role: response.data.data[1],
+                })
                 navigate("/home")
             } 
         } catch (error) {

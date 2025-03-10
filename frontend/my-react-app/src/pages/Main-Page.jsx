@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useContext } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
@@ -6,6 +6,7 @@ import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
 import KelolaPengajuan from "../components/Kelola-Pengajuan";
 import AksiPengajuan from "../components/Aksi-Pengajuan";
+import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
 import Navbar from '../ui/Navbar'
 import Footer from '../ui/Footer'
@@ -20,6 +21,8 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 function MainPage(props) {
     const whatMenu = props.menu;
 
+    // Use Context
+    const { user } = useContext(AuthContext)
     // States
     const [buttonSelect, setButtonSelect] = useState(props.submenu);
     const [savedPagination, setSavedPagination] = useState(null);
@@ -28,6 +31,7 @@ function MainPage(props) {
     const [alertMessage, setAlertMessage] = useState("");
     const [aksiData, setAksiData] = useState([]);
 
+    console.log(user)
 
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
@@ -112,7 +116,7 @@ function MainPage(props) {
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />
                         <span className="padd-span-bend"></span>
-                        <p>Biro Umum</p>
+                        <p>{user.name}</p>
                     </div>
                 </div>
                 {/* Button outside when sidebar is hidden */}

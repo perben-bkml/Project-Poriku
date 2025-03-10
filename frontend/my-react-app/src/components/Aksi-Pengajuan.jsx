@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 //Import components;
-import { columns } from "./head-data";
-import { TableKelola } from "../ui/tables";
+import { columns, infoHeadData } from "./head-data";
+import { TableKelola, TableInfoAntri } from "../ui/tables";
 import LoadingAnimate, { LoadingScreen } from "../ui/loading";
 import Popup from "../ui/Popup";
 
@@ -10,6 +10,7 @@ function AksiPengajuan(props) {
     
     //States
     const [isLoading, setIsLoading] = useState(false)
+    const [isTableLoading, setIsTableLoading] = useState(false)
     const [isPopup, setIsPopup] = useState(false)
     const [tableData, setTableData] = useState([])
     const [antriData, setAntriData] = useState({
@@ -22,7 +23,9 @@ function AksiPengajuan(props) {
         drpp: "",
         spp: "",
         spm: "",
-    })  
+    })
+    //State for aju-verif select
+    const [verifValue, setVerifValue] = useState("FALSE")
 
     //Options Data
     const optionPajak = [
@@ -39,16 +42,14 @@ function AksiPengajuan(props) {
         {label: "Pagu Minus", color: "#EB2727", textcolor: "#EEC6C6"},
     ]
 
-    if (tableData == [] || !props.fulldata) {
-        return <LoadingAnimate />
-    }
-
     async function fetchAntrianTable() {
         try {
+            setIsTableLoading(true)
             const tableKeyword = `TRANS_ID:${props.fulldata[0]}`
             const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
+                setIsTableLoading(false)
             }
         } catch (error) {
             console.log("Failed sending Keyword.", error)
@@ -67,12 +68,12 @@ function AksiPengajuan(props) {
             drpp: props.fulldata[8],
             spp: props.fulldata[9],
             spm: props.fulldata[10],
-        })
-        
+        });        
     }, [])
 
     //Automatically change background color for select tag
     useEffect(() => {
+        setVerifValue(antriData.ajuan_verifikasi)
         if (antriData.sedia_anggaran) {
             const selectElement = document.getElementById("anggaran");
             if (selectElement) {
@@ -104,9 +105,13 @@ function AksiPengajuan(props) {
     //Handle Input Change
     function handleInputChange(event){
         const {name, value} = event
-        setAntriData({...antriData, 
+        if (name === "ajuan_verifikasi") {
+            setVerifValue(value)
+        };
+        setAntriData((prevdata) => ({...prevdata, 
             [name]: value 
-        });
+        }));
+
     }
 
     //Handle Popup
@@ -117,6 +122,18 @@ function AksiPengajuan(props) {
             setIsPopup(false);
         }
     }
+
+    //Compile Info Antrian table data
+    const infoTableData = [
+        props.fulldata[0], 
+        props.fulldata[2],
+        props.fulldata[3],
+        props.fulldata[1],
+        props.fulldata[7],
+        props.fulldata[11],
+        props.fulldata[4],
+        props.fulldata[5],
+    ]
 
     //Submit Handler
     async function handleOnSubmit(){
@@ -137,36 +154,14 @@ function AksiPengajuan(props) {
         <div className="aksi-pengajuan-container">
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Informasi Antrian</h2>
-                <div className="aksi-content-grab-data">
-                    <h4>No. Antri:</h4>
-                    <input type="text" value={props.fulldata[0]} disabled />
-                    <h4>Nama:</h4>
-                    <input type="text" value={props.fulldata[2]} disabled />
-                    <h4>Jenis:</h4>
-                    <input type="text" value={props.fulldata[3]} disabled />
-                    <h4>Tgl. Antri:</h4>
-                    <input type="text" value={props.fulldata[1]} disabled />
-                    <h4>Status:</h4>
-                    <input type="text" value={props.fulldata[7]} disabled />
-                    <h4>Satker:</h4>
-                    <input type="text" value={props.fulldata[11]} disabled />
-                    <h4>Nominal:</h4>
-                    <input type="text" value={props.fulldata[4]} disabled />
-                    <h4>Tgl. Request:</h4>
-                    <input type="text" value={props.fulldata[5]} disabled />
-                </div>
+                <TableInfoAntri header={infoHeadData} body={infoTableData}/>
                 <form>
                 <div className="aksi-content-label">
                     <label htmlFor="aju-verif">Sedang Di Verifikasi?</label>
-                    {antriData.ajuan_verifikasi == "FALSE"?
-                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" onChange={e => handleInputChange(e.target)}>
+                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" value={verifValue} onChange={e => handleInputChange(e.target)}>
                         <option value="FALSE">Belum</option>
                         <option value="TRUE">Iya</option>
-                    </select> :
-                    <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" onChange={e => handleInputChange(e.target)}>
-                        <option value="TRUE">Iya</option>
                     </select>
-                    }
                     <label htmlFor="tgl-verif">Tanggal Selesai Verifikasi</label>
                     <input id="tgl-verif" className="type-btn" type="date" name="tgl_verifikasi" defaultValue={antriData.tgl_verifikasi} onChange={e => handleInputChange(e.target)} />
                     <label htmlFor="sts-pajak">Status Pajak</label>
@@ -198,7 +193,9 @@ function AksiPengajuan(props) {
             </div>
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
+                {isTableLoading ? <LoadingAnimate /> : 
                 <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData} />
+                }
             </div>
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}
             {isLoading && <LoadingScreen />}

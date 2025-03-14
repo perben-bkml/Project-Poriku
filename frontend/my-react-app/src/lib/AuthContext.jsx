@@ -23,13 +23,25 @@ export function AuthProvider({children}) {
         }
     }
 
+    //Logout functin
+    async function logout() {
+        try {
+            await axios.post("http://localhost:3000/logout", {}, { withCredentials: true });
+            setIsAuthenticated(false);
+            setUser(null);
+            navigate("/login"); // Redirect to login after logout
+        } catch (error) {
+            console.log("Logout failed:", error);
+        }
+    }
+
     //Check auth on page load
     useEffect(() => {
         checkAuth();
     }, [])
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, setIsAuthenticated, user, setUser, isLoading }}>
+        <AuthContext.Provider value={{ isAuthenticated, setIsAuthenticated, user, setUser, isLoading, logout }}>
             {children}
         </AuthContext.Provider>
     )

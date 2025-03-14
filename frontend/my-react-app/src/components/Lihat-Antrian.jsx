@@ -60,7 +60,7 @@ function LihatAntrian() {
                         <TableHead>
                             <TableRow sx={{ backgroundColor: "#1a284b" }}>
                             {columns2.map((cols) => (
-                                <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: 550, minWidth: cols.minWidth, fontSize:"1.1rem", color:"white"}} align="center">{cols.label}</TableCell>                                            
+                                <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: 550, minWidth: cols.minWidth, fontSize:"1.1rem", color:"white", border:"none"}} align="center">{cols.label}</TableCell>                                            
                             ))}
                             </TableRow>
                         </TableHead>

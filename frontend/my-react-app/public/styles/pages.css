@@ -230,6 +230,11 @@
     border-top: 0px;
 }
 
+.dash-button.dash-bottom {
+    margin-top: auto;
+    margin-bottom: 10px;
+}
+
 .padd-span-bend {
     padding-left: 20px;
 }

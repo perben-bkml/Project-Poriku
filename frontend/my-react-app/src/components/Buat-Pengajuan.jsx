@@ -564,12 +564,12 @@ function BuatPengajuan(props) {
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
                         {isLoading2 ? <LoadingAnimate /> :
-                        <TableContainer className="table-container" sx={{maxHeight: 950}}>
+                        <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
                             <Table stickyHeader aria-label="sticky table">
                                 <TableHead className="table-head">
                                     <TableRow className="table-row"> 
                                         {columns.map((cols) => (
-                                            <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth}} align="center">{cols.label}</TableCell>                                            
+                                            <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#1a284b", color: "white", border: "none"}} align="center">{cols.label}</TableCell>                                            
                                         ))}
                                     </TableRow>
                                 </TableHead>

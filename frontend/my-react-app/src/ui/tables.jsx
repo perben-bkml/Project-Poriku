@@ -22,7 +22,7 @@ export function TableSpmBendahara(props) {
             <TableHead>
                 <TableRow sx={{ backgroundColor: "#1a284b" }}>
                     {props.tableData.length > 0 && props.tableData[0].map((col, colIndex) => (
-                        <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white"}} align="center">{col}</TableCell>
+                        <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white", border: "none"}} align="center">{col}</TableCell>
                     ))}
                 </TableRow>
             </TableHead>

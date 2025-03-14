@@ -89,7 +89,7 @@ app.post("/login-auth", async (req, res) => {
         }
         //Create JWT Token
         const token = jwt.sign(
-            { id: userData[0].id, username: userData[0].username, role: userData[0].role },
+            { id: userData[0].id, username: userData[0].username, name: userData[0].name, role: userData[0].role },
             JWT_SECRET_KEY,
             { expiresIn: "8h" }
         );
@@ -112,6 +112,16 @@ app.post("/login-auth", async (req, res) => {
     }
 })
 
+//Logout Handler
+app.post("/logout", (req, res) => {
+    res.clearCookie("auth_token", {
+        httpOnly: true,
+        secure: false,
+        sameSite: "lax"
+    })
+    res.status(200).json({ message: "Logout Successful!"})
+})
+
 //Check user cookies
 app.get("/check-auth", (req, res) => {
     const token = req.cookies.auth_token;
@@ -121,7 +131,11 @@ app.get("/check-auth", (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET_KEY);
-        res.status(200).json({ user: decoded });
+        res.status(200).json({ 
+            user: {
+                name: decoded.name,
+                role: decoded.role } 
+            });
     } catch (error) {
         res.status(400).json({ message: "Invalid token" });
     }

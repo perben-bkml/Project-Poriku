@@ -6,6 +6,7 @@ import LihatAntrian from "../components/Lihat-Antrian";
 import InfoSPMBendahara from "../components/SPM-Bend";
 import KelolaPengajuan from "../components/Kelola-Pengajuan";
 import AksiPengajuan from "../components/Aksi-Pengajuan";
+// Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
 import Navbar from '../ui/Navbar'
@@ -17,12 +18,13 @@ import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
 import Avatar from "@mui/material/Avatar";
 import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 function MainPage(props) {
     const whatMenu = props.menu;
 
     // Use Context
-    const { user } = useContext(AuthContext)
+    const { user, logout } = useContext(AuthContext)
     // States
     const [buttonSelect, setButtonSelect] = useState(props.submenu);
     const [savedPagination, setSavedPagination] = useState(null);
@@ -112,6 +114,7 @@ function MainPage(props) {
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
+                        <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.png" />

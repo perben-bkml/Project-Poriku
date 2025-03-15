@@ -112,9 +112,9 @@ export function TableKelola(props) {
 
     return (
         <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 970 }}>
-            <Table stickyHeader aria-label="sticky table">
+            <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
-                    <TableRow>
+                    <TableRow sx={{backgroundColor: "#1a284b"}}>
                     {tableType === "kelola" ? <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}    
                     {props.header.map((data, index) => (
                         <TableCell key={index} sx={

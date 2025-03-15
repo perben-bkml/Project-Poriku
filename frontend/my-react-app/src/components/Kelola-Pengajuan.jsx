@@ -14,8 +14,6 @@ function KelolaPengajuan(props) {
     const [selesaiBulanIni, setSelesaiBulanIni] = useState([])
     const [fullData, setFullData] = useState([])
 
-    const cardTitle = ["Dalam Antrian", "Sudah di Verifikasi", "Diajukan Hari Ini", "Total Bulan Ini", "Selesai Bulan Ini"];
-
     async function getAjuanData(){
         try {
             const response = await axios.get("http://localhost:3000/bendahara/kelola-ajuan")
@@ -98,12 +96,19 @@ function KelolaPengajuan(props) {
         getAjuanData()
     }, [])
 
+    const cardTitle = [
+        {title: "Dalam Antrian", content: dalamAntri.length}, 
+        {title: "Sedang di Verifikasi", content: sedangVerif.length}, 
+        {title: "Sudah di Verifikasi", content: sudahVerif.length}, 
+        {title: "Diajukan Hari Ini", content: ajuHariIni.length}, 
+        {title: "Selesai Bulan Ini", content: selesaiBulanIni.length},
+    ];
 
     return (
         <div className='kelola-container'>
             <div className='card-wrap'>
                 {cardTitle.map((data, index) => (
-                    <Card key={index} title={data} content="999"/>
+                    <Card key={index} title={data.title} content={data.content}/>
                 ))}
             </div>
             <WideTableCard title="Pengajuan Belum Verifikasi" tableHead={headData1} tableContent={dalamAntri} fullContent={fullData[0]} changeComponent={props.changeComponent} aksiData={props.aksiData}/>

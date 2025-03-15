@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 // Import Components
 import DaftarPengajuan from "../components/Daftar-Pengajuan";
 import BuatPengajuan from "../components/Buat-Pengajuan";
@@ -26,12 +26,24 @@ function MainPage(props) {
     // Use Context
     const { user, logout } = useContext(AuthContext)
     // States
-    const [buttonSelect, setButtonSelect] = useState(props.submenu);
+    const [buttonSelect, setButtonSelect] = useState("");
     const [savedPagination, setSavedPagination] = useState(null);
     const [antrianData, setAntrianData] = useState([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [alertMessage, setAlertMessage] = useState("");
     const [aksiData, setAksiData] = useState([]);
+
+
+    // Set buttonSelect when page renders
+    useEffect(() => {
+        if (user.role === "admin" || user.role === "master admin") {
+            setButtonSelect("kelola-pengajuan");
+        }
+        if (user.role === "user") {
+            setButtonSelect("daftar-pengajuan")
+        }
+    }, [])
+    
 
     console.log(user)
 
@@ -109,8 +121,12 @@ function MainPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
-                        <button className={`dash-button ${buttonSelect === "kelola-pengajuan" ? "btn-selected" : ""}`} name="kelola-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><MenuBookIcon fontSize="small"/><span className="padd-span-bend"/>Kelola Pengajuan</button>
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "kelola-pengajuan" ? "btn-selected" : "hidden"}`} name="kelola-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><MenuBookIcon fontSize="small"/><span className="padd-span-bend"/>Kelola Pengajuan</button>
+                        : null}
+                        { user.role === "user" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
+                        : null}
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>

@@ -22,11 +22,11 @@ function App() {
             <Route path="/home" element={<ProtectedRoute> <Home /> </ProtectedRoute>} />
             <Route path="/menu-bendahara" element={
               <ProtectedRoute>
-                <MainPage menu="Bendahara" submenu="daftar-pengajuan"/>
+                <MainPage menu="Bendahara"/>
               </ProtectedRoute>} />
             <Route path="/menu-verifikasi" element={
               <ProtectedRoute>
-                <MainPage menu="Verifikasi" submenu="daftar-pengajuan"/>
+                <MainPage menu="Verifikasi"/>
               </ProtectedRoute>} />
           </Routes>
         </BrowserRouter>

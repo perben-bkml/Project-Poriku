@@ -8,6 +8,10 @@ import Popup from "../ui/Popup";
 
 function AksiPengajuan(props) {
     
+    //Todolist 24 March 2025
+    //2. Implement fetching data from Monitoring Table, if it exists, and display it on rows.
+
+
     //States
     const [isLoading, setIsLoading] = useState(false)
     const [isTableLoading, setIsTableLoading] = useState(false)
@@ -24,8 +28,12 @@ function AksiPengajuan(props) {
         spp: "",
         spm: "",
     })
+    const [documentData, setDocumentData] = useState([{
+        drpp: "", nominal: "", spp: "", spm: "",
+    }])
     //State for aju-verif select
     const [verifValue, setVerifValue] = useState("FALSE")
+    const [drppProcess, setDrppProcess] = useState(false)
 
     //Options Data
     const optionPajak = [
@@ -55,6 +63,11 @@ function AksiPengajuan(props) {
             console.log("Failed sending Keyword.", error)
         }
     }
+
+    async function fetchMonitoringData() {
+    
+    }
+
 
     useEffect(() => {
         fetchAntrianTable();
@@ -88,6 +101,18 @@ function AksiPengajuan(props) {
         }
     }, [antriData.sedia_anggaran, antriData.status_pajak]);
 
+    //Number format generator
+    function numberFormats(num) {
+        if (!num) {
+            return "";
+        }
+        // Remove all non-numeric characters (except numbers)
+        const numericValue = num.toString().replace(/\D/g, "");
+
+        // Format with periods as thousand separators
+        return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+
     //Handle Select Tag style change
     function selectPajakBackgroundColor(select) {
         const selectedOption = select.options[select.selectedIndex];
@@ -114,6 +139,30 @@ function AksiPengajuan(props) {
 
     }
 
+    function handleDocInputChange(event, index) {
+        const { name, value } = event;
+        let formattedValue = value;
+        if (name === "nominal") {
+            formattedValue = numberFormats(value);
+        }
+        const updatedRows = [...documentData];
+        updatedRows[index][name] = name === "nominal" ? formattedValue : value;
+        setDocumentData(updatedRows);
+    }
+
+    // Add and Delete Row For Document inputs
+    function addNewRow(e) {
+        e.preventDefault();
+        setDocumentData([...documentData, { drpp: "", nominal: "", spp: "", spm: "" }]);
+    }
+
+    function deleteRow(e) {
+        e.preventDefault();
+        if (documentData.length === 1) return; // Prevent deleting the last row
+        setDocumentData(prevRows => prevRows.slice(0, -1));
+    }
+
+
     //Handle Popup
     function handlePopup() {
         if (!isPopup) {
@@ -137,10 +186,31 @@ function AksiPengajuan(props) {
 
     //Submit Handler
     async function handleOnSubmit(){
+        const drppArray = documentData.map(row => row.drpp).join(", ");
+        const updatedAntriData = {
+            ...antriData,
+            drpp: drppArray, 
+            spp: documentData[0]?.spp, 
+            spm: documentData[0]?.spm
+        };
+
+        const nominalArray = documentData.map(row => row.nominal).join(", ");
+        const monitoringDrppData = {
+            trans_id: props.fulldata[0],
+            satker: props.fulldata[11],
+            nominal: nominalArray,
+            jenis: props.fulldata[3],
+        }
+
+        const sendData = {
+            updatedAntriData,
+            monitoringDrppData
+        }
+
         try {
             handlePopup();
             setIsLoading(true);
-            const result = await axios.post("http://localhost:3000/bendahara/aksi-ajuan", antriData)
+            const result = await axios.post("http://localhost:3000/bendahara/aksi-ajuan", sendData)
             if (result.status === 200) {
                 props.changeComponent("kelola-pengajuan")
                 setIsLoading(false)
@@ -148,6 +218,7 @@ function AksiPengajuan(props) {
         } catch (error) {
             console.log("Failed sending Data.", error)
         }
+        console.log(monitoringDrppData)
     }
 
     return (
@@ -178,13 +249,31 @@ function AksiPengajuan(props) {
                     </select>
                     <label htmlFor="tgl-acc">Tanggal Disetujui</label>
                     <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" defaultValue={antriData.tgl_setuju} onChange={e => handleInputChange(e.target)}/>
-                    <label htmlFor="drpp">Nomor DRPP</label>
-                    <input id="drpp" className="type-btn" type="text" name="drpp" placeholder={antriData.drpp} onChange={e => handleInputChange(e.target)}/>
-                    <label htmlFor="spp">Nomor SPP</label>
-                    <input id="spp" className="type-btn" type="number" name="spp" placeholder={antriData.spp} onChange={e => handleInputChange(e.target)}/>
-                    <label htmlFor="spm">Nomor SPM</label>
-                    <input id="spm" className="type-btn" type="number" name="spm" placeholder={antriData.spm} onChange={e => handleInputChange(e.target)}/>
+                    <label htmlFor="buat-drpp">Buat DRPP?</label>
+                    <input id="buat-drpp" className="type-btn" type="checkbox" name="buat_drpp" defaultValue={antriData.tgl_setuju} onChange={() => !drppProcess ? setDrppProcess(true) : setDrppProcess(false)}/>
                 </div>
+                { drppProcess &&
+                <div className="aksi-content-docs">
+                    <div className="docs-label">
+                        <label htmlFor="drpp">Nomor DRPP</label>
+                        <label htmlFor="nominal">Nominal</label>
+                        <label htmlFor="spp">Nomor SPP</label>
+                        <label htmlFor="spm">Nomor SPM</label>
+                    </div>
+                {documentData.map((row, index) => (
+                    <div key={index} className="docs-input">
+                        <input id="drpp" className="docs-btn" type="text" name="drpp" value={row.drpp} onChange={e => handleDocInputChange(e.target, index)}/>
+                        <input id="nominal" className="docs-btn" type="text" name="nominal" value={row.nominal} onChange={e => handleDocInputChange(e.target, index)}/>
+                        <input id="spp" className="docs-btn" type="text" name="spp" value={row.spp} onChange={e => handleDocInputChange(e.target, index)}/>
+                        <input id="spm" className="docs-btn" type="text" name="spm" value={row.spm} onChange={e => handleDocInputChange(e.target, index)}/>
+                    </div>
+                ))}
+                    <div>
+                        <button className="add-row-btn" onClick={(e) => addNewRow(e)}>Tambah Baris</button>
+                        <button className="add-row-btn" onClick={(e) => deleteRow(e)} disabled={documentData.length === 1}>Hapus Baris</button>
+                    </div>
+                </div>
+                }
                 <div className="form-submit aksi-submit">
                     <input type="button" value="Kembali" onClick={() => props.changeComponent("kelola-pengajuan")}/>
                     <input type="button" value="Simpan" onClick={handlePopup} />

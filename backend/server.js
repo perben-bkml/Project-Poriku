@@ -797,9 +797,24 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 
 //Aksi-Pengajuan Handler
 app.post("/bendahara/aksi-ajuan", async (req, res) => {
-    const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = req.body;
-    console.log(req.body);
     try {
+        const {updatedAntriData, monitoringDrppData} = req.body
+        const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = updatedAntriData;
+        const {trans_id, satker, nominal, jenis} = monitoringDrppData;
+
+        if (!updatedAntriData || !monitoringDrppData) {
+            return res.status(400).json({ message: "Invalid or missing data." });
+        }
+
+        //Split drpp and nominal into arrays
+        const drppArray = drpp.split(", ").map(num => num.trim());
+        const nominalArray = nominal.split(", ").map(num => num.trim());
+
+        if (drppArray.length !== nominalArray.length) {
+            return res.status(400).json({ message: "DRPP and Nominal data mismatch." });
+        }
+
+        //Handling Write Antrian Sheet update
         const getAntrianResponse = await sheets.spreadsheets.values.get({
             spreadsheetId,
             range: "'Write Antrian'!A:A"
@@ -844,6 +859,44 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                 }))
             }
         });
+
+        //Handling Monitoring DRPP Sheet update
+        const getMonitoringResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Monitoring DRPP'!A:A"
+        });
+
+        const lastFilledRow = getMonitoringResponse.data.values ? getMonitoringResponse.data.values.length + 1 : 2;
+
+        // Prepare the data for update
+        const newRows = drppArray.map((docNum, index) => {
+            return [
+                index === 0 ? trans_id : "", // Trans ID only on first row
+                fullDateFormat,  // Column C
+                satker,          // Column D
+                docNum,        // Column E
+                spm,            // Column F
+                nominalArray[index],  // Column G
+                "Belum", // Column H
+                "Belum", // Column I
+                jenis.toUpperCase(), // Column J
+            ];
+        });
+        
+        // Define the target range to write data
+        const startRow = lastFilledRow;
+        const endRow = startRow + newRows.length - 1;
+        const targetRange = `Monitoring DRPP!B${startRow}:J${endRow}`;
+
+        //Write data
+        await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: targetRange,
+            valueInputOption: "RAW",
+            resource: { values: newRows }
+        });
+
+        console.log(nominalArray)
 
         res.json({ message: "Data updated successfully!" });
 

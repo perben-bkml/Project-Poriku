@@ -45,8 +45,6 @@ function MainPage(props) {
     }, [])
     
 
-    console.log(user)
-
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
         const allButton = document.querySelectorAll(".dash-content button");

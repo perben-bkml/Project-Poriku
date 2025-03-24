@@ -655,7 +655,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .aksi-content-label {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
     row-gap: 12px;
     column-gap: 10px;
     padding: 10px 35px;
@@ -664,6 +664,45 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-top: 30px;
     margin-bottom: 30px;
 }
+
+.aksi-content-docs {
+    display: flex;
+    flex-direction: column;
+    padding: 0px 30px;
+    margin-bottom: 60px;
+}
+
+.docs-label, .docs-input {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.docs-btn {
+    height: 30px;
+    border-radius: 20px;
+    border: solid 0.8px rgb(199, 199, 199);
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 0px 10px;
+}
+
+.add-row-btn {
+    display: inline-block;
+    height: 30px;
+    width: 150px;
+    border-radius: 20px;
+    border: solid 0.8px rgb(199, 199, 199);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: white;
+    background-color: #1a284b;
+}
+
 
 .type-btn {
     height: 30px;

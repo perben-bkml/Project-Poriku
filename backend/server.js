@@ -240,8 +240,8 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
 // Write data from table on sheet
 app.post("/bendahara/buat-ajuan", async (req, res) => {
-    const {textdata, tabledata} = req.body;
-    if (textdata && tabledata) {
+    const {textdata, tabledata, userdata} = req.body;
+    if (textdata && tabledata && userdata) {
         // Get textdata/input data antrian and tabledata
         const ranges = [
             "'Write Antrian'!A:A",
@@ -285,6 +285,11 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                 {
                     range: "'Write Antrian'!R1:R1",
                     values: [[newIdCounter]],
+                },
+                {
+                    //Write Satuan Kerja Name
+                    range: `'Write Antrian'!L${startAntrianRow}`,
+                    values: [[userdata]],
                 },
             ],
             valueInputOption: "RAW",
@@ -860,43 +865,79 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             }
         });
 
-        //Handling Monitoring DRPP Sheet update
+
+
+        // Handling Monitoring DRPP Sheet update
         const getMonitoringResponse = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: "'Monitoring DRPP'!A:A"
+            range: "'Monitoring DRPP'!B:G"
         });
 
-        const lastFilledRow = getMonitoringResponse.data.values ? getMonitoringResponse.data.values.length + 1 : 2;
+        const monitoringRows = getMonitoringResponse.data.values || [];
+        let existingStartRow = null;
+        let existingRowCount = 0;
 
-        // Prepare the data for update
-        const newRows = drppArray.map((docNum, index) => {
-            return [
-                index === 0 ? trans_id : "", // Trans ID only on first row
-                fullDateFormat,  // Column C
-                satker,          // Column D
-                docNum,        // Column E
-                spm,            // Column F
-                nominalArray[index],  // Column G
+        //Find if `trans_id` already exists
+        for (let i = 0; i < monitoringRows.length; i++) {
+            if (monitoringRows[i][0] === trans_id) {
+                existingStartRow = i + 1; // Convert to 1-based index
+                existingRowCount = 1; // Start counting rows for this `trans_id`
+            } else if (existingStartRow && !monitoringRows[i][0]) {
+                existingRowCount++; // Continue counting blank rows
+            } else if (existingStartRow) {
+                break; // Stop counting when a new `trans_id` appears
+            }
+        }
+
+        const newRowCount = drppArray.length;
+
+        // Prepare the new rows
+        let rowsToWrite = [];
+        for (let i = 0; i < newRowCount; i++) {
+            rowsToWrite.push([
+                i === 0 ? trans_id : "", // Only write trans_id in the first row
+                fullDateFormat, // Column C
+                satker, // Column D
+                drppArray[i], // Column E
+                spm, // Column F
+                nominalArray[i], // Column G
                 "Belum", // Column H
                 "Belum", // Column I
                 jenis.toUpperCase(), // Column J
-            ];
-        });
-        
-        // Define the target range to write data
-        const startRow = lastFilledRow;
-        const endRow = startRow + newRows.length - 1;
-        const targetRange = `Monitoring DRPP!B${startRow}:J${endRow}`;
+            ]);
+        }
 
-        //Write data
-        await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: targetRange,
-            valueInputOption: "RAW",
-            resource: { values: newRows }
-        });
+        if (existingStartRow) {
+            //Adjust the row count
+            if (newRowCount < existingRowCount) {
+                // If new data has fewer rows, clear extra old rows
+                const clearRange = `Monitoring DRPP!B${existingStartRow + newRowCount}:J${existingStartRow + existingRowCount - 1}`;
+                await sheets.spreadsheets.values.clear({
+                    spreadsheetId,
+                    range: clearRange
+                });
+            }
 
-        console.log(nominalArray)
+            //Update the existing rows
+            const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
+            await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: targetRange,
+                valueInputOption: "RAW",
+                resource: { values: rowsToWrite }
+            });
+
+        } else {
+            //If trans_id doesn't exist, append new rows
+            const lastFilledRow = monitoringRows.length + 1;
+            const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
+            await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: targetRange,
+                valueInputOption: "RAW",
+                resource: { values: rowsToWrite }
+            });
+        }
 
         res.json({ message: "Data updated successfully!" });
 
@@ -905,6 +946,62 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         res.status(500).json({ error: "Failed to update data." });
     }
 })
+
+//Fetch monitoring data for Aksi-Pengajuan
+app.get("/bendahara/get-ajuan", async (req, res) => {
+    const { trans_id } = req.query;
+    if (!trans_id) {
+        return res.status(400).json({ error: "Missing trans_id" });
+    }
+
+    try {
+        // Fetch the relevant columns (B:G) from the "Monitoring DRPP" sheet
+        const range = "Monitoring DRPP!B2:G";
+        const sheetResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+
+        const rows = sheetResponse.data.values || [];
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "No data found" });
+        }
+
+        let matchedRows = [];
+        let found = false; // Flag to check if we found trans_id
+
+        for (const row of rows) {
+            const rowTransId = row[0]?.trim(); // Convert to string and trim spaces
+
+            if (rowTransId === trans_id.toString()) {
+                found = true; // Start collecting rows
+            } else if (found && rowTransId) {
+                break; // Stop collecting if a new trans_id appears
+            }
+
+            if (found) {
+                matchedRows.push({
+                    drpp: row[3] || "",
+                    nominal: row[5] || "",
+                    spp: row[4] || "",
+                    spm: row[4] || "",
+                });
+            }
+        }
+
+        if (matchedRows.length === 0) {
+            return res.status(404).json({ error: "No matching data found" });
+        }
+
+        return res.status(200).json({ data: matchedRows });
+
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
 
 // Ports
 app.listen(3000, () => {

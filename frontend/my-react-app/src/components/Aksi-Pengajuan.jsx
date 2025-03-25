@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import PropTypes from "prop-types";
 //Import components;
 import { columns, infoHeadData } from "./head-data";
 import { TableKelola, TableInfoAntri } from "../ui/tables";
@@ -7,10 +8,6 @@ import LoadingAnimate, { LoadingScreen } from "../ui/loading";
 import Popup from "../ui/Popup";
 
 function AksiPengajuan(props) {
-    
-    //Todolist 24 March 2025
-    //2. Implement fetching data from Monitoring Table, if it exists, and display it on rows.
-
 
     //States
     const [isLoading, setIsLoading] = useState(false)
@@ -65,12 +62,27 @@ function AksiPengajuan(props) {
     }
 
     async function fetchMonitoringData() {
-    
+        try {
+            const response = await axios.get("http://localhost:3000/bendahara/get-ajuan", {
+                params: { trans_id: props.fulldata[0] },
+            });
+            if (response.status === 200) {
+                const firstDRPP = response.data.data[0].drpp;
+                if (firstDRPP !== '') {
+                    console.log(response.data.data)
+                    setDocumentData(response.data.data || []);
+                    setDrppProcess(true);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching monitoring data", error);
+        }
     }
 
 
     useEffect(() => {
         fetchAntrianTable();
+        fetchMonitoringData();
         setAntriData({
             no_antri: props.fulldata[0],
             ajuan_verifikasi: props.fulldata[14] === "" ? "FALSE" : "TRUE",
@@ -132,7 +144,7 @@ function AksiPengajuan(props) {
         const {name, value} = event
         if (name === "ajuan_verifikasi") {
             setVerifValue(value)
-        };
+        }
         setAntriData((prevdata) => ({...prevdata, 
             [name]: value 
         }));
@@ -218,7 +230,6 @@ function AksiPengajuan(props) {
         } catch (error) {
             console.log("Failed sending Data.", error)
         }
-        console.log(monitoringDrppData)
     }
 
     return (
@@ -250,7 +261,7 @@ function AksiPengajuan(props) {
                     <label htmlFor="tgl-acc">Tanggal Disetujui</label>
                     <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" defaultValue={antriData.tgl_setuju} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="buat-drpp">Buat DRPP?</label>
-                    <input id="buat-drpp" className="type-btn" type="checkbox" name="buat_drpp" defaultValue={antriData.tgl_setuju} onChange={() => !drppProcess ? setDrppProcess(true) : setDrppProcess(false)}/>
+                    <input id="buat-drpp" className="type-btn" type="checkbox" name="buat_drpp" checked={drppProcess === true} defaultValue={antriData.tgl_setuju} onChange={() => !drppProcess ? setDrppProcess(true) : setDrppProcess(false)}/>
                 </div>
                 { drppProcess &&
                 <div className="aksi-content-docs">
@@ -291,5 +302,15 @@ function AksiPengajuan(props) {
         </div>
     )
 }
+
+// Define PropTypes
+AksiPengajuan.propTypes = {
+    fulldata: PropTypes.arrayOf(PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number
+    ])).isRequired, // Must be an array containing strings or numbers
+    changeComponent: PropTypes.func.isRequired, // Must be a function
+};
+
 
 export default AksiPengajuan;

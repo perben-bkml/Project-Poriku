@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {useState, useEffect, useRef, useContext} from "react";
 import * as math from "mathjs";
 import axios from "axios";
 
@@ -17,9 +17,16 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
+// Import Context
+import { AuthContext } from "../lib/AuthContext.jsx";
+
 function BuatPengajuan(props) {
     //Determining if this component is being used for viewing, editing, or creating new pengajuan
     const [componentType, setComponentType] = useState("")
+
+    //Use Context
+    const { user } = useContext(AuthContext);
+
     //State
     const [rowNum, setRowNum] = useState(1);
     const emptyCell = Array(21).fill("");
@@ -27,19 +34,23 @@ function BuatPengajuan(props) {
     const [tableData, setTableData] = useState([initialRow]);
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
+
     //State for reading and edit tabledata
     const [keywordRowPos, setKeywordRowPos] = useState("");
     const [keywordEndRow, setKeywordEndRow] = useState("");
+
     //State for "formula mode"
     const [targetReference, setTargetReference] = useState(null);
     const [currentEditableCell, setCurrentEditableCell] = useState(null);
     const [isFormulaMode, setIsFormulaMode] = useState(false);
     const [currentTextareaRef, setCurrentTextareaRef] = useState(null);
+
     //Popup State
     const [isPopup, setIsPopup] = useState(false);
     const [isKetentuan, setIsKetentuan] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoading2, setIsLoading2] = useState(false);
+
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
 
@@ -458,6 +469,7 @@ function BuatPengajuan(props) {
             const response = await axios.post("http://localhost:3000/bendahara/buat-ajuan" , {
                 textdata: inputArray,
                 tabledata: sendTable,
+                userdata: user.name,
             })
             if (response.status === 200){
                 props.alertMessage("Data berhasil dibuat.")

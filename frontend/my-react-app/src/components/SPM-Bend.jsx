@@ -1,5 +1,4 @@
-import React, { useState, useEffect, cloneElement } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 // Import Head Data
 import { jenisSPM, statusSPM } from './head-data';
 // Import Made UI
@@ -34,7 +33,7 @@ function InfoSPMBendahara() {
             ...rincianSearch,
             [event.target.name]: event.target.value,
         });
-    };
+    }
 
 
     return (

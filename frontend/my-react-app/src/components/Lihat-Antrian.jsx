@@ -14,9 +14,6 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Pagination from '@mui/material/Pagination';
 
-// Import Progress Material UI
-import CircularProgress from '@mui/material/CircularProgress';
-
 function LihatAntrian() {
 
     // States

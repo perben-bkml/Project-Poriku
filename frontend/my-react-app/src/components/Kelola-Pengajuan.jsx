@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 //Import components
 import { Card, WideTableCard } from '../ui/cards';
-import LoadingAnimate from '../ui/loading';
 import { headData1, headData2, headData3, headData4 } from './head-data';
+import PropTypes from "prop-types";
 
 function KelolaPengajuan(props) {
     //States
@@ -118,6 +118,11 @@ function KelolaPengajuan(props) {
             <WideTableCard title="Sudah Diajukan Bulan Ini" tableHead={headData4} tableContent={selesaiBulanIni} fullContent={Array.isArray(fullData[4]) ? [...fullData[4], ...fullData[5]] : []} changeComponent={props.changeComponent} aksiData={props.aksiData}/>
         </div>
     )
+}
+
+KelolaPengajuan.propTypes = {
+    changeComponent: PropTypes.func.isRequired,
+    aksiData: PropTypes.func.isRequired,
 };
 
 export default KelolaPengajuan;

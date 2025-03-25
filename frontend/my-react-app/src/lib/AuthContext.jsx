@@ -15,7 +15,7 @@ export function AuthProvider({children}) {
                 setIsAuthenticated(true);
                 setUser(response.data.user)
             }
-        } catch (error) {
+        } catch  {
             setIsAuthenticated(false);
             setUser(null);
         } finally {

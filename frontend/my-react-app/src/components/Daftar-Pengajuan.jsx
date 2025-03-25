@@ -8,6 +8,7 @@ import { PopupAlert } from "../ui/Popup";
 import Pagination from '@mui/material/Pagination';
 // Import Progress Material UI
 import CircularProgress from '@mui/material/CircularProgress';
+import PropTypes from "prop-types";
 
 
 function DaftarPengajuan(props){
@@ -171,5 +172,12 @@ function DaftarPengajuan(props){
         </div>
     )
 }
+
+//Proptypes
+DaftarPengajuan.propTypes = {
+    alertMessage: PropTypes.string,
+    invisible: PropTypes.func,
+    userPagination: PropTypes.number,
+};
 
 export default DaftarPengajuan;

@@ -19,6 +19,8 @@ import { TableFooter } from "@mui/material";
 
 // Import Context
 import { AuthContext } from "../lib/AuthContext.jsx";
+import PropTypes from "prop-types";
+
 
 function BuatPengajuan(props) {
     //Determining if this component is being used for viewing, editing, or creating new pengajuan
@@ -125,7 +127,7 @@ function BuatPengajuan(props) {
             const sanitizeEqu = equ.replace(/\./g, "")
             const sanitizeEqu2 = sanitizeEqu.replace(/,/g, "");
             //Evaluate/count equations
-            const result = Math.ceil(math.evaluate(sanitizeEqu2));
+            const result = Math.floor(math.evaluate(sanitizeEqu2));
             let stringResult = numberFormats(result.toString());
             if (stringResult == "NaN") {
                 stringResult = "";
@@ -161,6 +163,11 @@ function BuatPengajuan(props) {
     }
 
     function handleCellBlur (cellrowIndex, cellcolumnIndex, value) {
+        //Exclude column 1 - 4 from auto formatting
+        if (cellcolumnIndex >= 0 && cellcolumnIndex <= 3) {
+            return;
+        }
+
         // Check if the value starts with "=" (formula mode)
         if (value.startsWith("=")) {
             // No formatting should occur in formula mode
@@ -176,6 +183,16 @@ function BuatPengajuan(props) {
             // Update the table data with the formatted value
             const updatedData = [...tableData];
             updatedData[cellrowIndex][cellcolumnIndex] = formattedValue;
+
+            // Format column 5 and 6 if column 4 is filled
+            if (cellcolumnIndex === 4) {
+                const baseValue = parseFloat(numericValue);
+                if (!isNaN(baseValue)) {
+                    updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 6 for normal DPP
+                    updatedData[cellrowIndex][6] = numberFormats((baseValue * 11/12).toFixed(0)); // Column 7 for DPP Nilai Lain
+                }
+            }
+
             setTableData(updatedData);
         }   
     }
@@ -227,7 +244,7 @@ function BuatPengajuan(props) {
     function handleDppCount(rowIndex, colIndex) {
         if (colIndex === 5) {
             const getNilaiTagihan = [...tableData][rowIndex][4];
-            
+            console.log(getNilaiTagihan)
         }
     }
 
@@ -302,14 +319,14 @@ function BuatPengajuan(props) {
             textarea.focus();
             textarea.classList.add("selected-cell")
             cell.classList.add("selected-cell")
-        };
+        }
     }
         //Adding new row on the bottom of the page when pressing enter
-    function addNewRow() {
-        const newRow = [tableData.length + 1, ...emptyCell];
-        setRowNum(rowNum + 1);
-        setTableData([...tableData, newRow]);
-    }
+    // function addNewRow() {
+    //     const newRow = [tableData.length + 1, ...emptyCell];
+    //     setRowNum(rowNum + 1);
+    //     setTableData([...tableData, newRow]);
+    // }
 
     // Function to adjust cell height after pasting
     function adjustAllHeight() {
@@ -642,7 +659,7 @@ function BuatPengajuan(props) {
                         <SubmitButton value="Kembali Ke Daftar" name="submit-all" onClick={ 
                            props.invisible && props.invisible(props.fallbackTo, props.passedData)
                         }/>
-                        <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat" ? true : false}/>
+                        <SubmitButton value="Simpan Perubahan" name="submit-all" onClick={handlePopup} hidden={componentType === "lihat"}/>
                     </div>    
                         }
                 </form>
@@ -653,5 +670,18 @@ function BuatPengajuan(props) {
         </div>
     )
 }
+
+//Proptypes
+BuatPengajuan.propTypes = {
+    passedData: PropTypes.arrayOf(PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number
+    ])),
+    type: PropTypes.string,
+    changeComponent: PropTypes.func,
+    alertMessage: PropTypes.func,
+    invisible: PropTypes.func,
+    fallbackTo: PropTypes.string,
+};
 
 export default BuatPengajuan;

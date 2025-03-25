@@ -69,7 +69,6 @@ function AksiPengajuan(props) {
             if (response.status === 200) {
                 const firstDRPP = response.data.data[0].drpp;
                 if (firstDRPP !== '') {
-                    console.log(response.data.data)
                     setDocumentData(response.data.data || []);
                     setDrppProcess(true);
                 }

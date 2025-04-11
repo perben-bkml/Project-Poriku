@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 //Import components
-import { Card, WideTableCard } from '../ui/cards';
-import { headData1, headData2, headData3, headData4 } from './head-data';
+import { Card, WideTableCard } from '../../ui/cards.jsx';
+import { headData1, headData2, headData3, headData4 } from './head-data.js';
 import PropTypes from "prop-types";
 
 function KelolaPengajuan(props) {

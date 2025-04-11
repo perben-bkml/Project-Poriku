@@ -72,6 +72,9 @@ export function TableKelola(props) {
             props.aksiData(props.fullContent[index])
         } else if (props.type === "aksi") {
             null
+        } else if (props.type === "monitor") {
+            props.changeComponent("aksi-drpp")
+            props.aksiData(props.fullContent[index])
         }
     }
 
@@ -81,7 +84,7 @@ export function TableKelola(props) {
         return (
             <Fragment>
                 <TableRow>
-                    {tableType === "kelola"? 
+                    {tableType === "kelola" || tableType === "monitor"?
                     <TableCell>
                         <IconButton
                             aria-label="expand row"
@@ -93,12 +96,12 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} className={tableType === "kelola" ? null : "table-cell" } >{data}</TableCell>
+                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } >{data}</TableCell>
                     ))}
                 </TableRow>
 
                 <TableRow>
-                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola"? props.rowData[0].length + 2 : 22}>
+                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola" || tableType === "monitor"?  props.rowData[0].length + 2 : 22}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
                             <div className="collapsible">
                                 <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Lihat</button>
@@ -115,14 +118,14 @@ export function TableKelola(props) {
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
                     <TableRow sx={{backgroundColor: "#1a284b"}}>
-                    {tableType === "kelola" ? <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}    
+                    {tableType === "kelola" || tableType === "monitor"?  <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}
                     {props.header.map((data, index) => (
                         <TableCell key={index} sx={
-                            tableType === "kelola" ?
+                            tableType === "kelola" || tableType === "monitor"?
                             { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}
                             :
                             { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b", minWidth: data.minWidth}}>
-                            {tableType === "kelola" ? data : data.label}</TableCell>
+                            {tableType === "kelola" || tableType === "monitor"?  data : data.label}</TableCell>
                     ))}
                     </TableRow>
                 </TableHead>

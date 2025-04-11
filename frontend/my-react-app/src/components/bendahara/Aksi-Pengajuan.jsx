@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import PropTypes from "prop-types";
 //Import components;
-import { columns, infoHeadData } from "./head-data";
-import { TableKelola, TableInfoAntri } from "../ui/tables";
-import LoadingAnimate, { LoadingScreen } from "../ui/loading";
-import Popup from "../ui/Popup";
+import { columns, infoHeadData } from "./head-data.js";
+import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
+import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
+import Popup from "../../ui/Popup.jsx";
 
 function AksiPengajuan(props) {
 
@@ -206,11 +206,14 @@ function AksiPengajuan(props) {
         };
 
         const nominalArray = documentData.map(row => row.nominal).join(", ");
-        const monitoringDrppData = {
-            trans_id: props.fulldata[0],
-            satker: props.fulldata[11],
-            nominal: nominalArray,
-            jenis: props.fulldata[3],
+        let monitoringDrppData = null
+        if (drppProcess) {
+            monitoringDrppData = {
+                trans_id: props.fulldata[0],
+                satker: props.fulldata[11],
+                nominal: nominalArray,
+                jenis: props.fulldata[3],
+            }
         }
 
         const sendData = {

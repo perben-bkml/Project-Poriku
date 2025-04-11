@@ -1,11 +1,13 @@
 import React, { useState, useContext, useEffect } from "react";
 // Import Components
-import DaftarPengajuan from "../components/Daftar-Pengajuan";
-import BuatPengajuan from "../components/Buat-Pengajuan";
-import LihatAntrian from "../components/Lihat-Antrian";
-import InfoSPMBendahara from "../components/SPM-Bend";
-import KelolaPengajuan from "../components/Kelola-Pengajuan";
-import AksiPengajuan from "../components/Aksi-Pengajuan";
+import DaftarPengajuan from "../components/bendahara/Daftar-Pengajuan.jsx";
+import BuatPengajuan from "../components/bendahara/Buat-Pengajuan.jsx";
+import LihatAntrian from "../components/bendahara/Lihat-Antrian.jsx";
+import InfoSPMBendahara from "../components/bendahara/SPM-Bend.jsx";
+import KelolaPengajuan from "../components/bendahara/Kelola-Pengajuan.jsx";
+import AksiPengajuan from "../components/bendahara/Aksi-Pengajuan.jsx";
+import MonitoringDrpp from "../components/bendahara/Monitoring-Drpp.jsx";
+import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -19,6 +21,7 @@ import Avatar from "@mui/material/Avatar";
 import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import LogoutIcon from '@mui/icons-material/Logout';
+import MonitorIcon from '@mui/icons-material/Monitor';
 
 function MainPage(props) {
     const whatMenu = props.menu;
@@ -88,6 +91,10 @@ function MainPage(props) {
                 return <KelolaPengajuan changeComponent={setButtonSelect} aksiData={setAksiData} />
             case "aksi-pengajuan":
                 return <AksiPengajuan fulldata={aksiData} changeComponent={setButtonSelect}/>
+            case "monitoring-drpp":
+                return <MonitoringDrpp changeComponent={setButtonSelect} aksiData={setAksiData} />
+            case "aksi-drpp":
+                return <AksiDrpp fulldata={aksiData} changeComponent={setButtonSelect} />
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":
@@ -99,7 +106,7 @@ function MainPage(props) {
             case "lihat-antrian":
                 return <LihatAntrian />
             case "SPM-bendahara":
-                return <InfoSPMBendahara /> 
+                return <InfoSPMBendahara />
             default:
                 return null;
         }
@@ -121,6 +128,9 @@ function MainPage(props) {
                     <div className="dash-content">
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "kelola-pengajuan" ? "btn-selected" : "hidden"}`} name="kelola-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><MenuBookIcon fontSize="small"/><span className="padd-span-bend"/>Kelola Pengajuan</button>
+                        : null}
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "monitoring-drpp" ? "btn-selected" : "hidden"}`} name="monitoring-drpp" onClick={(e)=> handleButtonClick(e.target)}><MonitorIcon fontSize="small"/><span className="padd-span-bend"/>Monitoring DRPP</button>
                         : null}
                         { user.role === "user" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>

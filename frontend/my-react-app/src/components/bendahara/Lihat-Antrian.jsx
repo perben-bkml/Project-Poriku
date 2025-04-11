@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 // Import components
-import { columns2 } from './head-data'
-import LoadingAnimate from "../ui/loading";
+import { columns2 } from './head-data.js'
+import LoadingAnimate from "../../ui/loading.jsx";
 
 // Import Material UI Table & Pagination
 import Table from '@mui/material/Table';

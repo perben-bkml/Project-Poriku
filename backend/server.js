@@ -804,20 +804,11 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 app.post("/bendahara/aksi-ajuan", async (req, res) => {
     try {
         const {updatedAntriData, monitoringDrppData} = req.body
-        const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = updatedAntriData;
-        const {trans_id, satker, nominal, jenis} = monitoringDrppData;
-
-        if (!updatedAntriData || !monitoringDrppData) {
+        if (!updatedAntriData) {
             return res.status(400).json({ message: "Invalid or missing data." });
         }
 
-        //Split drpp and nominal into arrays
-        const drppArray = drpp.split(", ").map(num => num.trim());
-        const nominalArray = nominal.split(", ").map(num => num.trim());
-
-        if (drppArray.length !== nominalArray.length) {
-            return res.status(400).json({ message: "DRPP and Nominal data mismatch." });
-        }
+        const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = updatedAntriData;
 
         //Handling Write Antrian Sheet update
         const getAntrianResponse = await sheets.spreadsheets.values.get({
@@ -868,75 +859,123 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
 
         // Handling Monitoring DRPP Sheet update
-        const getMonitoringResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Monitoring DRPP'!B:G"
-        });
+        if (monitoringDrppData) {
+            const {trans_id, satker, nominal, jenis} = monitoringDrppData;
 
-        const monitoringRows = getMonitoringResponse.data.values || [];
-        let existingStartRow = null;
-        let existingRowCount = 0;
+            //Split drpp and nominal into arrays
+            const drppArray = drpp.split(", ").map(num => num.trim());
+            const nominalArray = nominal.split(", ").map(num => num.trim());
 
-        //Find if `trans_id` already exists
-        for (let i = 0; i < monitoringRows.length; i++) {
-            if (monitoringRows[i][0] === trans_id) {
-                existingStartRow = i + 1; // Convert to 1-based index
-                existingRowCount = 1; // Start counting rows for this `trans_id`
-            } else if (existingStartRow && !monitoringRows[i][0]) {
-                existingRowCount++; // Continue counting blank rows
-            } else if (existingStartRow) {
-                break; // Stop counting when a new `trans_id` appears
+            if (drppArray.length !== nominalArray.length) {
+                return res.status(400).json({message: "DRPP and Nominal data mismatch."});
             }
-        }
 
-        const newRowCount = drppArray.length;
+            const getMonitoringResponse = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Monitoring DRPP'!B:G"
+            });
 
-        // Prepare the new rows
-        let rowsToWrite = [];
-        for (let i = 0; i < newRowCount; i++) {
-            rowsToWrite.push([
-                i === 0 ? trans_id : "", // Only write trans_id in the first row
-                fullDateFormat, // Column C
-                satker, // Column D
-                drppArray[i], // Column E
-                spm, // Column F
-                nominalArray[i], // Column G
-                "Belum", // Column H
-                "Belum", // Column I
-                jenis.toUpperCase(), // Column J
-            ]);
-        }
+            const monitoringRows = getMonitoringResponse.data.values || [];
+            let existingStartRow = null;
+            let existingRowCount = 0;
 
-        if (existingStartRow) {
-            //Adjust the row count
-            if (newRowCount < existingRowCount) {
-                // If new data has fewer rows, clear extra old rows
-                const clearRange = `Monitoring DRPP!B${existingStartRow + newRowCount}:J${existingStartRow + existingRowCount - 1}`;
-                await sheets.spreadsheets.values.clear({
+            // Find if `trans_id` already exists
+            for (let i = 0; i < monitoringRows.length; i++) {
+                if (monitoringRows[i][0] === trans_id) {
+                    if (!existingStartRow) {
+                        existingStartRow = i + 1; // Convert to 1-based index (first occurrence)
+                    }
+                    existingRowCount++; // Count all rows belonging to the same trans_id
+                } else if (existingStartRow) {
+                    break; // Stop counting when a new `trans_id` appears
+                }
+            }
+
+            const newRowCount = drppArray.length;
+
+            // Prepare the new rows
+            let rowsToWrite = [];
+            for (let i = 0; i < newRowCount; i++) {
+                rowsToWrite.push([
+                    trans_id, // Trans ID is written on all rows
+                    fullDateFormat, // Column C
+                    satker, // Column D
+                    drppArray[i], // Column E
+                    spm, // Column F
+                    nominalArray[i], // Column G
+                    "Belum", // Column H
+                    "Belum", // Column I
+                    jenis.toUpperCase(), // Column J
+                ]);
+            }
+
+            // Find Sheets ID
+            const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+            const DrppSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Monitoring DRPP").properties.sheetId;
+
+            //Operator to add and delete empty row
+            if (existingStartRow) {
+                if (newRowCount > existingRowCount) {
+                    // INSERT rows before updating (so there is space)
+                    await sheets.spreadsheets.batchUpdate({
+                        spreadsheetId,
+                        resource: {
+                            requests: [
+                                {
+                                    insertDimension: {
+                                        range: {
+                                            sheetId: DrppSheetId,
+                                            dimension: "ROWS",
+                                            startIndex: existingStartRow + existingRowCount - 1,
+                                            endIndex: existingStartRow + newRowCount - 1
+                                        },
+                                        inheritFromBefore: false
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                } else if (newRowCount < existingRowCount) {
+                    // DELETE excess rows
+                    await sheets.spreadsheets.batchUpdate({
+                        spreadsheetId,
+                        resource: {
+                            requests: [
+                                {
+                                    deleteDimension: {
+                                        range: {
+                                            sheetId: DrppSheetId,
+                                            dimension: "ROWS",
+                                            startIndex: existingStartRow + newRowCount - 1,
+                                            endIndex: existingStartRow + existingRowCount - 1
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                }
+
+                // Update the rows
+                const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
+                await sheets.spreadsheets.values.update({
                     spreadsheetId,
-                    range: clearRange
+                    range: targetRange,
+                    valueInputOption: "RAW",
+                    resource: { values: rowsToWrite }
+                });
+
+            } else {
+                // If trans_id doesn't exist, append new rows
+                const lastFilledRow = monitoringRows.length + 1;
+                const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: targetRange,
+                    valueInputOption: "RAW",
+                    resource: { values: rowsToWrite }
                 });
             }
-
-            //Update the existing rows
-            const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
-            await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: targetRange,
-                valueInputOption: "RAW",
-                resource: { values: rowsToWrite }
-            });
-
-        } else {
-            //If trans_id doesn't exist, append new rows
-            const lastFilledRow = monitoringRows.length + 1;
-            const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
-            await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: targetRange,
-                valueInputOption: "RAW",
-                resource: { values: rowsToWrite }
-            });
         }
 
         res.json({ message: "Data updated successfully!" });
@@ -1000,6 +1039,39 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 });
+
+//Monitoring DRPP component handlers
+app.get("/bendahara/monitoring-drpp", async (req, res) => {
+    try {
+        const { page = 1, limit = 10 } = req.query;
+
+        // Fetch total rows based on A column
+        const getAllRowsResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Monitoring DRPP'!A3:A",
+        });
+        const totalRows = getAllRowsResponse.data.values.length;
+
+        // Set rows to fetch from the end of the sheet
+        const actualTotalRows = totalRows + 2; //+2 because totalRows is grabbing data from A3
+        const endRow = actualTotalRows - (page - 1) * limit;
+        const startRow = Math.max(endRow - limit + 1, 3); // Ensure we don't go below row 3
+
+        const fetchRowRange= `'Monitoring DRPP'!A${startRow}:J${endRow}`;
+
+        // Fetch Paginated Data
+        const getDRPPResponses = await sheets.spreadsheets.values.get({ spreadsheetId, range: fetchRowRange, });
+
+        //Capture data values
+        const paginatedDRPP = getDRPPResponses.data.values ? getDRPPResponses.data.values.reverse() : [];
+
+        res.json({ data: paginatedDRPP, realAllDRPPRows: totalRows })
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+})
 
 
 

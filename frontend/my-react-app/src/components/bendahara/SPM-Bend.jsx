@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 // Import Head Data
-import { jenisSPM, statusSPM } from './head-data';
+import { jenisSPM, statusSPM } from './head-data.js';
 // Import Made UI
-import { TableSpmBendahara } from '../ui/tables';
-import LoadingAnimate from '../ui/loading';
+import { TableSpmBendahara } from '../../ui/tables.jsx';
+import LoadingAnimate from '../../ui/loading.jsx';
 // Import Functions
-import { fetchNotPaidSPM, handleCariBtn, handleRincianSubmit } from '../lib/fetches';
+import { fetchNotPaidSPM, handleCariBtn, handleRincianSubmit } from '../../lib/fetches.js';
 
 function InfoSPMBendahara() {
     // State

@@ -3,10 +3,10 @@ import * as math from "mathjs";
 import axios from "axios";
 
 // Import Components
-import Popup from "../ui/Popup";
-import { columns } from "./head-data";
-import LoadingAnimate, { LoadingScreen } from "../ui/loading";
-import { SubmitButton } from "../ui/buttons";
+import Popup from "../../ui/Popup.jsx";
+import { columns } from "./head-data.js";
+import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
+import { SubmitButton } from "../../ui/buttons.jsx";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -18,7 +18,7 @@ import TableRow from '@mui/material/TableRow';
 import { TableFooter } from "@mui/material";
 
 // Import Context
-import { AuthContext } from "../lib/AuthContext.jsx";
+import { AuthContext } from "../../lib/AuthContext.jsx";
 import PropTypes from "prop-types";
 
 

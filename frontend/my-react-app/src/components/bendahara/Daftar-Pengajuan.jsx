@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, {useState, useEffect, useContext} from "react";
 import axios from "axios";
 // Import components
 import Pengajuan from "../../ui/Pengajuan-Info.jsx";
 import Popup from "../../ui/Popup.jsx";
 import { PopupAlert } from "../../ui/Popup.jsx";
+import { AuthContext } from "../../lib/AuthContext";
 // Import material UI
 import Pagination from '@mui/material/Pagination';
 // Import Progress Material UI
@@ -12,6 +13,9 @@ import PropTypes from "prop-types";
 
 
 function DaftarPengajuan(props){
+    //Context
+    const { user } = useContext(AuthContext)
+
     // States
     const [antrianData, setAntrianData] = useState([]);
     const [currentPage, setCurrentPage] = useState(props.userPagination || 1);
@@ -28,9 +32,6 @@ function DaftarPengajuan(props){
 
     // Early pagination leftof
     useEffect( () => {
-        // if (props.userPagination) {
-        //     setCurrentPage(props.userPagination);
-        // }
         if (props.alertMessage) {
             setIsAlert(true);
             setAlertMessage({message: props.alertMessage, severity: "success"});
@@ -44,11 +45,11 @@ function DaftarPengajuan(props){
         try {
             setAntrianData([]);
             setIsLoading(true);
-            const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage }});
+            const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage, username: user.name }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setIsLoading(false);
-                setAntrianData(responseResult);
+                setAntrianData(responseResult.reverse());
                 setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
             }
         } catch (error) {

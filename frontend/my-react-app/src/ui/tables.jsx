@@ -50,6 +50,7 @@ export function TableKelola(props) {
         setTableType(props.type);
     }, [props.type])
 
+
     useEffect(() => {
         if (props.content && props.fullContent) {
             setIsLoading(false);
@@ -58,7 +59,8 @@ export function TableKelola(props) {
 
     if (isLoading) {
         return <LoadingAnimate />
-    } 
+    }
+
 
     if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
         return null
@@ -85,7 +87,7 @@ export function TableKelola(props) {
             <Fragment>
                 <TableRow>
                     {tableType === "kelola" || tableType === "monitor"?
-                    <TableCell>
+                    <TableCell sx={tableType === 'monitor' && {border: '0.8px solid rgb(214, 214, 214)'}}>
                         <IconButton
                             aria-label="expand row"
                             size="small"
@@ -96,7 +98,7 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } >{data}</TableCell>
+                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' && {border: '0.8px solid rgb(214, 214, 214)'}} >{data}</TableCell>
                     ))}
                 </TableRow>
 
@@ -114,7 +116,7 @@ export function TableKelola(props) {
     }
 
     return (
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 970 }}>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900 }}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
                     <TableRow sx={{backgroundColor: "#1a284b"}}>

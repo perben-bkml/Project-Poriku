@@ -144,34 +144,40 @@ app.get("/check-auth", (req, res) => {
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
     try {
-        const { page = 1, limit = 5 } = req.query; //Page=1 limit=5 is default. changed by req.query.
+        const { page = 1, limit = 5, username } = req.query;
 
-        // Fetch total rows first
+        // Fetch all data from columns A to L starting from row 3
         const getAllRowsResponse = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: "'Write Antrian'!A3:A", // Only fetch the first column to determine row count
+            range: "'Write Antrian'!A3:L",
         });
-        const totalRows = getAllRowsResponse.data.values.length;
 
-        // Set rows to fetch from the end of the sheet
-        const endRow = totalRows - (page - 1) * limit + 2; // +2 to account for the starting row at A3
-        const startRow = Math.max(endRow - limit + 1, 3); // Ensure we don't go below row 3
-        const fetchRowRange= `'Write Antrian'!A${startRow}:L${endRow}`;
+        let allRows = getAllRowsResponse.data.values || [];
 
-        // Fetch Paginated Data
-        const getAntrianResponses = await sheets.spreadsheets.values.get({ spreadsheetId, range: fetchRowRange, });
+        // Filter rows where column L matches username (if username don't exist it will handle Lihat-Antrian)
+        let filteredRows = []
+        if (username) {
+            filteredRows = allRows.filter(row => row[11] === username);
+        } else {
+            filteredRows = allRows;
+        }
+        // Sort from latest to earliest by reversing
+        filteredRows = filteredRows.reverse();
 
-        //Handle empty rows
-        let paginatedAntrian = getAntrianResponses.data.values || [];
-         // Add empty rows to generate max 12 columns
-         const num_Columns = 12;
-         paginatedAntrian = paginatedAntrian.map(row => {
-             while (row.length < num_Columns) {
-                 row.push("");
-             }
-             return row;
-         })
-        res.json({ data: paginatedAntrian, realAllAntrianRows: totalRows })
+        const totalFiltered = filteredRows.length;
+
+        // Pagination logic (from the bottom up)
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + parseInt(limit);
+        const paginatedRows = filteredRows.slice(startIndex, endIndex);
+
+        // Ensure each row has 12 columns
+        const normalizedRows = paginatedRows.map(row => {
+            while (row.length < 12) row.push("");
+            return row;
+        });
+
+        res.json({ data: normalizedRows, realAllAntrianRows: totalFiltered });
 
     } catch (error) {
         console.error(error);

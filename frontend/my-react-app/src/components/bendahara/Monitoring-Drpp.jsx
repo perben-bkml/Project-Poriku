@@ -9,10 +9,6 @@ import {TableKelola} from "../../ui/tables.jsx";
 import Pagination from '@mui/material/Pagination';
 
 
-//Todolist
-//1. Fetch Data function has been stated by refering to Lihat Antrian. Continue to apply table and pagination.
-//2.
-
 export default function MonitoringDrpp(props) {
     //Placeholder
     const placeholderTable = ["No.", "ID Number", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan" ]

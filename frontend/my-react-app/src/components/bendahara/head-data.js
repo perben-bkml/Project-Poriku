@@ -51,6 +51,9 @@ const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerj
 //For Aksi-Pengajuan.jsx
 const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Satker", "Nominal", "Tgl. Request"]
 
+//For Aksi-Drpp.jsx
+const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData };
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData };
 

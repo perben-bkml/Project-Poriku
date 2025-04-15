@@ -644,7 +644,7 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-top: 0px;
     margin-left: 25px;
     margin-bottom: 5px;
-    font-size: 2.3rem;
+    font-size: 2rem;
     color: #0a0f1b;
 }
 
@@ -735,6 +735,11 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 20px;
 }
 
+/* For Aksi-Drpp.jsx */
+.aksi-content-label.drpp-content {
+    grid-template-rows: 1fr;
+    column-gap: 0;
+}
 
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {

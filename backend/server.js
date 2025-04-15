@@ -1079,7 +1079,46 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
     }
 })
 
+//Aksi DRPP handler
+app.post("/bendahara/aksi-drpp", async (req, res) => {
+    const {numbers, pajakStatus} = req.body;
+    try {
+        const getDrppRows = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Monitoring DRPP'!A3:A",
+        });
+        const totalRows = getDrppRows.data.values;
 
+        // Matching range with number
+        let trackedRowNum = null;
+        for (let i = 0; i < totalRows.length; i++) {
+            if (totalRows[i][0]?.toString().trim() === numbers.data.toString().trim()) {
+                trackedRowNum = i + 3; // A3 = index 0 => row number = i + 3
+                break;
+            }
+        }
+
+        if (!trackedRowNum) {
+            return res.status(404).json({ message: "Nomor urut DRPP tidak ditemukan." });
+        }
+
+        await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
+            valueInputOption: "RAW",
+            resource: {
+                values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
+            },
+        });
+
+        res.status(200).json({ message: "Status pajak berhasil diperbarui." });
+
+
+
+    } catch (error) {
+        console.log("Error processing data.", error)
+    }
+})
 
 // Ports
 app.listen(3000, () => {

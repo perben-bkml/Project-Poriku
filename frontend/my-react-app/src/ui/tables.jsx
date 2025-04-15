@@ -87,7 +87,7 @@ export function TableKelola(props) {
             <Fragment>
                 <TableRow>
                     {tableType === "kelola" || tableType === "monitor"?
-                    <TableCell sx={tableType === 'monitor' && {border: '0.8px solid rgb(214, 214, 214)'}}>
+                    <TableCell sx={tableType === 'monitor' ? {border: '0.8px solid rgb(214, 214, 214)'} : null}>
                         <IconButton
                             aria-label="expand row"
                             size="small"
@@ -98,7 +98,9 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' && {border: '0.8px solid rgb(214, 214, 214)'}} >{data}</TableCell>
+                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' ? {border: '0.8px solid rgb(214, 214, 214)'} : null} >
+                            {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ? <p style={{margin: '0px', fontWeight: '700'}}>{data}</p> : data}
+                        </TableCell>
                     ))}
                 </TableRow>
 

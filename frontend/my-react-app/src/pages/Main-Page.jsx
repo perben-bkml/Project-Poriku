@@ -35,6 +35,7 @@ function MainPage(props) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [alertMessage, setAlertMessage] = useState("");
     const [aksiData, setAksiData] = useState([]);
+    const [drppData, setDrppData] = useState([]);
 
 
     // Set buttonSelect when page renders
@@ -92,9 +93,9 @@ function MainPage(props) {
             case "aksi-pengajuan":
                 return <AksiPengajuan fulldata={aksiData} changeComponent={setButtonSelect}/>
             case "monitoring-drpp":
-                return <MonitoringDrpp changeComponent={setButtonSelect} aksiData={setAksiData} />
+                return <MonitoringDrpp changeComponent={setButtonSelect} aksiData={setDrppData} />
             case "aksi-drpp":
-                return <AksiDrpp fulldata={aksiData} changeComponent={setButtonSelect} />
+                return <AksiDrpp fulldata={drppData} changeComponent={setButtonSelect} />
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":

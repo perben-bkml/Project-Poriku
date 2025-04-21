@@ -19,6 +19,7 @@ export default function AksiDrpp(props) {
         pungutan: '',
         setoran: '',
     })
+    const [coloredRow, setColoredRow] = useState([]);
 
     //Setting Tablekelola data
     const drppData = [
@@ -38,7 +39,7 @@ export default function AksiDrpp(props) {
         { value: 'Belum', label: 'Belum', color: "#C7B6A7", textcolor: "#5E4C3B" },
         { value: 'Sudah', label: 'Sudah', color: "#9FFFC3", textcolor: "#0F9043" },
         { value: 'Ada Masalah', label: 'Ada Masalah', color: "#EB2727", textcolor: "#EEC6C6" },
-        { value: 'Tidak Ada Pajak', label: 'Tidak Ada Pajak', color: "#F3B5B5", textcolor: "#8B0808" },
+        { value: 'Tidak Ada Pajak', label: 'Tidak Ada Pajak', color: "white", textcolor: "black" },
         { value: 'Pajak Manual', label: 'Pajak Manual', color: "#3D3630", textcolor: "#C7B6A7" },
     ]
 
@@ -49,7 +50,18 @@ export default function AksiDrpp(props) {
             const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
-                setIsTableLoading(false)
+                if (response.data.keywordRowPos) {
+                    const tablePos = { startRow: response.data.keywordRowPos, endRow: response.data.keywordEndRow }
+                    const result = await axios.get("http://localhost:3000/bendahara/cek-drpp", { params: tablePos} )
+                    if (result.status === 200) {
+                        setColoredRow(result.data.data || []);
+                        setIsTableLoading(false)
+                    }
+                }
+                else {
+                    setIsTableLoading(false)
+                }
+
             }
         } catch (error) {
             console.log("Failed sending Keyword.", error)
@@ -78,14 +90,17 @@ export default function AksiDrpp(props) {
             if (selectElement) {
                 selectOptionBackgroundColor(selectElement);
             }
-        }
+        };
         if (pajakStatus.setoran) {
             const selectElement = document.getElementById("setor");
             if (selectElement) {
                 selectOptionBackgroundColor(selectElement);
             }
+        };
+        if (tableData.length > 0) {
+            setColoredRow(() => tableData.map(() => [""]));
         }
-    }, [pajakStatus.pungutan]);
+    }, [pajakStatus.pungutan, tableData]);
 
     //Handle Select Changes
     function handleInputChange(event){
@@ -95,12 +110,24 @@ export default function AksiDrpp(props) {
         }));
     }
 
+    //Handle colored row data
+    function addColorData(rowIndex, value) {
+        setColoredRow(prev => {
+            const newData = [...prev];
+            const current = newData[rowIndex]?.[0];
+            newData[rowIndex] = current === value ? [""] : [value]; // toggle logic
+            return newData;
+        });
+    }
+
     //Handle submit button
     async function handleSubmit(){
         let numbers = { data: props.fulldata[0] };
+        let colorData = { data: coloredRow, id: `TRANS_ID:${props.fulldata[1]}` };
         const sendData = {
             numbers,
-            pajakStatus
+            pajakStatus,
+            colorData
         }
         try {
             handlePopup()
@@ -123,6 +150,7 @@ export default function AksiDrpp(props) {
             setIsPopup(false);
         }
     }
+
 
     return (
         <div>
@@ -151,7 +179,7 @@ export default function AksiDrpp(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Transaksi</h2>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData} />}
+                <TableKelola type="aksi-drpp" header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
                 <div className='form-submit'>
                     <SubmitButton value='Kembali' name="submit-all" onClick={() => props.changeComponent('monitoring-drpp')} />
                 </div>

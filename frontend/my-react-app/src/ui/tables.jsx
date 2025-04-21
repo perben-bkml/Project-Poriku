@@ -72,22 +72,27 @@ export function TableKelola(props) {
         if (props.type === "kelola") {
             props.changeComponent("aksi-pengajuan")
             props.aksiData(props.fullContent[index])
-        } else if (props.type === "aksi") {
-            null
         } else if (props.type === "monitor") {
             props.changeComponent("aksi-drpp")
             props.aksiData(props.fullContent[index])
+        } else {
+            null
         }
     }
 
     function Row(props) {
         //State
         const [isOpen, setIsOpen] = useState(false);
+        const getCheckData = props.coloredRow?.[props.rowIndex] ?? [];
         return (
             <Fragment>
-                <TableRow>
+                <TableRow onClick={() => {
+                    if (tableType === 'aksi-drpp') {
+                        props.addColorData(props.rowIndex, "colored");
+                    }}}
+                    sx={tableType === 'aksi-drpp' ? {backgroundColor: getCheckData[0] === 'colored' ? "#F3B5B5" : "inherit", cursor: 'pointer'} : null}>
                     {tableType === "kelola" || tableType === "monitor"?
-                    <TableCell sx={tableType === 'monitor' ? {border: '0.8px solid rgb(214, 214, 214)'} : null}>
+                    <TableCell sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'} : null}>
                         <IconButton
                             aria-label="expand row"
                             size="small"
@@ -98,14 +103,14 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' ? {border: '0.8px solid rgb(214, 214, 214)'} : null} >
+                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'} : null} >
                             {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ? <p style={{margin: '0px', fontWeight: '700'}}>{data}</p> : data}
                         </TableCell>
                     ))}
                 </TableRow>
 
                 <TableRow>
-                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola" || tableType === "monitor"?  props.rowData[0].length + 2 : 22}>
+                    <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola" || tableType === "monitor"?  props.rowData[0].length + 2 : 20}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
                             <div className="collapsible">
                                 <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Lihat</button>
@@ -135,7 +140,7 @@ export function TableKelola(props) {
                 </TableHead>
                 <TableBody>
                     {props.content.map((row, index) => (
-                        <Row key={index} rowData={row} rowIndex={index}/>
+                        <Row key={index} rowData={row} rowIndex={index} coloredRow={props.coloredRow} addColorData={props.addColorData} />
                     ))}
                 </TableBody>
             </Table>

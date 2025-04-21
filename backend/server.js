@@ -1080,16 +1080,46 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 })
 
 //Aksi DRPP handler
-app.post("/bendahara/aksi-drpp", async (req, res) => {
-    const {numbers, pajakStatus} = req.body;
+app.get("/bendahara/cek-drpp", async (req, res) => {
     try {
-        const getDrppRows = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Monitoring DRPP'!A3:A",
-        });
-        const totalRows = getDrppRows.data.values;
+        const tablePos  = req.query;
+        const colorStartRow = parseInt(tablePos.startRow) + 1;
+        const range = `'Write Table'!W${colorStartRow}:W${tablePos.endRow}`;
+        const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+        let result = response.data.values || [];
 
-        // Matching range with number
+        // Add empty rows to fill based on row numbers
+        const num_Columns = parseInt(tablePos.startRow) - parseInt(tablePos.endRow);
+        result = result.map(row => {
+            while (row.length < num_Columns) {
+                row.push("");
+            }
+            return row;
+        })
+
+        res.json({ data: result })
+
+    } catch (error) {
+        console.log("Cannot fetch color status.", error)
+    }
+
+})
+
+
+app.post("/bendahara/aksi-drpp", async (req, res) => {
+    const {numbers, pajakStatus, colorData} = req.body;
+    try {
+        const getDrppRows = await sheets.spreadsheets.values.batchGet({
+            spreadsheetId,
+            ranges: [
+                "'Monitoring DRPP'!A3:A",   // Range to update DRPP status
+                "'Write Table'!X:X"       // Range to update colored row status
+            ],
+        });
+        const totalRows = getDrppRows.data.valueRanges[0].values || [];
+        const colorRows = getDrppRows.data.valueRanges[1].values || [];
+
+        // totalRows/DRPP status handler (find DRPP status number order on sheet)
         let trackedRowNum = null;
         for (let i = 0; i < totalRows.length; i++) {
             if (totalRows[i][0]?.toString().trim() === numbers.data.toString().trim()) {
@@ -1102,6 +1132,20 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             return res.status(404).json({ message: "Nomor urut DRPP tidak ditemukan." });
         }
 
+        // colorRows/colored row status handler
+        let foundRow = null;
+        for (let i = 0; i < colorRows.length; i++) {
+            if (colorRows[i][0] === colorData.id) {
+                foundRow = i + 1 + 1; // Adjust for 1-based indexing and +1 to skip table header
+                break;
+            }
+        }
+
+        if (!foundRow) {
+            console.log(`Keyword "${colorData}" tidak ditemukan.`);
+        }
+
+        //Update all data
         await sheets.spreadsheets.values.update({
             spreadsheetId,
             range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
@@ -1110,6 +1154,23 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
                 values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
             },
         });
+        await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+                valueInputOption: "RAW",
+                data: [
+                    {
+                        range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
+                        values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
+                    },
+                    {
+                        range: `'Write Table'!W${foundRow}`,
+                        values: colorData.data, // <-- convert to vertical array
+                    }
+                ]
+            }
+        });
+
 
         res.status(200).json({ message: "Status pajak berhasil diperbarui." });
 

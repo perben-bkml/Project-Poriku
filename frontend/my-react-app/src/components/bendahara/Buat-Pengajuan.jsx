@@ -135,28 +135,89 @@ function BuatPengajuan(props) {
         if (!num) {
             return "";
         } else {
-            return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         }
     }
+
+    // Helper function to calculate and update column 17 (Nilai Terima)
+    const updateNilaiTerima = (data, rowIndex) => {
+        // Function to convert formatted numbers to actual numbers
+        function toNumber(value) {
+            const cleaned = String(value).replace(/\./g, "").replace(/,/g, ".");
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
+
+        const initialValue = toNumber(data[rowIndex][4]);
+        const cut1 = toNumber(data[rowIndex][7]);
+        const cut2 = toNumber(data[rowIndex][9]);
+        const cut3 = toNumber(data[rowIndex][11]);
+        const cut4 = toNumber(data[rowIndex][13]);
+        const cut5 = toNumber(data[rowIndex][15]);
+
+        data[rowIndex][17] = numberFormats(initialValue - cut1 - cut2 - cut3 - cut4 - cut5);
+        return data;
+    };
 
     //Function handling Math equations
     function evaluateEquation(equation, rowIndex, colIndex) {
         try {
-            //Remove = and , as leading equation like excel
-            const equ = equation.trim().startsWith("=") ? equation.slice(1) : equation;
+            //Remove = as leading equation like excel
+            let equ = equation.trim().startsWith("=") ? equation.slice(1) : equation;
+
+            // Regular expression to find cell references in the format of column index + row index
+            // For example: 4[10] refers to column 4, row 10
+            // We use a more specific regex to avoid matching numbers like 4[1] as cell references
+            // when they're meant to be literal values
+            const cellRefRegex = /(\d+)\[(\d+)\]/g;
+
+            // Replace all cell references with their actual values
+            equ = equ.replace(cellRefRegex, (match, colIdx, rowIdx) => {
+                const col = parseInt(colIdx);
+                // Adjust row index to match the 1-based indexing used in handleCellClick
+                const row = parseInt(rowIdx) - 1;
+
+                // Check if the referenced cell exists
+                if (row >= 0 && row < tableData.length && col >= 0 && col < tableData[row].length) {
+                    const cellValue = tableData[row][col];
+
+                    // If the cell value is empty or not a number, return 0
+                    if (!cellValue || isNaN(cellValue.replace(/\./g, "").replace(/,/g, "."))) {
+                        return "0";
+                    }
+
+                    // Return the numeric value of the cell (remove formatting)
+                    return cellValue.replace(/\./g, "").replace(/,/g, ".");
+                }
+
+                // If the cell doesn't exist, return 0
+                return "0";
+            });
+
+            // Remove formatting from the equation
             const sanitizeEqu = equ.replace(/\./g, "")
-            const sanitizeEqu2 = sanitizeEqu.replace(/,/g, "");
+            const sanitizeEqu2 = sanitizeEqu.replace(/,/g, ".");
+
             //Evaluate/count equations
             const result = Math.floor(math.evaluate(sanitizeEqu2));
             let stringResult = numberFormats(result.toString());
             if (stringResult == "NaN") {
                 stringResult = "";
             }
+
             //Returning formatted result
             const newData = [...tableData];
             newData[rowIndex][colIndex] = stringResult;
+
+            // If the updated column is one of the columns used in the Nilai Terima calculation,
+            // update column 17 as well
+            if (colIndex === 4 || colIndex === 7 || colIndex === 9 || colIndex === 11 || colIndex === 13 || colIndex === 15) {
+                updateNilaiTerima(newData, rowIndex);
+            }
+
             setTableData(newData);
-        } catch {
+        } catch (error) {
+            console.error("Formula evaluation error:", error);
             return "Rumus tidak valid."
         }
     }
@@ -177,6 +238,13 @@ function BuatPengajuan(props) {
             const updatedData = [...prevData];
             updatedData[cellrowIndex] = [...updatedData[cellrowIndex]];
             updatedData[cellrowIndex][cellcolumnIndex] = value;
+
+            // Update column 17 (Nilai Terima) when any of the columns used in its calculation change
+            if (cellcolumnIndex === 4 || cellcolumnIndex === 7 || cellcolumnIndex === 9 || 
+                cellcolumnIndex === 11 || cellcolumnIndex === 13 || cellcolumnIndex === 15) {
+                updateNilaiTerima(updatedData, cellrowIndex);
+            }
+
             return updatedData;
         });
 
@@ -187,7 +255,7 @@ function BuatPengajuan(props) {
                 textareaRef.style.height = textareaRef.scrollHeight + "px";
             }
         }, 0);
-    }, []);
+    }, [updateNilaiTerima]);
 
     const handleCellBlur = useCallback((cellrowIndex, cellcolumnIndex, value) => {
         //Exclude column 1 - 4 from auto formatting
@@ -216,21 +284,27 @@ function BuatPengajuan(props) {
                 if (cellcolumnIndex === 4) {
                     const baseValue = parseFloat(numericValue);
                     if (!isNaN(baseValue)) {
-                        updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 6 for normal DPP
-                        updatedData[cellrowIndex][6] = numberFormats((baseValue * 11/12).toFixed(0)); // Column 7 for DPP Nilai Lain
+                        updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 5 for normal DPP
+                        updatedData[cellrowIndex][6] = numberFormats((baseValue * 100/111 * 11/12).toFixed(0)); // Column 6 for DPP Nilai Lain
                     }
+                }
+
+                //Automatically calculate total Nilai Terima
+                if (cellcolumnIndex >= 4 && cellcolumnIndex <= 17) {
+                    updateNilaiTerima(updatedData, cellrowIndex);
                 }
 
                 return updatedData;
             });
         }   
-    }, [numberFormats]);
+    }, [numberFormats, updateNilaiTerima]);
 
     // Handling formula mode - optimized with useCallback
     const handleCellClick = useCallback((rowIndex, colIndex) => {
         if (isFormulaMode && targetReference) {
             if (currentEditableCell && (currentEditableCell.col !== colIndex || currentEditableCell.row !== rowIndex)) {
-                const targetCellValue = tableData[rowIndex][colIndex] || "";
+                // Create a cell reference in the format C[R] where C is column and R is row
+                const cellReference = `${colIndex}[${rowIndex+1}]`;
 
                 const originCellData = tableData[currentEditableCell.row][currentEditableCell.col] || "=";
 
@@ -242,7 +316,7 @@ function BuatPengajuan(props) {
 
                 if (isLastCharOperator) {
                     // Append the new cell reference if the last character is an operator
-                    updatedFormula = originCellData + targetCellValue;
+                    updatedFormula = originCellData + cellReference;
                 } else {
                     // Find the position of the last operator or "="
                     const lastOperatorMatch = originCellData.match(/[\+\-\*\/=]/g);
@@ -251,7 +325,7 @@ function BuatPengajuan(props) {
                         : originCellData.length;
 
                     // Replace the value after the last operator
-                    updatedFormula = originCellData.substring(0, lastOperatorPos) + targetCellValue;
+                    updatedFormula = originCellData.substring(0, lastOperatorPos) + cellReference;
                 }
 
                 // Update the table with the new formula using functional setState
@@ -388,6 +462,28 @@ function BuatPengajuan(props) {
         return () => debouncedAdjust.cancel();
     }, []);
 
+    // Function to parse and adjust cell references in formulas
+    const adjustFormulaReferences = useCallback((formula, sourceRow, targetRow) => {
+        if (!formula.startsWith('=')) return formula;
+
+        // Regular expression to find cell references in the format of column index + row index
+        // For example: 4[10] refers to column 4, row 10
+        const cellRefRegex = /(\d+)\[(\d+)\]/g;
+
+        return formula.replace(cellRefRegex, (match, colIndex, rowIndex) => {
+            // Calculate the row difference
+            const rowDiff = targetRow - sourceRow;
+            // Adjust the row index, keeping the column index the same
+            const newRowIndex = parseInt(rowIndex) + rowDiff;
+
+            // Make sure the new row index is not negative
+            const safeRowIndex = Math.max(0, newRowIndex);
+
+            // Return the adjusted cell reference
+            return `${colIndex}[${safeRowIndex}]`;
+        });
+    }, []);
+
     // Handle pasting data to cell - optimized with useCallback
     const handlePaste = useCallback((event, startRow, startCol) => {
         event.preventDefault();
@@ -407,8 +503,19 @@ function BuatPengajuan(props) {
                 row.forEach((cell, j) => {
                     const targetCol = startCol + j;
                     if (targetCol < updatedData[targetRow].length) {
-                        updatedData[targetRow][targetCol] = cell.trim();
+                        // Check if the cell contains a formula
+                        if (cell.trim().startsWith('=')) {
+                            // Get the source row (where the formula is being copied from)
+                            const sourceRow = mouseSelectRange.start ? mouseSelectRange.start.row : targetRow;
+                            // Adjust the formula references
+                            const adjustedFormula = adjustFormulaReferences(cell.trim(), sourceRow, targetRow);
+                            updatedData[targetRow][targetCol] = adjustedFormula;
+                        } else {
+                            updatedData[targetRow][targetCol] = cell.trim();
+                        }
                     }
+                    //Auto format pasted values
+                    handleCellBlur(targetRow, targetCol, updatedData[targetRow][targetCol]);
                 });
             });
 
@@ -417,7 +524,7 @@ function BuatPengajuan(props) {
 
         // Use the debounced version for better performance
         adjustAllHeight();
-    }, [tableData.length, adjustAllHeight]);
+    }, [tableData.length, adjustAllHeight, adjustFormulaReferences, mouseSelectRange, handleCellBlur]);
 
     // Handling keyboard presses - optimized with useCallback
     const handleCellKeyDown = useCallback((event, rowIndex, colIndex) => {

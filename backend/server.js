@@ -31,6 +31,61 @@ const getFormattedDate = () => {
     }
 }
 const { fullDateFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
+
+/**
+ * Performs a Google Sheets API request with exponential backoff
+ * This utility function handles rate limiting by implementing an exponential backoff strategy
+ * If the API request fails due to quota limits, it will retry with increasing delays
+ * 
+ * @param {Function} apiCallFn - Function that returns a promise for the API call
+ * @param {Object} options - Options for the backoff algorithm
+ * @returns {Promise} - Result of the API call or throws after max retries
+ */
+async function withBackoff(apiCallFn, options = {}) {
+  const {
+    maxRetries = 5,               // Maximum number of retry attempts
+    initialDelayMs = 1000,        // Start with a 1 second delay
+    maxDelayMs = 30000,           // Maximum delay between retries (30 seconds)
+    factor = 2                    // Exponential factor (delay doubles each retry)
+  } = options;
+  
+  let retries = 0;
+  let delay = initialDelayMs;
+  
+  while (true) {
+    try {
+      return await apiCallFn();
+    } catch (error) {
+      // Check if error is due to rate limiting (Google's quota exceeded)
+      const isRateLimitError = 
+        error.code === 429 || 
+        (error.response && error.response.status === 429) ||
+        (error.message && (
+          error.message.includes("quota") || 
+          error.message.includes("rate limit") ||
+          error.message.includes("too many requests")
+        ));
+      
+      if (!isRateLimitError || retries >= maxRetries) {
+        // If it's not a rate limit error or we've exceeded max retries, throw the error
+        throw error;
+      }
+      
+      // Increment retry count
+      retries++;
+      
+      // Log the retry attempt
+      console.log(`Rate limit exceeded. Retrying in ${delay}ms... (Attempt ${retries} of ${maxRetries})`);
+      
+      // Wait for the calculated delay
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Increase delay for next potential retry (with a maximum limit)
+      delay = Math.min(delay * factor, maxDelayMs);
+    }
+  }
+}
+
 // Allowing CORS to get request and cookies from frontend
 const corsOption = {
     origin: "http://localhost:5173",
@@ -147,9 +202,13 @@ app.get("/bendahara/antrian", async (req, res) => {
         const { page = 1, limit = 5, username } = req.query;
 
         // Fetch all data from columns A to L starting from row 3
-        const getAllRowsResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Write Antrian'!A3:L",
+        // Using exponential backoff to handle potential rate limiting
+        const getAllRowsResponse = await withBackoff(async () => {
+            // Original API call wrapped in a function that returns a promise
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Write Antrian'!A3:L",
+            });
         });
 
         let allRows = getAllRowsResponse.data.values || [];
@@ -180,7 +239,7 @@ app.get("/bendahara/antrian", async (req, res) => {
         res.json({ data: normalizedRows, realAllAntrianRows: totalFiltered });
 
     } catch (error) {
-        console.error(error);
+        console.error("Error in /bendahara/antrian:", error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
@@ -194,10 +253,12 @@ app.get("/bendahara/filter-date", async (req, res) => {
     }
 
     try {
-        // Fetch the entire column B from Google Sheets
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Write Antrian'!B:B", // Adjust to your sheet name and range
+        // Fetch the entire column B from Google Sheets with backoff handling
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Write Antrian'!B:B", // Adjust to your sheet name and range
+            });
         });
 
         // Get all rows from column B
@@ -219,11 +280,15 @@ app.get("/bendahara/filter-date", async (req, res) => {
         const startIndex = (page - 1) * limit;
         const paginatedRows = filteredRows.slice(startIndex, startIndex + limit);
 
-        // Fetch full row data for the paginated rows
+        // Fetch full row data for the paginated rows with backoff handling
         const rowRanges = paginatedRows.map(row => `'Write Antrian'!A${row.rowIndex}:L${row.rowIndex}`); // Adjust range if needed
-        const batchGetResponse = await sheets.spreadsheets.values.batchGet({
-            spreadsheetId,
-            ranges: rowRanges,
+        
+        // Using backoff for the batch get operation
+        const batchGetResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchGet({
+                spreadsheetId,
+                ranges: rowRanges,
+            });
         });
 
         // Combine row data
@@ -237,7 +302,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error fetching filtered data:", error);
+        console.error("Error in /bendahara/filter-date:", error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 });
@@ -248,139 +313,187 @@ app.get("/bendahara/filter-date", async (req, res) => {
 app.post("/bendahara/buat-ajuan", async (req, res) => {
     const {textdata, tabledata, userdata} = req.body;
     if (textdata && tabledata && userdata) {
-        // Get textdata/input data antrian and tabledata
-        const ranges = [
-            "'Write Antrian'!A:A",
-            "'Write Table'!A:A",
-            "'Write Antrian'!R1:R1"  //Getting antrian ID counter
-        ]
-        const allRequest = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: ranges });
-        const responseAntrian = allRequest.data.valueRanges[0].values || [];
-        const responseTable = allRequest.data.valueRanges[1].values || [];
-        const responseId = allRequest.data.valueRanges[2].values || [];
+        try {
+            // Get textdata/input data antrian and tabledata
+            const ranges = [
+                "'Write Antrian'!A:A",
+                "'Write Table'!A:A",
+                "'Write Antrian'!R1:R1"  //Getting antrian ID counter
+            ]
+            
+            // Apply backoff strategy for batch data fetch
+            const allRequest = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.batchGet({ 
+                    spreadsheetId, 
+                    ranges: ranges 
+                });
+            });
+            
+            const responseAntrian = allRequest.data.valueRanges[0].values || [];
+            const responseTable = allRequest.data.valueRanges[1].values || [];
+            const responseId = allRequest.data.valueRanges[2].values || [];
 
-        const lastFilledRows = responseAntrian.length || 0;
-        const lastTableRows = responseTable.length || [];
-        // Add date to beginning of textdata array
-        textdata.unshift(fullDateFormat);
-        // Add counter increment and unshift to textdata
-        const newIdCounter = parseInt(responseId) + 1;
-        textdata.unshift(newIdCounter)
-        // Posting on Write Antrian
-        const startAntrianRow = lastFilledRows + 1;
-        const antrianColumnCount = textdata.length;
-        const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount); //Convert to letter.
-        const newAntrianRange = `'Write Antrian'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
-        // Posting on Write Table
-        const startTableRow = lastTableRows + 3;
-        const endTableRow = startTableRow + tabledata.length -1;
-        const tableColumnCount = tabledata[0].length;
-        const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
-        const newTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`
-        // Update Gsheet Antrian and Table
-        var resource = {
-            data: [
-                {
-                    range: newAntrianRange,
-                    values: [textdata],
-                },
-                {
-                    range: newTableRange,
-                    values: tabledata,
-                },
-                {
-                    range: "'Write Antrian'!R1:R1",
-                    values: [[newIdCounter]],
-                },
-                {
-                    //Write Satuan Kerja Name
-                    range: `'Write Antrian'!L${startAntrianRow}`,
-                    values: [[userdata]],
-                },
-            ],
-            valueInputOption: "RAW",
-        }
-        const response = await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId,
-            resource,
-        });
-        // Assign Transaksi ID and Row number (Row number for edits)
-            // Getting posted Antrian Number
-        const newAntrianNumRange = `'Write Antrian'!A${startAntrianRow}:A${startAntrianRow}` 
-        const requestNewAntrianNum = await sheets.spreadsheets.values.get({spreadsheetId, range: newAntrianNumRange});
-        const getNewAntrianNum = requestNewAntrianNum.data.values;
-        const newAntrianNum = getNewAntrianNum[0][0]
-            // Getting posted Table row numbers
-        const postedTableRow = tabledata.length - 1;
-            // Writing it to desired table
-        const idAndRowNum = [ `TRANS_ID:${newAntrianNum}`, postedTableRow ];
-        const idAndRowNumRange = `'Write Table'!X${startTableRow}:Y${startTableRow}`;
-        resource = { values: [idAndRowNum] }
-        const writeIdAndRowNum = await sheets.spreadsheets.values.update({spreadsheetId, range: idAndRowNumRange, valueInputOption: "RAW", resource,})
-
-        // Coloring Gsheet Table header & giving borders
-        resource = "";
-        const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
-        const sheet = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
-        const sheetId = sheet.properties.sheetId
-        const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
-        const batchUpdateRequest = {
-            requests: [
-                // Style Header
-                {
-                    repeatCell: {
-                        range: {
-                            sheetId: sheetId,
-                            startRowIndex: startTableRow - 1, // Zero-based index
-                            endRowIndex: startTableRow, // Only the first row
-                            startColumnIndex: 0, // Start at column A (zero-based)
-                            endColumnIndex: tableColumnCount, // Number of columns in tabledata[0]
-                        },
-                        cell: {
-                            userEnteredFormat: {
-                                backgroundColor: {
-                                    red: 0.2, // RGB for blue
-                                    green: 0.4,
-                                    blue: 0.6,
-                                },
-                                horizontalAlignment: "CENTER",
-                                textFormat: {
-                                    bold: true,
-                                    foregroundColor: {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0
-                                    }
-                                }
-                            },
-                        },
-                        fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+            const lastFilledRows = responseAntrian.length || 0;
+            const lastTableRows = responseTable.length || [];
+            // Add date to beginning of textdata array
+            textdata.unshift(fullDateFormat);
+            // Add counter increment and unshift to textdata
+            const newIdCounter = parseInt(responseId) + 1;
+            textdata.unshift(newIdCounter)
+            // Posting on Write Antrian
+            const startAntrianRow = lastFilledRows + 1;
+            const antrianColumnCount = textdata.length;
+            const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount); //Convert to letter.
+            const newAntrianRange = `'Write Antrian'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
+            // Posting on Write Table
+            const startTableRow = lastTableRows + 3;
+            const endTableRow = startTableRow + tabledata.length -1;
+            const tableColumnCount = tabledata[0].length;
+            const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
+            const newTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`
+            // Update Gsheet Antrian and Table
+            var resource = {
+                data: [
+                    {
+                        range: newAntrianRange,
+                        values: [textdata],
                     },
-                },
-                // Add borders
-                {
-                    updateBorders: {
-                        range: {
-                            sheetId: sheetId,
-                            startRowIndex: startTableRow - 1, // Zero-based index
-                            endRowIndex: endTableRow, // All rows
-                            startColumnIndex: 0, // Start at column A (zero-based)
-                            endColumnIndex: tableColumnCount, // Number of columns in tabledata[0]
+                    {
+                        range: newTableRange,
+                        values: tabledata,
+                    },
+                    {
+                        range: "'Write Antrian'!R1:R1",
+                        values: [[newIdCounter]],
+                    },
+                    {
+                        //Write Satuan Kerja Name
+                        range: `'Write Antrian'!L${startAntrianRow}`,
+                        values: [[userdata]],
+                    },
+                ],
+                valueInputOption: "RAW",
+            }
+            
+            // Apply backoff strategy for batch update
+            const response = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.batchUpdate({
+                    spreadsheetId,
+                    resource,
+                });
+            });
+            
+            // Assign Transaksi ID and Row number (Row number for edits)
+            // Getting posted Antrian Number
+            const newAntrianNumRange = `'Write Antrian'!A${startAntrianRow}:A${startAntrianRow}` 
+            
+            // Apply backoff for getting antrian number
+            const requestNewAntrianNum = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId, 
+                    range: newAntrianNumRange
+                });
+            });
+            
+            const getNewAntrianNum = requestNewAntrianNum.data.values;
+            const newAntrianNum = getNewAntrianNum[0][0]
+            // Getting posted Table row numbers
+            const postedTableRow = tabledata.length - 1;
+            // Writing it to desired table
+            const idAndRowNum = [ `TRANS_ID:${newAntrianNum}`, postedTableRow ];
+            const idAndRowNumRange = `'Write Table'!X${startTableRow}:Y${startTableRow}`;
+            resource = { values: [idAndRowNum] }
+            
+            // Apply backoff for updating ID and row number
+            const writeIdAndRowNum = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.update({
+                    spreadsheetId, 
+                    range: idAndRowNumRange, 
+                    valueInputOption: "RAW", 
+                    resource
+                });
+            });
+
+            // Coloring Gsheet Table header & giving borders
+            resource = "";
+            
+            // Apply backoff for getting sheet info
+            const sheetInfo = await withBackoff(async () => {
+                return await sheets.spreadsheets.get({ spreadsheetId });
+            });
+            
+            const sheet = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
+            const sheetId = sheet.properties.sheetId
+            const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
+            const batchUpdateRequest = {
+                requests: [
+                    // Style Header
+                    {
+                        repeatCell: {
+                            range: {
+                                sheetId: sheetId,
+                                startRowIndex: startTableRow - 1, // Zero-based index
+                                endRowIndex: startTableRow, // Only the first row
+                                startColumnIndex: 0, // Start at column A (zero-based)
+                                endColumnIndex: tableColumnCount, // Number of columns in tabledata[0]
+                            },
+                            cell: {
+                                userEnteredFormat: {
+                                    backgroundColor: {
+                                        red: 0.2, // RGB for blue
+                                        green: 0.4,
+                                        blue: 0.6,
+                                    },
+                                    horizontalAlignment: "CENTER",
+                                    textFormat: {
+                                        bold: true,
+                                        foregroundColor: {
+                                            red: 1.0,
+                                            green: 1.0,
+                                            blue: 1.0
+                                        }
+                                    }
+                                },
+                            },
+                            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
                         },
-                        top: tableBorderStyle,
-                        bottom: tableBorderStyle,
-                        left: tableBorderStyle,
-                        right: tableBorderStyle,
-                        innerHorizontal: tableBorderStyle,
-                        innerVertical: tableBorderStyle,
-                    }
-                },
-            ],
-        };
-        const updateColor = await sheets.spreadsheets.batchUpdate({spreadsheetId, resource: batchUpdateRequest});
-        return (res.status(200).json({message: "Data sent successfully."}))
+                    },
+                    // Add borders
+                    {
+                        updateBorders: {
+                            range: {
+                                sheetId: sheetId,
+                                startRowIndex: startTableRow - 1, // Zero-based index
+                                endRowIndex: endTableRow, // All rows
+                                startColumnIndex: 0, // Start at column A (zero-based)
+                                endColumnIndex: tableColumnCount, // Number of columns in tabledata[0]
+                            },
+                            top: tableBorderStyle,
+                            bottom: tableBorderStyle,
+                            left: tableBorderStyle,
+                            right: tableBorderStyle,
+                            innerHorizontal: tableBorderStyle,
+                            innerVertical: tableBorderStyle,
+                        }
+                    },
+                ],
+            };
+            
+            // Apply backoff for batch update (coloring and borders)
+            const updateColor = await withBackoff(async () => {
+                return await sheets.spreadsheets.batchUpdate({
+                    spreadsheetId, 
+                    resource: batchUpdateRequest
+                });
+            });
+            
+            return res.status(200).json({message: "Data sent successfully."});
+        } catch (error) {
+            console.error("Error in /bendahara/buat-ajuan:", error);
+            return res.status(500).json({message: "Failed to process request due to server error."});
+        }
     } else {
-        return res.status(400).json({message: "Invalid Data."})
+        return res.status(400).json({message: "Invalid Data."});
     }
 })
 
@@ -391,7 +504,15 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         const transaksiKeyword = req.query.tableKeyword;
         // Finding keyword range with data from X & Y columns on Write Table Sheet
         const matchRange = "'Write Table'!X:Y";
-        const matchResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: matchRange });
+        
+        // Apply backoff strategy for finding keyword match
+        const matchResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({ 
+                spreadsheetId, 
+                range: matchRange 
+            });
+        });
+        
         const matchResponseRows = matchResponse.data.values || [];
         // Matching range with user inputted keyword
         let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
@@ -409,12 +530,17 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         // Fetch entire table data based on table row data
         let endKeywordTableRow = parseInt(keywordRow) + parseInt(keywordTableRow) - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
         const keywordTableRange = `'Write Table'!A${keywordRow}:V${endKeywordTableRow}`;
-        const keywordTableRespose = await sheets.spreadsheets.values.get({ 
-            spreadsheetId, 
-            range: keywordTableRange, 
-            majorDimension: "ROWS",  // Ensure data is returned row-wise
-            valueRenderOption: "UNFORMATTED_VALUE",  // Ensures empty cells are included
+        
+        // Apply backoff strategy for getting table data
+        const keywordTableRespose = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({ 
+                spreadsheetId, 
+                range: keywordTableRange, 
+                majorDimension: "ROWS",  // Ensure data is returned row-wise
+                valueRenderOption: "UNFORMATTED_VALUE",  // Ensures empty cells are included
+            });
         });
+        
         let keywordTableData = keywordTableRespose.data.values || [];
         // Add empty rows to generate max 22 columns
         const num_Columns = 22;
@@ -428,7 +554,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         // Return back to only the grabbed table to frontend
         res.json({ data: keywordTableData, keywordRowPos: keywordRow - 1, keywordEndRow: endKeywordTableRow })
     } catch (error) {
-        console.error(error);
+        console.error("Error in /bendahara/data-transaksi:", error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
@@ -443,7 +569,15 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         
         // Setting antrian data range
         textdata.unshift(fullDateFormat);
-        const antriResponse = await sheets.spreadsheets.values.get({spreadsheetId, range: "'Write Antrian'!A3:A"});
+        
+        // Apply backoff strategy for getting antrian data
+        const antriResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId, 
+                range: "'Write Antrian'!A3:A"
+            });
+        });
+        
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
         for (let i = 0; i < matchResult.length; i++) {
@@ -460,8 +594,11 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         const endTableRow = startTableRow + tabledata.length -1;
         const tableColumnCount = tabledata[0].length;
             // Getting sheet ID
-        // Get Sheet IDs
-        const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+        // Get Sheet IDs with backoff
+        const sheetInfo = await withBackoff(async () => {
+            return await sheets.spreadsheets.get({ spreadsheetId });
+        });
+        
         const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
         const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
 
@@ -560,10 +697,12 @@ app.patch("/bendahara/edit-table", async (req, res) => {
             },
         });
 
-        // Execute Batch Update
-        await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            resource: { requests },
+        // Execute Batch Update with backoff
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                resource: { requests },
+            });
         });
 
         console.log("✅ Update successful!");
@@ -571,7 +710,7 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         res.status(200).json({ message: "Table updated successfully." });
 
     } catch (error) {
-        console.error("Error processing request:", error);
+        console.error("Error in /bendahara/edit-table:", error);
         res.status(500).json({ message: "Server error." });
     }
 })
@@ -586,7 +725,15 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
             "'Write Table'!X:Y",  //Table data Range
             "'Write Antrian'!A:A", //Antrian data Range
             ];
-         const matchResponse = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: matchRange });
+            
+         // Apply backoff for batch get operation
+         const matchResponse = await withBackoff(async () => { 
+             return await sheets.spreadsheets.values.batchGet({ 
+                 spreadsheetId, 
+                 ranges: matchRange 
+             });
+         });
+         
          const responseTable = matchResponse.data.valueRanges[0].values || [];
          const responseAntrian = matchResponse.data.valueRanges[1].values || [];
          // Matching range with user inputted keyword
@@ -610,8 +757,11 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
              return res.status(400).json({ error: "Keyword not found" })
          }
         //  Delete Rows
-            // Find Sheets ID
-        const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+            // Find Sheets ID with backoff
+        const sheetInfo = await withBackoff(async () => {
+            return await sheets.spreadsheets.get({ spreadsheetId });
+        });
+        
         const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
         const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
             // Create the batch update request
@@ -639,16 +789,19 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
                 }
             ]
         };
-        // Send the batch update request
-        const result = await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            resource: batchRequest
+        // Send the batch update request with backoff
+        const result = await withBackoff(async () => {
+            return await sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                resource: batchRequest
+            });
         });
+        
         console.log("Successfully delete data.")
         res.status(200).json({ message: "Table Deleted successfully." });
 
     } catch (error) {
-        console.error("Error processing request:", error);
+        console.error("Error in /bendahara/delete-ajuan:", error);
         res.status(500).json({ message: "Server error." });
     }
 })
@@ -659,33 +812,45 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
     try {
         const { data } = req.body;
         const cariRange = "'DASHBOARD'!D8"
-        await sheets.spreadsheets.values.update({
-            spreadsheetId: spreadsheetIdCariSPM,
-            range: cariRange,
-            valueInputOption: "USER_ENTERED",
-            resource: { values: [[data]] },
-        })
-        res.status(200).json({ message: "Table Deleted successfully." });
+        
+        // Apply backoff for updating cell
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdCariSPM,
+                range: cariRange,
+                valueInputOption: "USER_ENTERED",
+                resource: { values: [[data]] },
+            });
+        });
+        
+        res.status(200).json({ message: "Data updated successfully." });
     } catch (error) {
-        console.log("Error fetching data.", error)
+        console.error("Error in /bendahara/cari-spm:", error);
         res.status(500).json({error: "Failed to update cell." });
     }
 })
+
 // SPM Belum Bayar
 app.get("/bendahara/spm-belum-bayar", async (req, res) => {
     try {
         const range = "'MACHINE DB'!AE3:AM"
-        const response = await sheets.spreadsheets.values.get({ 
-            spreadsheetId: spreadsheetIdCariSPM, 
-            range,
-        })
+        
+        // Apply backoff for getting SPM data
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({ 
+                spreadsheetId: spreadsheetIdCariSPM, 
+                range,
+            });
+        });
+        
         const result = response.data.values;
         res.json({ data: result })
     } catch (error) {
-        console.log("Error fetching data.", error)
+        console.error("Error in /bendahara/spm-belum-bayar:", error);
         res.status(500).json({error: "Failed to fetch data." });
     }
 })
+
 // Find and Return Rincian SPM
 app.post("/bendahara/cari-rincian", async (req, res) => {
     try {
@@ -722,17 +887,26 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
             ],
             valueInputOption: "USER_ENTERED",
         }
-        const postResponse = await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: spreadsheetIdCariSPM,
-            resource,
+        
+        // Apply backoff for batch update
+        const postResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId: spreadsheetIdCariSPM,
+                resource,
+            });
         });
+        
         try {
-            const getResponse = await sheets.spreadsheets.values.get({ 
-                spreadsheetId: spreadsheetIdCariSPM, 
-                range: "'MACHINE DB'!AT3:BD",
-            })
+            // Apply backoff for getting results
+            const getResponse = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({ 
+                    spreadsheetId: spreadsheetIdCariSPM, 
+                    range: "'MACHINE DB'!AT3:BD",
+                });
+            });
+            
             let result = getResponse.data.values;
-                // Add empty rows to generate max 11 columns
+            // Add empty rows to generate max 11 columns
             const maxColumns = 11;
             result = result.map(row => {
                 while (row.length < maxColumns) {
@@ -742,11 +916,11 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
             })
             res.json({ data: result })
         } catch (error) {
-            console.log("Failed fecthing results.", error)
-            res.status(500).json({error: "Failed fecthing results." });
+            console.error("Error fetching results in /bendahara/cari-rincian:", error);
+            res.status(500).json({error: "Failed fetching results." });
         }
     } catch (error) {
-        console.log("Failed handling data.", error)
+        console.error("Error in /bendahara/cari-rincian:", error);
         res.status(500).json({error: "Failed handling data." });
     }
 })
@@ -755,11 +929,14 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
 app.get("/bendahara/kelola-ajuan", async (req, res) => {
     const datePrefixes = [MonthDateFormat, PrevMonthDate];
       try {
-        // Fetch entire column B from Google Sheets
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Write Antrian'!B:B",
-        })
+        // Fetch entire column B from Google Sheets with backoff
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Write Antrian'!B:B",
+            });
+        });
+        
         // Get all rows
         const allRows = response.data.values || [];
 
@@ -773,11 +950,14 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         }
         // Sort rows in reverse order (latest dates first)
         const reversedRows = filteredRows.reverse();
-        // Fetch full row data for the selected month
+        // Fetch full row data for the selected month with backoff
         const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:P${row.rowIndex}`); // Adjust range if needed
-        const batchGetResponse = await sheets.spreadsheets.values.batchGet({
-            spreadsheetId,
-            ranges: rowRanges,
+        
+        const batchGetResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchGet({
+                spreadsheetId,
+                ranges: rowRanges,
+            });
         });
 
         let rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
@@ -787,7 +967,8 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
                 row.push("");
             }
             return row;
-        })
+        });
+        
         // Function to filter arrays
         function filterByStatus(array, status) {
             return array.filter(row => row.includes(status));
@@ -802,7 +983,8 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         res.json({ data: [dalamAntrian, sedangVerif, sudahVerif, ajuanHariIni, terbitDRPP, diajukanKPPN] });
 
       } catch (error) {
-            console.log("Error fetching data.", error)
+            console.error("Error in /bendahara/kelola-ajuan:", error);
+            res.status(500).json({ error: "Failed to fetch data." });
       } 
 })
 
@@ -816,10 +998,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = updatedAntriData;
 
-        //Handling Write Antrian Sheet update
-        const getAntrianResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Write Antrian'!A:A"
+        //Handling Write Antrian Sheet update with backoff
+        const getAntrianResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Write Antrian'!A:A"
+            });
         });
 
         const allRows = getAntrianResponse.data.values || [];
@@ -851,18 +1035,19 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue], // Condition for column O
         ];
 
-        await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-                valueInputOption: "USER_ENTERED", // Keep number formatting
-                data: updateData.map(([range, value]) => ({
-                    range,
-                    values: [[value]]
-                }))
-            }
+        // Apply backoff for batch update
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    valueInputOption: "USER_ENTERED", // Keep number formatting
+                    data: updateData.map(([range, value]) => ({
+                        range,
+                        values: [[value]]
+                    }))
+                }
+            });
         });
-
-
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {
@@ -876,9 +1061,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                 return res.status(400).json({message: "DRPP and Nominal data mismatch."});
             }
 
-            const getMonitoringResponse = await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Monitoring DRPP'!B:G"
+            // Apply backoff for getting monitoring data
+            const getMonitoringResponse = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: "'Monitoring DRPP'!B:G"
+                });
             });
 
             const monitoringRows = getMonitoringResponse.data.values || [];
@@ -915,71 +1103,82 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                 ]);
             }
 
-            // Find Sheets ID
-            const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
+            // Find Sheets ID with backoff
+            const sheetInfo = await withBackoff(async () => {
+                return await sheets.spreadsheets.get({ spreadsheetId });
+            });
+            
             const DrppSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Monitoring DRPP").properties.sheetId;
 
             //Operator to add and delete empty row
             if (existingStartRow) {
                 if (newRowCount > existingRowCount) {
-                    // INSERT rows before updating (so there is space)
-                    await sheets.spreadsheets.batchUpdate({
-                        spreadsheetId,
-                        resource: {
-                            requests: [
-                                {
-                                    insertDimension: {
-                                        range: {
-                                            sheetId: DrppSheetId,
-                                            dimension: "ROWS",
-                                            startIndex: existingStartRow + existingRowCount - 1,
-                                            endIndex: existingStartRow + newRowCount - 1
-                                        },
-                                        inheritFromBefore: false
-                                    }
-                                }
-                            ]
-                        }
-                    });
-                } else if (newRowCount < existingRowCount) {
-                    // DELETE excess rows
-                    await sheets.spreadsheets.batchUpdate({
-                        spreadsheetId,
-                        resource: {
-                            requests: [
-                                {
-                                    deleteDimension: {
-                                        range: {
-                                            sheetId: DrppSheetId,
-                                            dimension: "ROWS",
-                                            startIndex: existingStartRow + newRowCount - 1,
-                                            endIndex: existingStartRow + existingRowCount - 1
+                    // INSERT rows before updating (so there is space) with backoff
+                    await withBackoff(async () => {
+                        return await sheets.spreadsheets.batchUpdate({
+                            spreadsheetId,
+                            resource: {
+                                requests: [
+                                    {
+                                        insertDimension: {
+                                            range: {
+                                                sheetId: DrppSheetId,
+                                                dimension: "ROWS",
+                                                startIndex: existingStartRow + existingRowCount - 1,
+                                                endIndex: existingStartRow + newRowCount - 1
+                                            },
+                                            inheritFromBefore: false
                                         }
                                     }
-                                }
-                            ]
-                        }
+                                ]
+                            }
+                        });
+                    });
+                } else if (newRowCount < existingRowCount) {
+                    // DELETE excess rows with backoff
+                    await withBackoff(async () => {
+                        return await sheets.spreadsheets.batchUpdate({
+                            spreadsheetId,
+                            resource: {
+                                requests: [
+                                    {
+                                        deleteDimension: {
+                                            range: {
+                                                sheetId: DrppSheetId,
+                                                dimension: "ROWS",
+                                                startIndex: existingStartRow + newRowCount - 1,
+                                                endIndex: existingStartRow + existingRowCount - 1
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        });
                     });
                 }
 
-                // Update the rows
+                // Update the rows with backoff
                 const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
-                await sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: targetRange,
-                    valueInputOption: "RAW",
-                    resource: { values: rowsToWrite }
+                await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: targetRange,
+                        valueInputOption: "RAW",
+                        resource: { values: rowsToWrite }
+                    });
                 });
 
             } else {
-                // If trans_id doesn't exist, append new rows
+                // If trans_id doesn't exist, append new rows with backoff
                 const lastFilledRow = monitoringRows.length + 1;
                 const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
-                await sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: targetRange,
-                    valueInputOption: "RAW",
-                    resource: { values: rowsToWrite }
+                await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: targetRange,
+                        valueInputOption: "RAW",
+                        resource: { values: rowsToWrite }
+                    });
                 });
             }
         }
@@ -987,7 +1186,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         res.json({ message: "Data updated successfully!" });
 
     } catch (error) {
-        console.error("Error updating Google Sheet:", error);
+        console.error("Error in /bendahara/aksi-ajuan:", error);
         res.status(500).json({ error: "Failed to update data." });
     }
 })
@@ -1000,11 +1199,13 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
     }
 
     try {
-        // Fetch the relevant columns (B:G) from the "Monitoring DRPP" sheet
+        // Fetch the relevant columns with backoff
         const range = "Monitoring DRPP!B2:G";
-        const sheetResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
+        const sheetResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range,
+            });
         });
 
         const rows = sheetResponse.data.values || [];
@@ -1041,7 +1242,7 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
         return res.status(200).json({ data: matchedRows });
 
     } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error in /bendahara/get-ajuan:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -1051,11 +1252,14 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
         const { page = 1, limit = 10 } = req.query;
 
-        // Fetch total rows based on A column
-        const getAllRowsResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Monitoring DRPP'!A3:A",
+        // Fetch total rows based on A column with backoff
+        const getAllRowsResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Monitoring DRPP'!A3:A",
+            });
         });
+        
         const totalRows = getAllRowsResponse.data.values.length;
 
         // Set rows to fetch from the end of the sheet
@@ -1065,8 +1269,13 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 
         const fetchRowRange= `'Monitoring DRPP'!A${startRow}:J${endRow}`;
 
-        // Fetch Paginated Data
-        const getDRPPResponses = await sheets.spreadsheets.values.get({ spreadsheetId, range: fetchRowRange, });
+        // Fetch Paginated Data with backoff
+        const getDRPPResponses = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({ 
+                spreadsheetId, 
+                range: fetchRowRange,
+            });
+        });
 
         //Capture data values
         const paginatedDRPP = getDRPPResponses.data.values ? getDRPPResponses.data.values.reverse() : [];
@@ -1074,7 +1283,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         res.json({ data: paginatedDRPP, realAllDRPPRows: totalRows })
 
     } catch (error) {
-        console.error(error);
+        console.error("Error in /bendahara/monitoring-drpp:", error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
@@ -1085,7 +1294,15 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
         const tablePos  = req.query;
         const colorStartRow = parseInt(tablePos.startRow) + 1;
         const range = `'Write Table'!W${colorStartRow}:W${tablePos.endRow}`;
-        const response = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+        
+        // Apply backoff for getting color status
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({ 
+                spreadsheetId, 
+                range,
+            });
+        });
+        
         let result = response.data.values || [];
 
         // Add empty rows to fill based on row numbers
@@ -1100,22 +1317,25 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
         res.json({ data: result })
 
     } catch (error) {
-        console.log("Cannot fetch color status.", error)
+        console.error("Error in /bendahara/cek-drpp:", error);
+        res.status(500).json({ error: "Cannot fetch color status." });
     }
-
 })
-
 
 app.post("/bendahara/aksi-drpp", async (req, res) => {
     const {numbers, pajakStatus, colorData} = req.body;
     try {
-        const getDrppRows = await sheets.spreadsheets.values.batchGet({
-            spreadsheetId,
-            ranges: [
-                "'Monitoring DRPP'!A3:A",   // Range to update DRPP status
-                "'Write Table'!X:X"       // Range to update colored row status
-            ],
+        // Apply backoff for batch get
+        const getDrppRows = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchGet({
+                spreadsheetId,
+                ranges: [
+                    "'Monitoring DRPP'!A3:A",   // Range to update DRPP status
+                    "'Write Table'!X:X"       // Range to update colored row status
+                ],
+            });
         });
+        
         const totalRows = getDrppRows.data.valueRanges[0].values || [];
         const colorRows = getDrppRows.data.valueRanges[1].values || [];
 
@@ -1145,39 +1365,31 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             console.log(`Keyword "${colorData}" tidak ditemukan.`);
         }
 
-        //Update all data
-        await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
-            valueInputOption: "RAW",
-            resource: {
-                values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
-            },
+        // Apply backoff for batch update - Combine the two API calls into one batchUpdate for efficiency
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    valueInputOption: "RAW",
+                    data: [
+                        {
+                            range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
+                            values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
+                        },
+                        {
+                            range: `'Write Table'!W${foundRow}`,
+                            values: colorData.data, 
+                        }
+                    ]
+                }
+            });
         });
-        await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-                valueInputOption: "RAW",
-                data: [
-                    {
-                        range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
-                        values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
-                    },
-                    {
-                        range: `'Write Table'!W${foundRow}`,
-                        values: colorData.data, // <-- convert to vertical array
-                    }
-                ]
-            }
-        });
-
 
         res.status(200).json({ message: "Status pajak berhasil diperbarui." });
 
-
-
     } catch (error) {
-        console.log("Error processing data.", error)
+        console.error("Error in /bendahara/aksi-drpp:", error);
+        res.status(500).json({ message: "Error processing data." });
     }
 })
 

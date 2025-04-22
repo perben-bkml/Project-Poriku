@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef, useContext} from "react";
+import React, {useState, useEffect, useRef, useContext, useCallback, useMemo} from "react";
 import * as math from "mathjs";
 import axios from "axios";
 
@@ -15,11 +15,15 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import { TableFooter } from "@mui/material";
+import { TableFooter, TablePagination } from "@mui/material";
 
 // Import Context
 import { AuthContext } from "../../lib/AuthContext.jsx";
 import PropTypes from "prop-types";
+
+// Virtualization and optimization
+// Import the actual packages
+import debounce from 'lodash.debounce';
 
 
 function BuatPengajuan(props) {
@@ -53,18 +57,31 @@ function BuatPengajuan(props) {
     const [isLoading, setIsLoading] = useState(false);
     const [isLoading2, setIsLoading2] = useState(false);
 
+    // Pagination state
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
+
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
 
-    // Auto-resize textareas when data is loaded
-    function resizeAllTextareas() {
-        textAreaRefs.current.forEach((textarea) => {
-            if (textarea) {
-                textarea.style.height = "auto"; // Reset height first
-                textarea.style.height = `${textarea.scrollHeight}px`; // Expand to fit content
-            }
-        });
-    }
+    // Auto-resize textareas when data is loaded - debounced to improve performance
+    const resizeAllTextareas = useCallback(() => {
+        // Create a new debounced function each time to avoid stale closures
+        const debouncedResize = debounce(() => {
+            textAreaRefs.current.forEach((textarea) => {
+                if (textarea) {
+                    textarea.style.height = "auto"; // Reset height first
+                    textarea.style.height = `${textarea.scrollHeight}px`; // Expand to fit content
+                }
+            });
+        }, 100);
+
+        // Execute the debounced function
+        debouncedResize();
+
+        // Return a cleanup function that cancels the debounced call if component unmounts
+        return () => debouncedResize.cancel();
+    }, []);
 
     //Fetching table data from backend to be shown
     async function fetchAntrianTable() {
@@ -77,7 +94,9 @@ function BuatPengajuan(props) {
                 setRowNum(response.data.data.length);
                 setKeywordRowPos(response.data.keywordRowPos)
                 setKeywordEndRow(response.data.keywordEndRow)
-                setTimeout(() => resizeAllTextareas(), 0);
+                setTimeout(() => {
+                    resizeAllTextareas();
+                }, 0);
             }
             setIsLoading2(false);
         } catch (error) {
@@ -87,11 +106,12 @@ function BuatPengajuan(props) {
     useEffect(() => {
         const newComponentType = props.type;
         setComponentType(newComponentType);
-    
+
         if (newComponentType !== "buat") {
             fetchAntrianTable();
         }
     }, [props.type]);
+
 
     //Handle how many rows the user wants
     function handleRowChange(event) {
@@ -118,7 +138,7 @@ function BuatPengajuan(props) {
             return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         }
     }
-    
+
     //Function handling Math equations
     function evaluateEquation(equation, rowIndex, colIndex) {
         try {
@@ -141,9 +161,8 @@ function BuatPengajuan(props) {
         }
     }
 
-    // Handling text area changes
-    function handleCellChange(cellrowIndex, cellcolumnIndex, value, textareaRef) {
-        handleDppCount(cellrowIndex, cellcolumnIndex);
+    // Handling text area changes - optimized with useCallback
+    const handleCellChange = useCallback((cellrowIndex, cellcolumnIndex, value, textareaRef) => {
         if (value.startsWith("=")) {
             setIsFormulaMode(true);
             setCurrentEditableCell({ row: cellrowIndex, col: cellcolumnIndex });
@@ -154,15 +173,23 @@ function BuatPengajuan(props) {
             setCurrentTextareaRef(null);
         }
 
-        const updatedData = [...tableData];
-        updatedData[cellrowIndex][cellcolumnIndex] = value;
-        setTableData(updatedData);
-        //Adjust cell height
-        textareaRef.style.height = "auto";
-        textareaRef.style.height = textareaRef.scrollHeight + "px";
-    }
+        setTableData(prevData => {
+            const updatedData = [...prevData];
+            updatedData[cellrowIndex] = [...updatedData[cellrowIndex]];
+            updatedData[cellrowIndex][cellcolumnIndex] = value;
+            return updatedData;
+        });
 
-    function handleCellBlur (cellrowIndex, cellcolumnIndex, value) {
+        // Debounce the height adjustment for better performance
+        setTimeout(() => {
+            if (textareaRef) {
+                textareaRef.style.height = "auto";
+                textareaRef.style.height = textareaRef.scrollHeight + "px";
+            }
+        }, 0);
+    }, []);
+
+    const handleCellBlur = useCallback((cellrowIndex, cellcolumnIndex, value) => {
         //Exclude column 1 - 4 from auto formatting
         if (cellcolumnIndex >= 0 && cellcolumnIndex <= 3) {
             return;
@@ -180,32 +207,33 @@ function BuatPengajuan(props) {
             // Format the number with commas for thousands
             const formattedValue = numberFormats(numericValue);
 
-            // Update the table data with the formatted value
-            const updatedData = [...tableData];
-            updatedData[cellrowIndex][cellcolumnIndex] = formattedValue;
+            setTableData(prevData => {
+                const updatedData = [...prevData];
+                updatedData[cellrowIndex] = [...updatedData[cellrowIndex]];
+                updatedData[cellrowIndex][cellcolumnIndex] = formattedValue;
 
-            // Format column 5 and 6 if column 4 is filled
-            if (cellcolumnIndex === 4) {
-                const baseValue = parseFloat(numericValue);
-                if (!isNaN(baseValue)) {
-                    updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 6 for normal DPP
-                    updatedData[cellrowIndex][6] = numberFormats((baseValue * 11/12).toFixed(0)); // Column 7 for DPP Nilai Lain
+                // Format column 5 and 6 if column 4 is filled
+                if (cellcolumnIndex === 4) {
+                    const baseValue = parseFloat(numericValue);
+                    if (!isNaN(baseValue)) {
+                        updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 6 for normal DPP
+                        updatedData[cellrowIndex][6] = numberFormats((baseValue * 11/12).toFixed(0)); // Column 7 for DPP Nilai Lain
+                    }
                 }
-            }
 
-            setTableData(updatedData);
+                return updatedData;
+            });
         }   
-    }
+    }, [numberFormats]);
 
-    // Handling formula mode
-    function handleCellClick(rowIndex, colIndex) {
+    // Handling formula mode - optimized with useCallback
+    const handleCellClick = useCallback((rowIndex, colIndex) => {
         if (isFormulaMode && targetReference) {
-            if (currentEditableCell.col !== colIndex || currentEditableCell.row !== rowIndex){
+            if (currentEditableCell && (currentEditableCell.col !== colIndex || currentEditableCell.row !== rowIndex)) {
                 const targetCellValue = tableData[rowIndex][colIndex] || "";
-                
-                const originData = [...tableData];
-                const originCellData = originData[currentEditableCell.row][currentEditableCell.col] || "=";
-                
+
+                const originCellData = tableData[currentEditableCell.row][currentEditableCell.col] || "=";
+
                 // Check if the last character is an operator
                 const lastChar = originCellData[originCellData.length - 1];
                 const isLastCharOperator = /[\+\-\*\/=]$/.test(lastChar);
@@ -226,86 +254,31 @@ function BuatPengajuan(props) {
                     updatedFormula = originCellData.substring(0, lastOperatorPos) + targetCellValue;
                 }
 
-                // Update the table with the new formula
-                originData[currentEditableCell.row][currentEditableCell.col] = updatedFormula;
-                setTableData(originData);
+                // Update the table with the new formula using functional setState
+                setTableData(prevData => {
+                    const newData = [...prevData];
+                    newData[currentEditableCell.row] = [...newData[currentEditableCell.row]];
+                    newData[currentEditableCell.row][currentEditableCell.col] = updatedFormula;
+                    return newData;
+                });
 
                 // Retain focus on the current editing cell
                 if (currentTextareaRef) {
-                    currentTextareaRef.focus();
-                    currentTextareaRef.setSelectionRange(updatedFormula.length, updatedFormula.length);
+                    setTimeout(() => {
+                        currentTextareaRef.focus();
+                        currentTextareaRef.setSelectionRange(updatedFormula.length, updatedFormula.length);
+                    }, 0);
                 }
-      
             }
         }
-    }
+    }, [isFormulaMode, targetReference, currentEditableCell, tableData, currentTextareaRef]);
 
-    // Handle Automatic DPP & DPP Nilai lain calculation
-    function handleDppCount(rowIndex, colIndex) {
-        if (colIndex === 5) {
-            const getNilaiTagihan = [...tableData][rowIndex][4];
-            console.log(getNilaiTagihan)
-        }
-    }
 
-    // The following function will make us able to select many cells with mouse
-    function handleCellMouseDown(rowIndex, colIndex) {
-        if (!isFormulaMode){
-            setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
-            setIsSelecting(true);
-            focusCell(rowIndex, colIndex)
-        } 
-    }
-    function handleCellMouseOver(rowIndex, colIndex) {
-        if (isSelecting) {
-            setMouseSelectRange((prevdata) => ({
-                ...prevdata,
-                end: {row: rowIndex, col: colIndex},
-            }));
-        }
-    }
-    function handleCellMouseUp(){
-        setIsSelecting(false)
-    }
-    function isCellSelected(rowIndex, colIndex) {
-        if (!mouseSelectRange.start || !mouseSelectRange.end) return false;
-
-        const { start, end } = mouseSelectRange;
-        const rowStart = Math.min(start.row, end.row);
-        const rowEnd = Math.max(start.row, end.row);
-        const colStart = Math.min(start.col, end.col);
-        const colEnd = Math.max(start.col, end.col);
-
-        return rowIndex >= rowStart && rowIndex <= rowEnd && colIndex >= colStart && colIndex <= colEnd;
-    }
-    // Deleting all selected textarea contents
-    function clearSelectedCells() {
-        if (!mouseSelectRange.start || !mouseSelectRange.end) return;
-
-        const updatedData = [...tableData];
-        const { start, end } = mouseSelectRange;
-
-        const rowStart = Math.min(start.row, end.row);
-        const rowEnd = Math.max(start.row, end.row);
-        const colStart = Math.min(start.col, end.col);
-        const colEnd = Math.max(start.col, end.col);
-
-        for (let row = rowStart; row <= rowEnd; row++) {
-            for (let col = colStart; col <= colEnd; col++) {
-                updatedData[row][col] = ""; // Clear content
-            }
-        }
-
-        setTableData(updatedData);
-    }
-
-    // This functions enable to navigate through cells with arrow
-    function focusCell(row, col) {
-        // Add and remove highlighted cell style class
-        const allTextArea = document.querySelectorAll(".table-container textarea");
-        allTextArea.forEach((cell) => cell.classList.remove("selected-cell"));
-        const allCell = document.querySelectorAll(".table-container .table-cell");
-        allCell.forEach((cell) => cell.classList.remove("selected-cell"))
+    // This functions enable to navigate through cells with arrow - optimized with useCallback
+    const focusCell = useCallback((row, col) => {
+        // Use a more targeted approach to reduce DOM operations
+        const currentSelected = document.querySelectorAll(".table-container .selected-cell");
+        currentSelected.forEach((cell) => cell.classList.remove("selected-cell"));
 
         // Focusing on the selected cell
         const textarea = document.querySelector(
@@ -316,82 +289,145 @@ function BuatPengajuan(props) {
         );
 
         if (textarea) {
-            textarea.focus();
-            textarea.classList.add("selected-cell")
-            cell.classList.add("selected-cell")
+            // Use setTimeout to defer focus until after the current execution context
+            setTimeout(() => {
+                textarea.focus();
+                textarea.classList.add("selected-cell");
+                if (cell) cell.classList.add("selected-cell");
+            }, 0);
         }
-    }
-        //Adding new row on the bottom of the page when pressing enter
-    // function addNewRow() {
-    //     const newRow = [tableData.length + 1, ...emptyCell];
-    //     setRowNum(rowNum + 1);
-    //     setTableData([...tableData, newRow]);
-    // }
+    }, []);
 
-    // Function to adjust cell height after pasting
-    function adjustAllHeight() {
-        const textareas = document.querySelectorAll(".table-container textarea");
-        textareas.forEach((textarea) => {
-            textarea.style.height = "auto"; // Reset height to calculate proper scrollHeight
-            textarea.style.height = textarea.scrollHeight + "px"; // Set height based on content
+    // The following function will make us able to select many cells with mouse - optimized with useCallback
+    const handleCellMouseDown = useCallback((rowIndex, colIndex) => {
+        if (!isFormulaMode){
+            setMouseSelectRange({start: {row: rowIndex, col: colIndex}, end: {row: rowIndex, col: colIndex}});
+            setIsSelecting(true);
+            focusCell(rowIndex, colIndex);
+        } 
+    }, [isFormulaMode, focusCell]);
+
+    const handleCellMouseOver = useCallback((rowIndex, colIndex) => {
+        if (isSelecting) {
+            setMouseSelectRange((prevdata) => ({
+                ...prevdata,
+                end: {row: rowIndex, col: colIndex},
+            }));
+        }
+    }, [isSelecting]);
+
+    const handleCellMouseUp = useCallback(() => {
+        setIsSelecting(false);
+    }, []);
+    // Memoize the selected cells calculation for better performance
+    const selectedCells = useMemo(() => {
+        if (!mouseSelectRange.start || !mouseSelectRange.end) return new Set();
+
+        const { start, end } = mouseSelectRange;
+        const rowStart = Math.min(start.row, end.row);
+        const rowEnd = Math.max(start.row, end.row);
+        const colStart = Math.min(start.col, end.col);
+        const colEnd = Math.max(start.col, end.col);
+
+        const selected = new Set();
+        for (let r = rowStart; r <= rowEnd; r++) {
+            for (let c = colStart; c <= colEnd; c++) {
+                selected.add(`${r}-${c}`);
+            }
+        }
+        return selected;
+    }, [mouseSelectRange]);
+
+    // More efficient cell selection check using Set
+    function isCellSelected(rowIndex, colIndex) {
+        return selectedCells.has(`${rowIndex}-${colIndex}`);
+    }
+    // Deleting all selected textarea contents - optimized with useCallback
+    const clearSelectedCells = useCallback(() => {
+        if (!mouseSelectRange.start || !mouseSelectRange.end) return;
+
+        const { start, end } = mouseSelectRange;
+
+        const rowStart = Math.min(start.row, end.row);
+        const rowEnd = Math.max(start.row, end.row);
+        const colStart = Math.min(start.col, end.col);
+        const colEnd = Math.max(start.col, end.col);
+
+        setTableData(prevData => {
+            const updatedData = [...prevData];
+
+            for (let row = rowStart; row <= rowEnd; row++) {
+                if (!updatedData[row]) continue;
+                updatedData[row] = [...updatedData[row]];
+
+                for (let col = colStart; col <= colEnd; col++) {
+                    updatedData[row][col] = ""; // Clear content
+                }
+            }
+
+            return updatedData;
         });
-    }
+    }, [mouseSelectRange]);
 
-    // Handle pasting data to cell
-    function handlePaste(event, startRow, startCol) {
+
+    // Function to adjust cell height after pasting - optimized with useCallback and debounce
+    const adjustAllHeight = useCallback(() => {
+        // Create a new debounced function each time to avoid stale closures
+        const debouncedAdjust = debounce(() => {
+            const textareas = document.querySelectorAll(".table-container textarea");
+            textareas.forEach((textarea) => {
+                textarea.style.height = "auto"; // Reset height to calculate proper scrollHeight
+                textarea.style.height = textarea.scrollHeight + "px"; // Set height based on content
+            });
+        }, 100);
+
+        // Execute the debounced function
+        debouncedAdjust();
+
+        // Return a cleanup function that cancels the debounced call if component unmounts
+        return () => debouncedAdjust.cancel();
+    }, []);
+
+    // Handle pasting data to cell - optimized with useCallback
+    const handlePaste = useCallback((event, startRow, startCol) => {
         event.preventDefault();
-    
+
         const clipboardData = event.clipboardData.getData("text/plain");
         const rows = clipboardData.split("\n").map((row) => row.split("\t"));
-    
-        const updatedData = [...tableData];
-    
-        rows.forEach((row, i) => {
-            row.forEach((cell, j) => {
-                const targetRow = startRow + i;
-                const targetCol = startCol + j;
-                if (targetRow < updatedData.length && targetCol < updatedData[0].length) {
-                    updatedData[targetRow][targetCol] = cell.trim();
-                }
-            });
-        });
-        setTableData(updatedData);
-        setTimeout(adjustAllHeight, 0);
-    }
 
-    // Handling keyboard presses
-    function handleCellKeyDown(event, rowIndex, colIndex) {
+        setTableData(prevData => {
+            const updatedData = [...prevData];
+
+            rows.forEach((row, i) => {
+                const targetRow = startRow + i;
+                if (targetRow >= updatedData.length) return;
+
+                updatedData[targetRow] = [...updatedData[targetRow]];
+
+                row.forEach((cell, j) => {
+                    const targetCol = startCol + j;
+                    if (targetCol < updatedData[targetRow].length) {
+                        updatedData[targetRow][targetCol] = cell.trim();
+                    }
+                });
+            });
+
+            return updatedData;
+        });
+
+        // Use the debounced version for better performance
+        adjustAllHeight();
+    }, [tableData.length, adjustAllHeight]);
+
+    // Handling keyboard presses - optimized with useCallback
+    const handleCellKeyDown = useCallback((event, rowIndex, colIndex) => {
         const numRows = tableData.length;
         const numCols = tableData[0].length;
-    
+
         switch (event.key) {
-            // case "ArrowUp":
-            //     event.preventDefault();
-            //     if (!isFormulaMode){
-            //         if (rowIndex > 0) {focusCell(rowIndex - 1, colIndex)};
-            //     }
-            //     break;
-            // case "ArrowDown":
-            //     event.preventDefault();
-            //     if (!isFormulaMode){
-            //         if (rowIndex < numRows - 1) {focusCell(rowIndex + 1, colIndex)};
-            //     }
-            //     break;
-            // case "ArrowLeft":
-            //     event.preventDefault();
-            //     if (!isFormulaMode){
-            //         if (colIndex > 0) {focusCell(rowIndex, colIndex - 1)};
-            //     }
-            //     break;
-            // case "ArrowRight":
-            //     event.preventDefault();
-            //     if (!isFormulaMode){
-            //         if (colIndex < numCols - 1) {focusCell(rowIndex, colIndex + 1)};
-            //     }
-            //     break;
             case "Enter":
                 event.preventDefault();
-                evaluateEquation(event.target.value, rowIndex, colIndex)
+                evaluateEquation(event.target.value, rowIndex, colIndex);
                 setIsFormulaMode(false);
                 setCurrentEditableCell(null); 
                 setTargetReference(null);
@@ -399,10 +435,11 @@ function BuatPengajuan(props) {
                     focusCell(rowIndex + 1, colIndex);
                 }
                 break;
+
             case "Tab":
                 event.preventDefault();
                 if (isFormulaMode) {
-                    evaluateEquation(event.target.value, rowIndex, colIndex)
+                    evaluateEquation(event.target.value, rowIndex, colIndex);
                     setIsFormulaMode(false);
                     setCurrentEditableCell(null); 
                     setTargetReference(null);
@@ -413,31 +450,34 @@ function BuatPengajuan(props) {
                     focusCell(rowIndex + 1, 0);
                 }
                 break;
+
             case "Delete":
                 event.preventDefault();
                 clearSelectedCells();
                 break;
+
             default:
                 break;
         }
-    }
+    }, [tableData.length, evaluateEquation, isFormulaMode, focusCell, clearSelectedCells]);
 
-    // Handle footer table that sums up numbers
-    function calculateColumnTotal(columnIndex) {
+    // Memoize column totals calculation for better performance
+    const calculateColumnTotal = useCallback((columnIndex) => {
         return tableData.reduce((sum, row) => {
             const cellValue = row[columnIndex];
-    
+
             // Ensure the value is a string before calling replace
             const stringValue = typeof cellValue === "string" ? cellValue : String(cellValue || "0");
-    
+
             // Remove non-digit characters and convert to number
             const value = parseInt(stringValue.replace(/[^\d]/g, ""), 10);
-    
+
             return sum + (isNaN(value) ? 0 : value);
         }, 0);
-    }
+    }, [tableData]);
+
     // Determining what columns that will accept numbers
-    const summableColumns = {
+    const summableColumns = useMemo(() => ({
         tagihan: 4,
         dpp: 5,
         dppLain: 6,
@@ -447,7 +487,16 @@ function BuatPengajuan(props) {
         pph23: 13,
         pphf: 15,
         terima: 17,
-    };
+    }), []);
+
+    // Memoize all column totals to prevent recalculation on every render
+    const columnTotals = useMemo(() => {
+        const totals = {};
+        Object.entries(summableColumns).forEach(([key, colIndex]) => {
+            totals[key] = calculateColumnTotal(colIndex);
+        });
+        return totals;
+    }, [tableData, summableColumns, calculateColumnTotal]);
 
     // Handle Popups
     function handlePopup() {
@@ -538,6 +587,112 @@ function BuatPengajuan(props) {
             console.log("Failed to send data.", err)
         }
     }
+    // Memoize the table component to prevent unnecessary re-renders
+    const TableComponent = useMemo(() => {
+        return (
+            <React.Fragment>
+                <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
+                    <Table stickyHeader aria-label="sticky table">
+                        <TableHead className="table-head">
+                            <TableRow className="table-row"> 
+                                {columns.map((cols) => (
+                                    <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#1a284b", color: "white", border: "none"}} align="center">{cols.label}</TableCell>                                            
+                                ))}
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {/* Render rows directly without FixedSizeList to avoid DOM nesting issues */}
+                            {tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, rowIndex) => {
+                                const actualRowIndex = page * rowsPerPage + rowIndex;
+                                return (
+                                    <TableRow key={actualRowIndex}>
+                                        {row.map((cell, colIndex) => (
+                                            <TableCell className={`table-cell ${isCellSelected(actualRowIndex, colIndex) ? "selected-cell" : ""}`}
+                                                key={colIndex}
+                                                data-row={actualRowIndex}
+                                                data-col={colIndex}
+                                                onMouseDown={()=>handleCellMouseDown(actualRowIndex, colIndex)}
+                                                onMouseOver={()=>handleCellMouseOver(actualRowIndex, colIndex)}
+                                                onClick={() => {
+                                                    setTargetReference({ row: actualRowIndex, col: colIndex });
+                                                    handleCellClick(actualRowIndex, colIndex);
+                                                }}
+                                                sx={{minHeight:20, minWidth: columns[colIndex].minWidth, padding:"8px"}}
+                                                align={colIndex === 0 ? "center" : "left"}>
+                                                <textarea
+                                                    ref={(el) => (textAreaRefs.current[actualRowIndex * row.length + colIndex] = el)}
+                                                    className={`${isCellSelected(actualRowIndex, colIndex) ? "selected-cell" : ""}`}
+                                                    value={cell}
+                                                    data-row={actualRowIndex}
+                                                    data-col={colIndex}
+                                                    onChange={(input) => handleCellChange(actualRowIndex, colIndex, input.target.value, input.target)}
+                                                    onBlur={(input) => handleCellBlur(actualRowIndex, colIndex, input.target.value)}
+                                                    onKeyDown={(event) => handleCellKeyDown(event, actualRowIndex, colIndex)}
+                                                    onPaste={(event) => handlePaste(event, actualRowIndex, colIndex)}
+                                                    readOnly={componentType == "lihat"}
+                                                />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                        <TableFooter>
+                            <TableRow>
+                                {columns.map((col, colIndex) => (
+                                    <TableCell className="table-footer-cell" key={colIndex}>
+                                        {Object.values(summableColumns).includes(colIndex) ? 
+                                            numberFormats(
+                                                columnTotals[
+                                                    Object.keys(summableColumns).find(key => 
+                                                        summableColumns[key] === colIndex
+                                                    )
+                                                ].toString()
+                                            ) : ""}
+                                    </TableCell>
+                                ))}
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                </TableContainer>
+
+                {/* Add pagination controls */}
+                <TablePagination
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                    component="div"
+                    count={tableData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={(e, newPage) => setPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                        setRowsPerPage(parseInt(e.target.value, 10));
+                        setPage(0);
+                    }}
+                />
+            </React.Fragment>
+        );
+    }, [
+        tableData, 
+        page, 
+        rowsPerPage, 
+        columns, 
+        summableColumns, 
+        columnTotals, 
+        isCellSelected, 
+        handleCellMouseDown, 
+        handleCellMouseOver, 
+        handleCellClick, 
+        handleCellChange, 
+        handleCellBlur, 
+        handleCellKeyDown, 
+        handlePaste, 
+        componentType,
+        setPage,
+        setRowsPerPage,
+        setTargetReference,
+        numberFormats
+    ]);
+
     return (
         <div className="buat-pengajuan bg-card" onMouseUp={handleCellMouseUp}>
             {componentType === "buat" ? (
@@ -592,63 +747,7 @@ function BuatPengajuan(props) {
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
-                        {isLoading2 ? <LoadingAnimate /> :
-                        <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
-                            <Table stickyHeader aria-label="sticky table">
-                                <TableHead className="table-head">
-                                    <TableRow className="table-row"> 
-                                        {columns.map((cols) => (
-                                            <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#1a284b", color: "white", border: "none"}} align="center">{cols.label}</TableCell>                                            
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {tableData.map((row, rowIndex) => (
-                                        <TableRow key={rowIndex}>
-                                            {row.map((cell, colIndex) => (
-                                                <TableCell className={`table-cell ${isCellSelected(rowIndex, colIndex) ? "selected-cell" : ""}`}
-                                                    key={colIndex}
-                                                    data-row={rowIndex}
-                                                    data-col={colIndex}
-                                                    onMouseDown={()=>handleCellMouseDown(rowIndex, colIndex)}
-                                                    onMouseOver={()=>handleCellMouseOver(rowIndex, colIndex)}
-                                                    onClick={() => {
-                                                        setTargetReference({ row: rowIndex, col: colIndex });
-                                                        handleCellClick(rowIndex, colIndex);
-                                                    }}
-                                                    sx={{minHeight:20, minWidth: columns[colIndex].minWidth, padding:"8px"}}
-                                                    align={colIndex === 0 ? "center" : "left"}>
-                                                    <textarea
-                                                        ref={(el) => (textAreaRefs.current[rowIndex * row.length + colIndex] = el)}
-                                                        className={`${isCellSelected(rowIndex, colIndex) ? "selected-cell" : ""}`}
-                                                        value={cell}
-                                                        data-row={rowIndex}
-                                                        data-col={colIndex}
-                                                        onChange={(input) => handleCellChange(rowIndex, colIndex, input.target.value, input.target)}
-                                                        onBlur={(input) => handleCellBlur(rowIndex, colIndex, input.target.value)}
-                                                        onKeyDown={(event) => handleCellKeyDown(event, rowIndex, colIndex)}
-                                                        onPaste={(event) => handlePaste(event, rowIndex, colIndex)}
-                                                        readOnly={
-                                                            componentType == "lihat"
-                                                            }
-                                                        />
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                                <TableFooter>
-                                    <TableRow>
-                                        {columns.map((col, colIndex) => (
-                                            <TableCell className="table-footer-cell" key={colIndex}>
-                                                {Object.values(summableColumns).includes(colIndex) ? numberFormats(calculateColumnTotal(colIndex).toString()) : ""}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                </TableFooter>
-                            </Table>
-                        </TableContainer>
-                        }  
+                        {isLoading2 ? <LoadingAnimate /> : TableComponent}
                     </div>
                     {componentType === "buat" ?
                     <div className="form-submit">

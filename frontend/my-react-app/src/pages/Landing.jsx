@@ -14,7 +14,7 @@ export default function Landing() {
             </div>
             <div className="landing-buttons slide-down">
                 <NavLink to={isAuthenticated ? "/home" : "/login"}><button className='page-button'>Layanan Ajuan</button></NavLink>
-                <NavLink to="/"><button className='page-button'>Layanan Gaji</button></NavLink>
+                <NavLink to="/layanan-gaji"><button className='page-button'>Layanan Gaji</button></NavLink>
             </div>
         </div>
     )

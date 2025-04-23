@@ -67,7 +67,7 @@ function Login () {
                     <form className="login-form" onSubmit={handleSubmit}>
                         <input type="text" value={credentials.username} placeholder="Username" name="username" onChange={handleInputChange} />
                         <input type="password" value={credentials.password} placeholder="Password" name="password" onChange={handleInputChange} />
-                        <input type="submit" />
+                        <input type="submit" value='Masuk'/>
                     </form>
                 </div>
                 <div className="login-gaji">

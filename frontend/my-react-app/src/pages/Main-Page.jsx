@@ -40,11 +40,17 @@ function MainPage(props) {
 
     // Set buttonSelect when page renders
     useEffect(() => {
-        if (user.role === "admin" || user.role === "master admin") {
-            setButtonSelect("kelola-pengajuan");
-        }
-        if (user.role === "user") {
-            setButtonSelect("daftar-pengajuan")
+        //Get locally saved storage saved button
+        const storedButton = localStorage.getItem("selectedButton");
+        if (storedButton) {
+            setButtonSelect(storedButton);
+        } else {
+            if (user.role === "admin" || user.role === "master admin") {
+                setButtonSelect("kelola-pengajuan");
+            }
+            if (user.role === "user") {
+                setButtonSelect("daftar-pengajuan")
+            }
         }
     }, [])
     
@@ -57,6 +63,8 @@ function MainPage(props) {
         detectButton.classList.add("btn-selected")
 
         setButtonSelect(event.name)
+        //Store button select locally
+        localStorage.setItem("selectedButton", event.name);
         formatText(event.name)
         setSavedPagination(null);
         setAlertMessage("");

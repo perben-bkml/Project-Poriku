@@ -1,6 +1,6 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, NavLink } from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
 
 function Login () {
@@ -11,7 +11,7 @@ function Login () {
     })
     //Setting up useNavigate and createContex
     const navigate = useNavigate();
-    const { setIsAuthenticated, setUser } = useContext(AuthContext)
+    const { isAuthenticated, setIsAuthenticated, setUser } = useContext(AuthContext)
 
     //Handling user input changes
     function handleInputChange(event) {
@@ -19,7 +19,14 @@ function Login () {
             ...credentials,
             [event.target.name]: event.target.value,
         })
-    }    
+    }
+
+    //Redirect to home page if user is authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate("/home")
+        }
+    }, [isAuthenticated])
 
     async function handleSubmit(event) {
         event.preventDefault();
@@ -46,7 +53,7 @@ function Login () {
 
     return (
         <div className="login-home">
-            <div className="login-bg">
+            <div className="login-bg slide-down">
                 <div className="login-logo-container">
                     <img src="../../public/assets/bakamla_logo.png" alt="Bakamla Logo" className="login-logo"></img>
                 </div>
@@ -64,8 +71,7 @@ function Login () {
                     </form>
                 </div>
                 <div className="login-gaji">
-                    <p className="login-gaji-p1">Ingin mengajukan permohonan Slip Gaji?</p>
-                    <p className="login-gaji-p2">Klik Disini!</p>
+                    <p className="login-gaji-p1"><NavLink to="/" style={{ textDecoration: "none", color:"inherit"}}>Kembali Ke Halaman Awal</NavLink></p>
                 </div>
             </div>      
         </div>

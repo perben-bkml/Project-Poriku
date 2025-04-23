@@ -165,7 +165,7 @@ function BuatPengajuan(props) {
             //Remove = as leading equation like excel
             let equ = equation.trim().startsWith("=") ? equation.slice(1) : equation;
 
-            // Regular expression to find cell references in the format of column index + row index
+            // Regular expression to find cell references in the format of column index plus row index
             // For example: 4[10] refers to column 4, row 10
             // We use a more specific regex to avoid matching numbers like 4[1] as cell references
             // when they're meant to be literal values
@@ -466,7 +466,7 @@ function BuatPengajuan(props) {
     const adjustFormulaReferences = useCallback((formula, sourceRow, targetRow) => {
         if (!formula.startsWith('=')) return formula;
 
-        // Regular expression to find cell references in the format of column index + row index
+        // Regular expression to find cell references in the format of column index plus row index
         // For example: 4[10] refers to column 4, row 10
         const cellRefRegex = /(\d+)\[(\d+)\]/g;
 

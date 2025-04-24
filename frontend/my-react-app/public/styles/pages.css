@@ -422,7 +422,7 @@
 
 .gaji-title {
     width: 90%;
-    height: 230px;
+    height: 260px;
     background-image: url("../assets/BG_Home.jpg");
     background-repeat: no-repeat;
     background-size: cover;
@@ -440,11 +440,31 @@
 }
 
 .gaji-button {
-    margin-top: 40px;
-    width: 480px;
+    margin-top: 30px;
+    width: 470px;
     display: flex;
     align-items: center;
     align-self: center ;
+    background-color: #1a2433;
+    cursor: pointer;
+}
+
+.gaji-buttonList {
+    display: flex;
+    gap: 50px;
+    margin-bottom: 15px;
+}
+
+.gaji-title-desc {
+    display: inline-block;
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.gaji-title-desc:hover {
+    transform: scale(1.1, 1.1);
 }
 
 .gaji-content {
@@ -485,6 +505,13 @@
     font-size: 1.4rem;
 }
 
+.gaji-table {
+    height: 400px;
+}
+
+.gaji-guide {
+    height: 500px;
+}
 
 
   /* Adding Media Queries */

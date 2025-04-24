@@ -86,7 +86,7 @@ export function TableKelola(props) {
         const getCheckData = props.coloredRow?.[props.rowIndex] ?? [];
         return (
             <Fragment>
-                <TableRow onClick={() => {
+                <TableRow onDoubleClick={() => {
                     if (tableType === 'aksi-drpp') {
                         props.addColorData(props.rowIndex, "colored");
                     }}}

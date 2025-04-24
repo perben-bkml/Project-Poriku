@@ -48,10 +48,10 @@ async function withBackoff(apiCallFn, options = {}) {
     maxDelayMs = 30000,           // Maximum delay between retries (30 seconds)
     factor = 2                    // Exponential factor (delay doubles each retry)
   } = options;
-  
+
   let retries = 0;
   let delay = initialDelayMs;
-  
+
   while (true) {
     try {
       return await apiCallFn();
@@ -65,21 +65,21 @@ async function withBackoff(apiCallFn, options = {}) {
           error.message.includes("rate limit") ||
           error.message.includes("too many requests")
         ));
-      
+
       if (!isRateLimitError || retries >= maxRetries) {
         // If it's not a rate limit error or we've exceeded max retries, throw the error
         throw error;
       }
-      
+
       // Increment retry count
       retries++;
-      
+
       // Log the retry attempt
       console.log(`Rate limit exceeded. Retrying in ${delay}ms... (Attempt ${retries} of ${maxRetries})`);
-      
+
       // Wait for the calculated delay
       await new Promise(resolve => setTimeout(resolve, delay));
-      
+
       // Increase delay for next potential retry (with a maximum limit)
       delay = Math.min(delay * factor, maxDelayMs);
     }
@@ -120,6 +120,7 @@ const sheets = google.sheets({ version: "v4", auth })
 const sheetIds = JSON.parse(fs.readFileSync("./credentials/sheetid.json"))
 const spreadsheetId = sheetIds.spreadsheetId;
 const spreadsheetIdCariSPM = sheetIds.spreadsheetIdCariSPM;
+const spreadsheetIdGaji = sheetIds.spreadsheetIdGaji;
 
 //Endpoints
 // Login page
@@ -195,6 +196,69 @@ app.get("/check-auth", (req, res) => {
         res.status(400).json({ message: "Invalid token" });
     }
 });
+
+// Layanan Gaji antrian
+app.get("/bendahara/antrian-gaji", async (req, res) => {
+    try {
+        const { page = 1, limit = 5 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        //Get hidden rows metadata
+        const metaResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.get({
+                spreadsheetId: spreadsheetIdGaji,
+                includeGridData: false,
+                ranges: ["'Sheet1'!A:C"],
+                fields: 'sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))'
+            })
+        })
+
+        const hiddenRowIdx = new Set();
+
+        metaResponse.data.sheets[0].data.forEach(grid => {
+            grid.rowMetadata.forEach((rowMeta, idx) => {
+                if (rowMeta.hiddenByUser || rowMeta.hiddenByFilter) {
+                    hiddenRowIdx.add(idx);      // row index is zero–based
+                }
+            });
+        });
+
+        //Get filtered values
+        const valueResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdGaji,
+                range: `'Sheet1'!A:C`,
+            });
+        });
+
+        const visibleRows = valueResponse.data.values.filter(
+            (_, idx) => !hiddenRowIdx.has(idx)
+        );
+
+        // Ensure each row has 3 columns
+        const normalizedRows = visibleRows.slice(1).reverse().map(row => {
+            while (row.length < 3) row.push("");
+            return row;
+        });
+
+        const allRows = normalizedRows.length;
+
+        // Apply pagination
+        const startIndex = (pageNum - 1) * limitNum;
+        const endIndex = startIndex + limitNum;
+        const paginatedRows = normalizedRows.slice(startIndex, endIndex);
+
+        res.json({ data: paginatedRows, rowLength: allRows });
+
+
+    } catch (error) {
+        console.error("Error in fetching gaji antrian data:", error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+
+})
+
 
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
@@ -282,7 +346,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
         // Fetch full row data for the paginated rows with backoff handling
         const rowRanges = paginatedRows.map(row => `'Write Antrian'!A${row.rowIndex}:L${row.rowIndex}`); // Adjust range if needed
-        
+
         // Using backoff for the batch get operation
         const batchGetResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchGet({
@@ -320,7 +384,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                 "'Write Table'!A:A",
                 "'Write Antrian'!R1:R1"  //Getting antrian ID counter
             ]
-            
+
             // Apply backoff strategy for batch data fetch
             const allRequest = await withBackoff(async () => {
                 return await sheets.spreadsheets.values.batchGet({ 
@@ -328,7 +392,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     ranges: ranges 
                 });
             });
-            
+
             const responseAntrian = allRequest.data.valueRanges[0].values || [];
             const responseTable = allRequest.data.valueRanges[1].values || [];
             const responseId = allRequest.data.valueRanges[2].values || [];
@@ -374,7 +438,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                 ],
                 valueInputOption: "RAW",
             }
-            
+
             // Apply backoff strategy for batch update
             const response = await withBackoff(async () => {
                 return await sheets.spreadsheets.values.batchUpdate({
@@ -382,11 +446,11 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     resource,
                 });
             });
-            
+
             // Assign Transaksi ID and Row number (Row number for edits)
             // Getting posted Antrian Number
             const newAntrianNumRange = `'Write Antrian'!A${startAntrianRow}:A${startAntrianRow}` 
-            
+
             // Apply backoff for getting antrian number
             const requestNewAntrianNum = await withBackoff(async () => {
                 return await sheets.spreadsheets.values.get({
@@ -394,7 +458,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     range: newAntrianNumRange
                 });
             });
-            
+
             const getNewAntrianNum = requestNewAntrianNum.data.values;
             const newAntrianNum = getNewAntrianNum[0][0]
             // Getting posted Table row numbers
@@ -403,7 +467,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
             const idAndRowNum = [ `TRANS_ID:${newAntrianNum}`, postedTableRow ];
             const idAndRowNumRange = `'Write Table'!X${startTableRow}:Y${startTableRow}`;
             resource = { values: [idAndRowNum] }
-            
+
             // Apply backoff for updating ID and row number
             const writeIdAndRowNum = await withBackoff(async () => {
                 return await sheets.spreadsheets.values.update({
@@ -416,12 +480,12 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
 
             // Coloring Gsheet Table header & giving borders
             resource = "";
-            
+
             // Apply backoff for getting sheet info
             const sheetInfo = await withBackoff(async () => {
                 return await sheets.spreadsheets.get({ spreadsheetId });
             });
-            
+
             const sheet = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
             const sheetId = sheet.properties.sheetId
             const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
@@ -478,7 +542,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     },
                 ],
             };
-            
+
             // Apply backoff for batch update (coloring and borders)
             const updateColor = await withBackoff(async () => {
                 return await sheets.spreadsheets.batchUpdate({
@@ -486,7 +550,7 @@ app.post("/bendahara/buat-ajuan", async (req, res) => {
                     resource: batchUpdateRequest
                 });
             });
-            
+
             return res.status(200).json({message: "Data sent successfully."});
         } catch (error) {
             console.error("Error in /bendahara/buat-ajuan:", error);
@@ -504,7 +568,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         const transaksiKeyword = req.query.tableKeyword;
         // Finding keyword range with data from X & Y columns on Write Table Sheet
         const matchRange = "'Write Table'!X:Y";
-        
+
         // Apply backoff strategy for finding keyword match
         const matchResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({ 
@@ -512,7 +576,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
                 range: matchRange 
             });
         });
-        
+
         const matchResponseRows = matchResponse.data.values || [];
         // Matching range with user inputted keyword
         let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
@@ -530,7 +594,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         // Fetch entire table data based on table row data
         let endKeywordTableRow = parseInt(keywordRow) + parseInt(keywordTableRow) - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
         const keywordTableRange = `'Write Table'!A${keywordRow}:V${endKeywordTableRow}`;
-        
+
         // Apply backoff strategy for getting table data
         const keywordTableRespose = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({ 
@@ -540,7 +604,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
                 valueRenderOption: "UNFORMATTED_VALUE",  // Ensures empty cells are included
             });
         });
-        
+
         let keywordTableData = keywordTableRespose.data.values || [];
         // Add empty rows to generate max 22 columns
         const num_Columns = 22;
@@ -566,10 +630,10 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         return res.status(400).json({message: "Invalid Data."})  
     }
     try {
-        
+
         // Setting antrian data range
         textdata.unshift(fullDateFormat);
-        
+
         // Apply backoff strategy for getting antrian data
         const antriResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
@@ -577,7 +641,7 @@ app.patch("/bendahara/edit-table", async (req, res) => {
                 range: "'Write Antrian'!A3:A"
             });
         });
-        
+
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
         for (let i = 0; i < matchResult.length; i++) {
@@ -598,7 +662,7 @@ app.patch("/bendahara/edit-table", async (req, res) => {
         const sheetInfo = await withBackoff(async () => {
             return await sheets.spreadsheets.get({ spreadsheetId });
         });
-        
+
         const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
         const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
 
@@ -725,7 +789,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
             "'Write Table'!X:Y",  //Table data Range
             "'Write Antrian'!A:A", //Antrian data Range
             ];
-            
+
          // Apply backoff for batch get operation
          const matchResponse = await withBackoff(async () => { 
              return await sheets.spreadsheets.values.batchGet({ 
@@ -733,7 +797,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
                  ranges: matchRange 
              });
          });
-         
+
          const responseTable = matchResponse.data.valueRanges[0].values || [];
          const responseAntrian = matchResponse.data.valueRanges[1].values || [];
          // Matching range with user inputted keyword
@@ -761,7 +825,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
         const sheetInfo = await withBackoff(async () => {
             return await sheets.spreadsheets.get({ spreadsheetId });
         });
-        
+
         const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
         const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
             // Create the batch update request
@@ -796,7 +860,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
                 resource: batchRequest
             });
         });
-        
+
         console.log("Successfully delete data.")
         res.status(200).json({ message: "Table Deleted successfully." });
 
@@ -812,7 +876,7 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
     try {
         const { data } = req.body;
         const cariRange = "'DASHBOARD'!D8"
-        
+
         // Apply backoff for updating cell
         await withBackoff(async () => {
             return await sheets.spreadsheets.values.update({
@@ -822,7 +886,7 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
                 resource: { values: [[data]] },
             });
         });
-        
+
         res.status(200).json({ message: "Data updated successfully." });
     } catch (error) {
         console.error("Error in /bendahara/cari-spm:", error);
@@ -834,7 +898,7 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
 app.get("/bendahara/spm-belum-bayar", async (req, res) => {
     try {
         const range = "'MACHINE DB'!AE3:AM"
-        
+
         // Apply backoff for getting SPM data
         const response = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({ 
@@ -842,7 +906,7 @@ app.get("/bendahara/spm-belum-bayar", async (req, res) => {
                 range,
             });
         });
-        
+
         const result = response.data.values;
         res.json({ data: result })
     } catch (error) {
@@ -887,7 +951,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
             ],
             valueInputOption: "USER_ENTERED",
         }
-        
+
         // Apply backoff for batch update
         const postResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchUpdate({
@@ -895,7 +959,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
                 resource,
             });
         });
-        
+
         try {
             // Apply backoff for getting results
             const getResponse = await withBackoff(async () => {
@@ -904,7 +968,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
                     range: "'MACHINE DB'!AT3:BD",
                 });
             });
-            
+
             let result = getResponse.data.values;
             // Add empty rows to generate max 11 columns
             const maxColumns = 11;
@@ -936,7 +1000,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
                 range: "'Write Antrian'!B:B",
             });
         });
-        
+
         // Get all rows
         const allRows = response.data.values || [];
 
@@ -952,7 +1016,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const reversedRows = filteredRows.reverse();
         // Fetch full row data for the selected month with backoff
         const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:P${row.rowIndex}`); // Adjust range if needed
-        
+
         const batchGetResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
@@ -968,7 +1032,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
             }
             return row;
         });
-        
+
         // Function to filter arrays
         function filterByStatus(array, status) {
             return array.filter(row => row.includes(status));
@@ -1020,7 +1084,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         if (!rowIndex) {
             return res.status(400).json({ error: "Keyword not found in column A" });
         }
-        
+
         const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? fullDateFormat : "";
 
         // Update multiple columns in a single request
@@ -1107,7 +1171,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             const sheetInfo = await withBackoff(async () => {
                 return await sheets.spreadsheets.get({ spreadsheetId });
             });
-            
+
             const DrppSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Monitoring DRPP").properties.sheetId;
 
             //Operator to add and delete empty row
@@ -1259,7 +1323,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 range: "'Monitoring DRPP'!A3:A",
             });
         });
-        
+
         const totalRows = getAllRowsResponse.data.values.length;
 
         // Set rows to fetch from the end of the sheet
@@ -1294,7 +1358,7 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
         const tablePos  = req.query;
         const colorStartRow = parseInt(tablePos.startRow) + 1;
         const range = `'Write Table'!W${colorStartRow}:W${tablePos.endRow}`;
-        
+
         // Apply backoff for getting color status
         const response = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({ 
@@ -1302,7 +1366,7 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
                 range,
             });
         });
-        
+
         let result = response.data.values || [];
 
         // Add empty rows to fill based on row numbers
@@ -1335,7 +1399,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
                 ],
             });
         });
-        
+
         const totalRows = getDrppRows.data.valueRanges[0].values || [];
         const colorRows = getDrppRows.data.valueRanges[1].values || [];
 

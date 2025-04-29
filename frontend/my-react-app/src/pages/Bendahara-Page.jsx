@@ -23,7 +23,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MonitorIcon from '@mui/icons-material/Monitor';
 
-function MainPage(props) {
+function BendaharaPage(props) {
     const whatMenu = props.menu;
 
     // Use Context
@@ -173,4 +173,4 @@ function MainPage(props) {
     )
 }
 
-export default MainPage;
+export default BendaharaPage;

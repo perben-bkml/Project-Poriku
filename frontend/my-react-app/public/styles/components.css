@@ -576,10 +576,10 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-left: 30px;
 }
 
-/* Kelola-Pengajuan Style and Card UI*/
+/* Kelola-Pengajuan Style and Card UI for Kelola-PJK*/
 .card {
     border-radius: 12px;
-    width: 85%;
+    width: 90%;
     height: 150px;
 }
 .card-wrap {
@@ -589,16 +589,22 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 97%;
     margin-bottom: 30px;
 }
+
+.pjk-card {
+    grid-template-columns: repeat(4, 1fr);
+}
+
 .card-title {
     display: flex;
     justify-content: center;
     margin-bottom: 0px;
-    font-size: 1.3rem;
+    margin-top: 25px;
+    font-size: 1.2rem;
 }
 .card-content {
     display: flex;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: 1rem;
 }
 .wide-card {
     margin-top: 40px;
@@ -739,6 +745,12 @@ input[type="number"]::-webkit-inner-spin-button {
 .aksi-content-label.drpp-content {
     grid-template-rows: 1fr;
     column-gap: 0;
+}
+
+/* Kelola-PJK */
+.pjk-table {
+    padding-top: 40px;
+    padding-bottom: 40px;
 }
 
 /* Trying to add media queries */

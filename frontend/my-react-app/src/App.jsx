@@ -4,7 +4,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 //Page Imports
 import Landing from './pages/Landing'
 import Home from './pages/Home'
-import MainPage from './pages/Main-Page'
+import BendaharaPage from './pages/Bendahara-Page.jsx'
+import VerifikasiPage from "./pages/Verifikasi-Page.jsx";
 import Login from './pages/Login'
 import NotFound from './pages/NotFound.jsx'
 import Gaji from './pages/Gaji.jsx'
@@ -28,11 +29,11 @@ function App() {
             <Route path="/home" element={<ProtectedRoute> <Home /> </ProtectedRoute>} />
             <Route path="/menu-bendahara" element={
               <ProtectedRoute>
-                <MainPage menu="Bendahara"/>
+                <BendaharaPage menu="Bendahara"/>
               </ProtectedRoute>} />
             <Route path="/menu-verifikasi" element={
               <ProtectedRoute>
-                <MainPage menu="Verifikasi"/>
+                <VerifikasiPage menu="Verifikasi"/>
               </ProtectedRoute>} />
           </Routes>
         </BrowserRouter>

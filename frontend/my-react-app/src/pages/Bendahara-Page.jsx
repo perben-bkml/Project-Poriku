@@ -41,7 +41,7 @@ function BendaharaPage(props) {
     // Set buttonSelect when page renders
     useEffect(() => {
         //Get locally saved storage saved button
-        const storedButton = localStorage.getItem("selectedButton");
+        const storedButton = localStorage.getItem("selectedButtonBendahara");
         if (storedButton) {
             setButtonSelect(storedButton);
         } else {
@@ -64,7 +64,7 @@ function BendaharaPage(props) {
 
         setButtonSelect(event.name)
         //Store button select locally
-        localStorage.setItem("selectedButton", event.name);
+        localStorage.setItem("selectedButtonBendahara", event.name);
         formatText(event.name)
         setSavedPagination(null);
         setAlertMessage("");

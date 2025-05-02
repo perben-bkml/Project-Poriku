@@ -8,7 +8,6 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 
-// Date
 
 // Initialize tools
 const app = express();
@@ -115,12 +114,26 @@ const auth = new google.auth.JWT(
     SCOPES
 );
 
+// Credentials for Verifikasi Gsheet
+const verifGsheetCredentials = JSON.parse(fs.readFileSync("./credentials/poriku-project-21c022313775.json"))
+const auth2 = new google.auth.JWT(
+    verifGsheetCredentials.client_email,
+    null,
+    verifGsheetCredentials.private_key,
+    SCOPES
+);
+
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
 const sheetIds = JSON.parse(fs.readFileSync("./credentials/sheetid.json"))
 const spreadsheetId = sheetIds.spreadsheetId;
 const spreadsheetIdCariSPM = sheetIds.spreadsheetIdCariSPM;
 const spreadsheetIdGaji = sheetIds.spreadsheetIdGaji;
+
+// Gsheet Verif API Setup
+const sheets2 = google.sheets({ version: "v4", auth: auth2 })
+const spreadsheetIdVerif = sheetIds.spreadsheetIdVerif;
+const spreadsheetIdVerifCode = sheetIds.spreadsheetIdVerifCode;
 
 //Endpoints
 // Login page
@@ -1454,6 +1467,104 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
     } catch (error) {
         console.error("Error in /bendahara/aksi-drpp:", error);
         res.status(500).json({ message: "Error processing data." });
+    }
+})
+
+//Verifikasi Section
+//Kelola-PJK Page
+app.get("/verifikasi/data-pjk", async (req, res) => {
+    try {
+        const { satkerPrefix, page = 1, limit = 10 } = req.query;
+
+        //Get all data from range A
+        const response = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdVerif,
+                range: "'Daftar SPM'!A:A"
+            })
+        })
+        let allRows = response.data.values || [];
+
+        //Filter if satkerPrefix exist
+        if (satkerPrefix !== "") {
+            allRows = allRows
+                .map((row, index) => ({ satker: row[0], rowIndex: index + 1 }))
+                .filter(row => row.satker && row.satker.startsWith(satkerPrefix));
+        } else {
+            allRows = allRows
+                .map((row, index) => ({ satker: row[0], rowIndex: index + 1 }))
+        }
+        if (allRows.length === 0) {
+            return res.status(404).json({ error: "No matching rows found." });
+        }
+        //Sort reverse
+        allRows = allRows.reverse();
+
+        //Pagination logic
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + parseInt(limit);
+        const paginatedRows = allRows.slice(startIndex, endIndex);
+
+        //Fetch Rows with pagination
+        const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:H${row.rowIndex}`);
+        const batchGetResponse = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.batchGet({
+                spreadsheetId: spreadsheetIdVerif,
+                ranges: rowRanges,
+            })
+        })
+        const rowData = batchGetResponse.data.valueRanges.map(row => row.values[0]);
+        const totalPages = Math.ceil(allRows.length / limit);
+        if (satkerPrefix === "" && parseInt(page) === parseInt(totalPages)) {
+            rowData.pop()
+        }
+
+        //Fetch PJK Count data
+        let countData = null;
+        if (satkerPrefix === "") {
+            const countResponse = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetIdVerifCode,
+                    range: `'Sheet Coding'!A4:E4`,
+                })
+            })
+            countData = countResponse.data.values[0] || [];
+        } else {
+            const allKeyword = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetIdVerifCode,
+                    range: `'Sheet Coding'!A:A`
+                })
+            })
+
+            const allrows = allKeyword.data.values || [];
+            let foundRow = null;
+
+            for (let i = 0; i < allrows.length; i++) {
+                if (allrows[i][0] === satkerPrefix) {
+                    foundRow = i + 1 + 2; // +1 for 1-based indexing, +2 to target the data row
+                    break;
+                }
+            }
+            if (foundRow) {
+                const countResponse = await withBackoff(async () => {
+                    return await sheets2.spreadsheets.values.get({
+                        spreadsheetId: spreadsheetIdVerifCode,
+                        range: `'Sheet Coding'!A${foundRow}:E${foundRow}`,
+                    })
+                })
+                countData = countResponse.data.values[0] || [];
+            }
+        }
+
+
+
+
+        res.json({ data: rowData, totalPages, countData });
+
+
+    } catch (error) {
+        console.error("Error fetching Data PJK", error);
     }
 })
 

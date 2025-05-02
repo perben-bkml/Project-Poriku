@@ -579,7 +579,7 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Kelola-Pengajuan Style and Card UI for Kelola-PJK*/
 .card {
     border-radius: 12px;
-    width: 90%;
+    width: 85%;
     height: 150px;
 }
 .card-wrap {
@@ -590,15 +590,14 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 30px;
 }
 
-.pjk-card {
-    grid-template-columns: repeat(4, 1fr);
-}
 
 .card-title {
     display: flex;
     justify-content: center;
+    text-align: center;
     margin-bottom: 0px;
     margin-top: 25px;
+    min-height: 40px;
     font-size: 1.2rem;
 }
 .card-content {
@@ -751,6 +750,11 @@ input[type="number"]::-webkit-inner-spin-button {
 .pjk-table {
     padding-top: 40px;
     padding-bottom: 40px;
+}
+
+.filter-select2 select {
+    margin-left: 20px;
+    width: 180px;
 }
 
 /* Trying to add media queries */

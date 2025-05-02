@@ -171,5 +171,32 @@ export function TableInfoAntri(props) {
             </Table>
         </TableContainer>
     )
+}
+
+export function TableInfoPJK(props) {
+    return(
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <Table>
+                <TableHead>
+                    <TableRow sx={{width: "30px", backgroundColor: "#1a284b"}}>
+                        {props.header.map((data, index) => (
+                            <TableCell key={index}
+                                       sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}}
+                            >{data}</TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                {props.body.map((row, index) => (
+                    <TableRow key={index}>
+                        {row.map((data, index) => (
+                            <TableCell key={index}>{data}</TableCell>
+                        ))}
+                    </TableRow>
+                ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
 
 }

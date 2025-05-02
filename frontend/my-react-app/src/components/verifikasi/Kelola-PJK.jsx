@@ -1,27 +1,103 @@
-
+import React, {useEffect, useState} from "react";
 //Import Components
 import { Card } from "../../ui/cards.jsx"
-import { TableInfoAntri } from "../../ui/tables.jsx";
+import { TableInfoPJK } from "../../ui/tables.jsx";
 import LoadingAnimate from "../../ui/loading.jsx";
-import React, {useState} from "react";
+import axios from "axios";
+
+import Pagination from "@mui/material/Pagination";
 
 export default function KelolaPJK() {
     //State
     const [isLoading, setIsLoading] = useState(false);
+    const [filterSelect, setFilterSelect] = useState("");
+    const [filterData, setFilterData] = useState("");
+    const [dashboardData, setDashboardData] = useState([]);
+    const [tableData, setTableData] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
 
 
-    //Titles for card
-    const cardTitles = [
-        {title: "PJK Belum Dikumpulkan", content: 0},
-        {title: "Ditolak", content: 1},
-        {title: "Lengkap Dengan Catatan", content: 2},
-        {title: "Lengkap", content: 3}
+    //Nama Satker
+    const satkerNames = [
+        {title: "", value: ""},
+        {title: "Biro Umum", value: "Biro Umum"},
+        {title: "Biro Sarpras", value: "Biro Sarpras"},
+        {title: "Biro Perencanaan", value: "Biro Rencana"},
+        {title: "Dit Datin", value: "Dit Datin"},
+        {title: "Dit Hukum", value: "Dit Hukum"},
+        {title: "Dit Kebijakan", value: "Dit Kebijakan"},
+        {title: "Dit Kerja Sama", value: "Dit Kerma"},
+        {title: "Dit Latihan", value: "Dit Latihan"},
+        {title: "Dit Litbang", value: "Dit Litbang"},
+        {title: "Dit Opsla", value: "Dit Opsla"},
+        {title: "Dit Opsud", value: "Dit Opsud"},
+        {title: "Dit Strategi", value: "Dit Strategi"},
+        {title: "Inspektorat", value: "Inspektorat"},
+        {title: "KPIML", value: "KPIML"},
+        {title: "UPH", value: "UPH"},
+        {title: "Zona Barat", value: "Zona Barat"},
+        {title: "Zona Tengah", value: "Zona Tengah"},
+        {title: "Zona Timur", value: "Zona Timur"},
     ]
 
     //Table Head
     const tableHead = [
-        "No.", "Unit Kerja", "No. SPM", "Tanggal SP2D", "Bulan SP2D", "Jenis SPM", "Nominal", "Jenis Belanja", "Status Verifikasi"
+        "Unit Kerja", "No. SPM", "Tanggal SP2D", "Bulan SP2D", "Jenis SPM", "Nominal", "Jenis Belanja", "Status Verifikasi"
     ]
+
+    //Fetch data with filter
+    async function fetchData(data, page) {
+        const rowsPerPage = 10;
+        let satkerPrefix = data;
+        try {
+            setIsLoading(true);
+            const response = await axios.get("http://localhost:3000/verifikasi/data-pjk", { params:{ satkerPrefix, page: page, limit: rowsPerPage }});
+            if (response.status === 200){
+                const { data: rowData, totalPages, countData } = response.data;
+                setDashboardData(countData);
+                setTableData(rowData)
+                setTotalPages(totalPages);
+                setIsLoading(false);
+            }
+        } catch (error) {
+            console.error("Error fetching data.", error);
+            setIsLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        fetchData(filterData, currentPage);
+    }, [filterData, currentPage]);
+
+
+    //Titles for card
+    const cardTitles = [
+        {title: "Total PJK", content: dashboardData[0]},
+        {title: "PJK Belum Dikumpulkan", content: dashboardData[1]},
+        {title: "Ditolak", content: dashboardData[2]},
+        {title: "Lengkap Dengan Catatan", content: dashboardData[3]},
+        {title: "Lengkap", content: dashboardData[4]}
+    ]
+
+
+    //Filter Change
+    function handleFilterChange(event) {
+        const option = event.target.value;
+        setFilterSelect(option);
+        if (option === "") {
+            setFilterData("");
+        }
+    }
+    function handleFilterSelectChange(event) {
+        const option = event.target.value;
+        setFilterData(option);
+
+    }
+    //Pagination
+    function handlePaginationChange(event, value) {
+        setCurrentPage(value);
+    }
 
     return (
         <div>
@@ -29,23 +105,33 @@ export default function KelolaPJK() {
                 <form className="filter-form">
                     <label className="filter-label1">Filter dengan:</label>
                     <div className="filter-select">
-                        <select>
+                        <select onChange={handleFilterChange}>
                             <option value=""/>
-                            <option value="month">Bulan</option>
-                            <option value="date">Tanggal</option>
+                            <option value="text">Satker</option>
                         </select>
                     </div>
-                    <label className="filter-label2">Opsi Filter:</label>
-                    <input className="filter-input1"/>
+                    <label className="filter-label2" hidden={filterSelect === ""} >Nama Satker:</label>
+                    <div className="filter-select filter-select2 ">
+                        <select hidden={filterSelect === ""} value={filterData} onChange={handleFilterSelectChange}>
+                            {satkerNames.map((satker, index) => (
+                                <option key={index} value={satker.value}>{satker.title}</option>
+                            ))}
+                        </select>
+                    </div>
                 </form>
             </div>
-            <div className={"card-wrap pjk-card"}>
+            { isLoading ? <LoadingAnimate /> :
+            <div className={"card-wrap"}>
                 {cardTitles.map((card, index) => (
                     <Card key={index} title={card.title} content={card.content}/>
                 ))}
             </div>
+            }
             <div className={"bg-card pjk-table"}>
-                <TableInfoAntri header={tableHead} body={tableHead} />
+                {isLoading ? <LoadingAnimate /> :
+                    <TableInfoPJK header={tableHead} body={tableData} />
+                }
+                <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />
             </div>
         </div>
     )

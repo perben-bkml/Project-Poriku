@@ -26,7 +26,7 @@ function VerifikasiPage(props) {
     // Set buttonSelect when page renders
     useEffect(() => {
         //Get locally saved storage saved button
-        const storedButton = localStorage.getItem("selectedButton");
+        const storedButton = localStorage.getItem("selectedButtonVerif");
         if (storedButton) {
             setButtonSelect(storedButton);
         } else {
@@ -49,7 +49,7 @@ function VerifikasiPage(props) {
 
         setButtonSelect(event.name)
         //Store button select locally
-        localStorage.setItem("selectedButton", event.name);
+        localStorage.setItem("selectedButtonVerif", event.name);
         formatText(event.name)
     }
     //Just converting into title name

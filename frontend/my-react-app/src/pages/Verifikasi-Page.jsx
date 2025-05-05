@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from "react";
 // Import Components
 import KelolaPJK from "../components/verifikasi/Kelola-PJK.jsx";
+import FormVerifikasi from "../components/verifikasi/Form-Verifikasi.jsx";
 import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
@@ -12,6 +13,7 @@ import Avatar from "@mui/material/Avatar";
 import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
+import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 
 function VerifikasiPage(props) {
     const whatMenu = props.menu;
@@ -66,6 +68,8 @@ function VerifikasiPage(props) {
         switch (buttonSelect) {
             case "kelola-PJK":
                 return <KelolaPJK />;
+            case "form-verifikasi":
+                return <FormVerifikasi changeComponent={setButtonSelect}/>;
             case "monitor-PJK":
                 return <MonitorPJK />;
             default:
@@ -89,6 +93,9 @@ function VerifikasiPage(props) {
                     <div className="dash-content">
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "kelola-PJK" ? "btn-selected" : "hidden"}`} name="kelola-PJK" onClick={(e)=> handleButtonClick(e.target)}><DashboardIcon fontSize="small"/><span className="padd-span-bend"/>Kelola PJK</button>
+                        : null}
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "form-verifikasi" ? "btn-selected" : "hidden"}`} name="form-verifikasi" onClick={(e)=> handleButtonClick(e.target)}><ChecklistRtlIcon fontSize="small"/><span className="padd-span-bend"/>Form Verifikasi</button>
                         : null}
                         <button className={`dash-button ${buttonSelect === "monitor-PJK" ? "btn-selected" : "hidden"}`} name="monitor-PJK" onClick={(e)=> handleButtonClick(e.target)}><ScreenSearchDesktopIcon fontSize="small"/><span className="padd-span-bend"/>Monitor PJK</button>
                         <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>

@@ -133,7 +133,6 @@ const spreadsheetIdGaji = sheetIds.spreadsheetIdGaji;
 // Gsheet Verif API Setup
 const sheets2 = google.sheets({ version: "v4", auth: auth2 })
 const spreadsheetIdVerif = sheetIds.spreadsheetIdVerif;
-const spreadsheetIdVerifCode = sheetIds.spreadsheetIdVerifCode;
 
 //Endpoints
 // Login page
@@ -1524,7 +1523,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         if (satkerPrefix === "") {
             const countResponse = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetIdVerifCode,
+                    spreadsheetId: spreadsheetIdVerif,
                     range: `'Sheet Coding'!A4:E4`,
                 })
             })
@@ -1532,7 +1531,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         } else {
             const allKeyword = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetIdVerifCode,
+                    spreadsheetId: spreadsheetIdVerif,
                     range: `'Sheet Coding'!A:A`
                 })
             })
@@ -1549,7 +1548,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             if (foundRow) {
                 const countResponse = await withBackoff(async () => {
                     return await sheets2.spreadsheets.values.get({
-                        spreadsheetId: spreadsheetIdVerifCode,
+                        spreadsheetId: spreadsheetIdVerif,
                         range: `'Sheet Coding'!A${foundRow}:E${foundRow}`,
                     })
                 })
@@ -1567,6 +1566,59 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         console.error("Error fetching Data PJK", error);
     }
 })
+
+//Form-Verifikasi.jsx
+app.post("/verifikasi/verifikasi-form", async (req, res) => {
+    try {
+        const { data } = req.body;
+        //Current Date converter to dd/mm/yyyy hh:mm:ss
+        function formatDateTime(date) {
+            const pad = (n) => String(n).padStart(2, '0');
+
+            const day = pad(date.getDate());
+            const month = pad(date.getMonth() + 1); // Months are 0-indexed
+            const year = date.getFullYear();
+
+            const hours = pad(date.getHours());
+            const minutes = pad(date.getMinutes());
+            const seconds = pad(date.getSeconds());
+
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        }
+
+        const now = new Date();
+        const formatted = formatDateTime(now);
+        data.push(formatted);
+
+        //Get all row information
+        const getAllRowsResponse = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdVerif,
+                range: `'Data'!A:A`
+            })
+        })
+
+        const getAllRows = getAllRowsResponse.data.values || [];
+        const nextRow = getAllRows.length + 1;
+
+        const writeResponse = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.update({
+                spreadsheetId: spreadsheetIdVerif,
+                range: `'Data'!A${nextRow}:G${nextRow}`,
+                valueInputOption: "USER_ENTERED",
+                resource: { values: [data] }
+            })
+        })
+
+        res.status(200).json({ message: "Data successfully written." })
+
+    } catch (error) {
+        console.error("Error fetching Data PJK", error);
+    }
+})
+
+
+
 
 // Ports
 app.listen(3000, () => {

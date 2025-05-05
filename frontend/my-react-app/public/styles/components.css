@@ -58,6 +58,7 @@
     font-size: 1.2rem;
     letter-spacing: 1.5px;
     transition: all 0.2s ease-in-out;
+    cursor: pointer;
 }
 
 .Nav-SIPKU:hover {
@@ -756,6 +757,58 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-left: 20px;
     width: 180px;
 }
+
+/* Form Verifikasi.jsx */
+.form-verif {
+    padding: 10px 30px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(17, 1fr);
+    margin: 10px 0px;
+}
+
+.form-verif label {
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.form-verif input, .form-verif select {
+    height: 30px;
+    margin-top: 0px;
+}
+
+
+.verif-buttons {
+    padding: 5px 30px;
+    margin-top: 30px;
+    display: flex;
+    gap: 20px;
+}
+
+.verif-btn {
+    width: 180px;
+    height: 32px;
+    background-color: #1a284b;
+    border-radius: 15px;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.verif-submit-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 20px;
+}
+
+.verif-find {
+    grid-template-rows: 1fr 1fr;
+}
+
+
+
 
 /* Trying to add media queries */
 @media screen and (max-width: 1400px) {

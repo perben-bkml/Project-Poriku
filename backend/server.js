@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
-import bodyParser from "body-parser";
+import axios from "axios";
 import fs from "fs";
 import postgres from "postgres";
 import jwt from "jsonwebtoken";
@@ -159,7 +159,7 @@ app.post("/login-auth", async (req, res) => {
         const token = jwt.sign(
             { id: userData[0].id, username: userData[0].username, name: userData[0].name, role: userData[0].role },
             JWT_SECRET_KEY,
-            { expiresIn: "8h" }
+            { expiresIn: "12h" }
         );
 
             // Set cookie with the token
@@ -1570,7 +1570,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 //Form-Verifikasi.jsx
 app.post("/verifikasi/verifikasi-form", async (req, res) => {
     try {
-        const { data } = req.body;
+        const { data, type, rowPosition } = req.body;
         //Current Date converter to dd/mm/yyyy hh:mm:ss
         function formatDateTime(date) {
             const pad = (n) => String(n).padStart(2, '0');
@@ -1590,30 +1590,99 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
         const formatted = formatDateTime(now);
         data.push(formatted);
 
-        //Get all row information
-        const getAllRowsResponse = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdVerif,
-                range: `'Data'!A:A`
-            })
-        })
 
-        const getAllRows = getAllRowsResponse.data.values || [];
-        const nextRow = getAllRows.length + 1;
-
-        const writeResponse = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.update({
-                spreadsheetId: spreadsheetIdVerif,
-                range: `'Data'!A${nextRow}:G${nextRow}`,
-                valueInputOption: "USER_ENTERED",
-                resource: { values: [data] }
+        if (type === "filled") {
+            //Directly write into the row
+            const writeResponse = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.update({
+                    spreadsheetId: spreadsheetIdVerif,
+                    range: `'Data'!A${rowPosition}:G${rowPosition}`,
+                    valueInputOption: "USER_ENTERED",
+                    resource: { values: [data] }
+                })
             })
-        })
+        } else {
+            //Get all row information
+            const getAllRowsResponse = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetIdVerif,
+                    range: `'Data'!A:A`
+                })
+            })
+
+            const getAllRows = getAllRowsResponse.data.values || [];
+            const nextRow = getAllRows.length + 1;
+
+            const writeResponse = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.update({
+                    spreadsheetId: spreadsheetIdVerif,
+                    range: `'Data'!A${nextRow}:G${nextRow}`,
+                    valueInputOption: "USER_ENTERED",
+                    resource: { values: [data] }
+                })
+            })
+
+        }
 
         res.status(200).json({ message: "Data successfully written." })
 
     } catch (error) {
         console.error("Error fetching Data PJK", error);
+    }
+})
+
+app.get("/verifikasi/cari-spm", async (req,res) => {
+    const { searchValue } = req.query;
+    try {
+        const response = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdVerif,
+                range: `'Data'!A:A`
+            })
+        })
+        const allRows = response.data.values || [];
+        //Row index
+        const rowIndex = allRows.findIndex(row => row[0].includes(searchValue));
+        if (rowIndex === -1) {
+            return res.status(404).json({error: "Keyword not found."});
+        }
+        const targetRowNumber = rowIndex + 1 //Gsheet 1 indexed
+
+        //Fetch target row
+        const result = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdVerif,
+                range: `'Data'!A${targetRowNumber}:G${targetRowNumber}`
+            })
+        })
+        const targetRow = result.data.values[0] || [];
+        res.json({ data: targetRow, rowNumber: targetRowNumber});
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+
+})
+
+//Generate PDF
+app.post("/verifikasi/generate-pdf", async (req, res) => {
+    const data = req.body;
+
+    try {
+        const response = await axios.post(
+            'https://script.google.com/macros/s/AKfycbz9i4yr9mBC-M62M4rummZrd_zLNHo0sN4U3XcY47zzOOptopqmQIklSDxKpSpTpcif/exec',
+            data,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        res.status(200).json({ message: "PDF successfully generated." });
+    } catch (error) {
+        console.error("Error forwarding to Google Apps Script:", error.message);
+        res.status(500).json({ message: "Error creating PDF", error: error.message });
     }
 })
 

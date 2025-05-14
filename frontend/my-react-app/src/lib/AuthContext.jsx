@@ -29,8 +29,8 @@ export function AuthProvider({children}) {
             await axios.post("http://localhost:3000/logout", {}, { withCredentials: true });
             setIsAuthenticated(false);
             setUser(null);
-            localStorage.removeItem("selectedButton"); //remove button select data
-            navigate("/login"); // Redirect to login after logout
+            localStorage.removeItem("selectedButtonBendahara");
+            localStorage.removeItem("selectedButtonVerif")//remove button select data
         } catch (error) {
             console.log("Logout failed:", error);
         }

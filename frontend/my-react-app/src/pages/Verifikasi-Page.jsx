@@ -97,7 +97,9 @@ function VerifikasiPage(props) {
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "form-verifikasi" ? "btn-selected" : "hidden"}`} name="form-verifikasi" onClick={(e)=> handleButtonClick(e.target)}><ChecklistRtlIcon fontSize="small"/><span className="padd-span-bend"/>Form Verifikasi</button>
                         : null}
+                        { user.role === "user" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "monitor-PJK" ? "btn-selected" : "hidden"}`} name="monitor-PJK" onClick={(e)=> handleButtonClick(e.target)}><ScreenSearchDesktopIcon fontSize="small"/><span className="padd-span-bend"/>Monitor PJK</button>
+                        : null}
                         <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">

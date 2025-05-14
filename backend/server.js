@@ -1473,50 +1473,65 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
 //Kelola-PJK Page
 app.get("/verifikasi/data-pjk", async (req, res) => {
     try {
-        const { satkerPrefix, page = 1, limit = 10 } = req.query;
+        const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10 } = req.query;
 
         //Get all data from range A
         const response = await withBackoff(async () => {
             return await sheets2.spreadsheets.values.get({
                 spreadsheetId: spreadsheetIdVerif,
-                range: "'Daftar SPM'!A:A"
-            })
-        })
+                range: "'Daftar SPM'!A:H"
+            });
+        });
         let allRows = response.data.values || [];
+
+        //Format setup
+        allRows = allRows.map((row, index) => ({
+            satker: row[0] || "",           // Column A
+            status: row[7] || "",           // Column H
+            rowIndex: index + 1
+        }));
 
         //Filter if satkerPrefix exist
         if (satkerPrefix !== "") {
-            allRows = allRows
-                .map((row, index) => ({ satker: row[0], rowIndex: index + 1 }))
-                .filter(row => row.satker && row.satker.startsWith(satkerPrefix));
-        } else {
-            allRows = allRows
-                .map((row, index) => ({ satker: row[0], rowIndex: index + 1 }))
+            allRows = allRows.filter(row => row.satker.startsWith(satkerPrefix));
         }
+        if (filterKeyword !== "") {
+            allRows = allRows.filter(row => row.status.includes(filterKeyword));
+        }
+
+
+
+
+        let rowData = [];
+        let totalPages = 0;
+        let message = true;
+
         if (allRows.length === 0) {
-            return res.status(404).json({ error: "No matching rows found." });
-        }
-        //Sort reverse
-        allRows = allRows.reverse();
+            message = false;
+        } else {
+            //Sort reverse
+            allRows = allRows.reverse();
 
-        //Pagination logic
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedRows = allRows.slice(startIndex, endIndex);
+            //Pagination logic
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + parseInt(limit);
+            const paginatedRows = allRows.slice(startIndex, endIndex);
 
-        //Fetch Rows with pagination
-        const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:H${row.rowIndex}`);
-        const batchGetResponse = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.batchGet({
-                spreadsheetId: spreadsheetIdVerif,
-                ranges: rowRanges,
+            //Fetch Rows with pagination
+            const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:H${row.rowIndex}`);
+            const batchGetResponse = await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.batchGet({
+                    spreadsheetId: spreadsheetIdVerif,
+                    ranges: rowRanges,
+                })
             })
-        })
-        const rowData = batchGetResponse.data.valueRanges.map(row => row.values[0]);
-        const totalPages = Math.ceil(allRows.length / limit);
-        if (satkerPrefix === "" && parseInt(page) === parseInt(totalPages)) {
-            rowData.pop()
+            rowData = batchGetResponse.data.valueRanges.map(row => row.values[0]);
+            totalPages = Math.ceil(allRows.length / limit);
+            if (satkerPrefix === "" && filterKeyword === "" && parseInt(page) === parseInt(totalPages)) {
+                rowData.pop()
+            }
         }
+
 
         //Fetch PJK Count data
         let countData = null;
@@ -1559,7 +1574,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 
 
 
-        res.json({ data: rowData, totalPages, countData });
+        res.json({ data: rowData, totalPages, countData, message: message });
 
 
     } catch (error) {

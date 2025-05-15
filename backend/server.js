@@ -919,7 +919,13 @@ app.get("/bendahara/spm-belum-bayar", async (req, res) => {
             });
         });
 
-        const result = response.data.values;
+        const result = (response.data.values || []).map(row => {
+            while (row.length < 9) {
+                row.push("");
+            }
+            return row;
+        });
+
         res.json({ data: result })
     } catch (error) {
         console.error("Error in /bendahara/spm-belum-bayar:", error);
@@ -1356,7 +1362,34 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         //Capture data values
         const paginatedDRPP = getDRPPResponses.data.values ? getDRPPResponses.data.values.reverse() : [];
 
-        res.json({ data: paginatedDRPP, realAllDRPPRows: totalRows })
+        //Get Total count of pajak status
+        // Get column H and I from row 3 downward
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Monitoring DRPP'!H:I", // Columns H and I
+            });
+        });
+
+        const rows = response.data.values || [];
+
+        let hBelum = 0, hSudah = 0;
+        let iBelum = 0, iSudah = 0;
+
+        rows.forEach(row => {
+            const colH = row[0]?.trim();
+            const colI = row[1]?.trim();
+
+            if (colH === "Belum") hBelum++;
+            else if (colH === "Sudah") hSudah++;
+
+            if (colI === "Belum") iBelum++;
+            else if (colI === "Sudah") iSudah++;
+        });
+
+        const countData = [hBelum, hSudah, iBelum, iSudah]
+
+        res.json({ data: paginatedDRPP, realAllDRPPRows: totalRows, countData: countData });
 
     } catch (error) {
         console.error("Error in /bendahara/monitoring-drpp:", error);

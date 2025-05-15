@@ -16,7 +16,9 @@ function Home() {
             <div className="welcome-buttons slide-up">
                 <NavLink to="/menu-bendahara"><button className='page-button'>Menu Bendahara</button></NavLink>
                 <NavLink to="/menu-verifikasi"><button className='page-button'>Menu Verifikasi</button></NavLink>
-                <button className='page-button'>Login SIPKU</button>
+                <a href="https://quickconnect.to/sipku" target="_blank" rel="noopener noreferrer">
+                    <button className="page-button" style={{backgroundColor: "rgb(8, 13, 20)"}}>Login SIPKU</button>
+                </a>
             </div>
         </div>
     )

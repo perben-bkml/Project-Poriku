@@ -3,6 +3,7 @@ import axios from "axios";
 import PropTypes from "prop-types";
 //Import Components
 import LoadingAnimate from "../../ui/loading.jsx";
+import {Card} from "../../ui/cards.jsx";
 //Import Table
 import {TableKelola} from "../../ui/tables.jsx";
 //Import Pagination
@@ -18,6 +19,7 @@ export default function MonitoringDrpp(props) {
     const [isLoading, setIsLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
+    const [cardContent, setCardContent] = useState([0, 0, 0, 0]);
 
     //Fetch Data
     const rowsPerPage = 10;
@@ -26,9 +28,10 @@ export default function MonitoringDrpp(props) {
             setIsLoading(true);
             const response = await axios.get("http://localhost:3000/bendahara/monitoring-drpp", { params:{ page, limit: rowsPerPage }});
             if (response.status === 200){
-                const { data: responseResult, realAllDRPPRows } = response.data;
+                const { data: responseResult, realAllDRPPRows, countData } = response.data;
                 setMonitoringData(responseResult);
                 setTotalPages(Math.ceil(realAllDRPPRows / rowsPerPage));
+                setCardContent(countData);
             }
             setIsLoading(false);
         } catch (error) {
@@ -45,15 +48,26 @@ export default function MonitoringDrpp(props) {
         setCurrentPage(value);
     }
 
+    //Card titles
+    const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor"]
+
     return (
-        <div className="bg-card">
-            {isLoading ? <LoadingAnimate /> :
-                <div className="lihat-antri-table" >
-                    <TableKelola type="monitor" header={placeholderTable} content={monitoringData} fullContent={monitoringData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
+        <div>
+            <div className="card-wrap" >
+                {cardTitles.map((card, index) => (
+                    <Card key={index} title={card} content={cardContent[index]} />
+                ))}
+            </div>
+            <div className="bg-card">
+
+                {isLoading ? <LoadingAnimate /> :
+                    <div className="lihat-antri-table" >
+                        <TableKelola type="monitor" header={placeholderTable} content={monitoringData} fullContent={monitoringData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
+                    </div>
+                }
+                <div className="lihat-antri-pagination" >
+                    <Pagination className="pagination" size="medium" count={totalPages} onChange={handlePaginationChange} />
                 </div>
-            }
-            <div className="lihat-antri-pagination" >
-                <Pagination className="pagination" size="medium" count={totalPages} onChange={handlePaginationChange} />
             </div>
         </div>
     )

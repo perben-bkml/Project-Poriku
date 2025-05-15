@@ -55,7 +55,7 @@ function Login () {
         <div className="login-home">
             <div className="login-bg slide-down">
                 <div className="login-logo-container">
-                    <img src="../../public/assets/bakamla_logo.png" alt="Bakamla Logo" className="login-logo"></img>
+                    <img src="../../public/assets/bakamla_logo.svg" alt="Bakamla Logo" className="login-logo"></img>
                 </div>
 
                 <div className="login-title">

@@ -19,15 +19,17 @@ export default function FormVerifikasi(props) {
     const [searchedData, setSearchedData] = useState([]);
     const [savedRow, setSavedRow] = useState(null);
     const [isAlert, setIsAlert] = useState(false);
-
+    const [activeButton, setActiveButton] = useState("buat-form");
 
     //Menu display handler
     function handleDisplay(event) {
         const { name } = event.target;
         if (name === "buat-form") {
             setDisplay(true);
+            setActiveButton(name);
         } else {
             setDisplay(false);
+            setActiveButton(name);
         }
     }
 
@@ -187,10 +189,10 @@ export default function FormVerifikasi(props) {
                 <label htmlFor="catatan">Catatan</label>
                 <input type="text" id="catatan" name="catatan" defaultValue={setType === "filled" ? searchedData[4] : null}/>
                 <br />
-                <div className="verif-submit-buttons">
+                <div>
                     {setType === "basic" ?
                         <VerifButton type="submit" value="Submit Formulir" name="submit-form"/>:
-                        <div>
+                        <div className="verif-submit-buttons">
                             <VerifButton type="submit" value="Update Formulir" name="submit-form"/>
                             <VerifButton type="button" value="Generate PDF" name="submit-form" onClick={handleGeneratePDF}/>
                         </div>
@@ -216,8 +218,8 @@ export default function FormVerifikasi(props) {
     return (
         <div className={"bg-card"}>
             <div className="verif-buttons">
-                <VerifButton type="button" value="Buat Form" name="buat-form" onClick={(e) => handleDisplay(e)}/>
-                <VerifButton type="button" value="Cari/Perbarui" name="cari/perbarui" onClick={(e) => handleDisplay(e)}/>
+                <VerifButton type="button" value="Buat Form" name="buat-form" pressed={activeButton === "buat-form"} onClick={(e) => handleDisplay(e)}/>
+                <VerifButton type="button" value="Cari/Perbarui" name="cari/perbarui" pressed={activeButton === "cari/perbarui"} onClick={(e) => handleDisplay(e)}/>
             </div>
             {display ? <CreateForm type="basic" /> : <FindReplaceForm />}
             {loadingScreen && <LoadingScreen />}

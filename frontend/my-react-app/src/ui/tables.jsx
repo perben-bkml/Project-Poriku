@@ -9,7 +9,7 @@ import TableRow from '@mui/material/TableRow';
 // Other Material UI
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import { IconButton } from '@mui/material';
+import { IconButton, TablePagination } from '@mui/material';
 import Collapse from '@mui/material/Collapse';
 // Components
 import LoadingAnimate from './loading';
@@ -45,6 +45,8 @@ export function TableKelola(props) {
     //State
     const [tableType, setTableType] = useState("")
     const [isLoading, setIsLoading] = useState(true)
+    const [page, setPage] = useState(0)
+    const [rowsPerPage, setRowsPerPage] = useState(10)
 
     useEffect(() => {
         setTableType(props.type);
@@ -65,7 +67,17 @@ export function TableKelola(props) {
     if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
         return null
     }
-    
+
+    // Pagination handlers
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
 
 
     function handleAksiClick(index) {
@@ -139,11 +151,36 @@ export function TableKelola(props) {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {props.content.map((row, index) => (
-                        <Row key={index} rowData={row} rowIndex={index} coloredRow={props.coloredRow} addColorData={props.addColorData} />
+                    {props.content
+                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        .map((row, index) => (
+                            <Row 
+                                key={index} 
+                                rowData={row} 
+                                rowIndex={page * rowsPerPage + index} 
+                                coloredRow={props.coloredRow} 
+                                addColorData={props.addColorData} 
+                            />
                     ))}
                 </TableBody>
             </Table>
+            {props.type !== "monitor" &&
+            <TablePagination
+                rowsPerPageOptions={[5, 10, 25]}
+                component="div"
+                count={props.content.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                sx={{ 
+                    borderTop: '1px solid rgba(224, 224, 224, 1)',
+                    '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                        margin: 0
+                    }
+                }}
+            />
+            }
         </TableContainer>
     )
 }

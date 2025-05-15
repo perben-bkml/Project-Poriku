@@ -7,6 +7,6 @@ export function SubmitButton(props) {
 
 export function VerifButton(props) {
     return (
-        <input className="verif-btn" type={props.type} value={props.value} name={props.name} onClick={props.onClick}/>
+        <input className={`verif-btn ${props.pressed ? "verif-btn-pressed" : ""}`} type={props.type} value={props.value} name={props.name} onClick={props.onClick}/>
     )
 }

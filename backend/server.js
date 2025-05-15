@@ -2,11 +2,11 @@ import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
 import axios from "axios";
-import fs from "fs";
 import postgres from "postgres";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
+import 'dotenv/config'
 
 
 // Initialize tools
@@ -31,15 +31,7 @@ const getFormattedDate = () => {
 }
 const { fullDateFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
 
-/**
- * Performs a Google Sheets API request with exponential backoff
- * This utility function handles rate limiting by implementing an exponential backoff strategy
- * If the API request fails due to quota limits, it will retry with increasing delays
- * 
- * @param {Function} apiCallFn - Function that returns a promise for the API call
- * @param {Object} options - Options for the backoff algorithm
- * @returns {Promise} - Result of the API call or throws after max retries
- */
+//Exponential Backoff for GSheet API Limits
 async function withBackoff(apiCallFn, options = {}) {
   const {
     maxRetries = 5,               // Maximum number of retry attempts
@@ -97,42 +89,40 @@ app.use(cors(corsOption));
 app.use(cookieParser())
 
 // Setting Up Postgres
-const dbCredentials = JSON.parse(fs.readFileSync("./credentials/database.json"));
-const sql = postgres(dbCredentials);
+const sql = postgres({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+});
 
-// JWT Secret Key
-const JWT_SECRET = JSON.parse(fs.readFileSync("./credentials/jwt_secret.json"));
-const JWT_SECRET_KEY = JWT_SECRET.jwt_secret;
-
-// Credentials
-const gsheetCredentials = JSON.parse(fs.readFileSync("./credentials/project-import-gsheet-keu-27df045eec2e.json"))
+// Credentials for Pengajuan Gsheet
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 const auth = new google.auth.JWT(
-    gsheetCredentials.client_email,
+    process.env.AJUAN_CLIENT_EMAIL,
     null,
-    gsheetCredentials.private_key,
+    process.env.AJUAN_PRIVATE_KEY,
     SCOPES
 );
 
 // Credentials for Verifikasi Gsheet
-const verifGsheetCredentials = JSON.parse(fs.readFileSync("./credentials/poriku-project-21c022313775.json"))
 const auth2 = new google.auth.JWT(
-    verifGsheetCredentials.client_email,
+    process.env.VERIF_CLIENT_EMAIL,
     null,
-    verifGsheetCredentials.private_key,
+    process.env.VERIF_PRIVATE_KEY,
     SCOPES
 );
 
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
-const sheetIds = JSON.parse(fs.readFileSync("./credentials/sheetid.json"))
-const spreadsheetId = sheetIds.spreadsheetId;
-const spreadsheetIdCariSPM = sheetIds.spreadsheetIdCariSPM;
-const spreadsheetIdGaji = sheetIds.spreadsheetIdGaji;
+const spreadsheetId = process.env.SPREADSHEET_ID_AJUAN;
+const spreadsheetIdCariSPM = process.env.SPREADSHEET_ID_CARISPM;
+const spreadsheetIdGaji = process.env.SPREADSHEET_ID_GAJI;
 
 // Gsheet Verif API Setup
 const sheets2 = google.sheets({ version: "v4", auth: auth2 })
-const spreadsheetIdVerif = sheetIds.spreadsheetIdVerif;
+const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 
 //Endpoints
 // Login page
@@ -158,7 +148,7 @@ app.post("/login-auth", async (req, res) => {
         //Create JWT Token
         const token = jwt.sign(
             { id: userData[0].id, username: userData[0].username, name: userData[0].name, role: userData[0].role },
-            JWT_SECRET_KEY,
+            process.env.JWT_SECRET,
             { expiresIn: "12h" }
         );
 
@@ -198,7 +188,7 @@ app.get("/check-auth", (req, res) => {
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET_KEY);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         res.status(200).json({ 
             user: {
                 name: decoded.name,
@@ -1342,7 +1332,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             });
         });
 
-        const totalRows = getAllRowsResponse.data.values.length;
+        const totalRows = getAllRowsResponse.data.values.length || 0;
 
         // Set rows to fetch from the end of the sheet
         const actualTotalRows = totalRows + 2; //+2 because totalRows is grabbing data from A3
@@ -1353,8 +1343,8 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 
         // Fetch Paginated Data with backoff
         const getDRPPResponses = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({ 
-                spreadsheetId, 
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
                 range: fetchRowRange,
             });
         });

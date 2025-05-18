@@ -26,7 +26,7 @@ function Login () {
         if (isAuthenticated && isLoading) {
             navigate("/home")
         }
-    }, [isAuthenticated])
+    }, [isAuthenticated, isLoading, navigate])
 
     async function handleSubmit(event) {
         event.preventDefault();

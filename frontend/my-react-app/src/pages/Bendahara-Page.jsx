@@ -53,7 +53,7 @@ function BendaharaPage(props) {
             }
         }
     }, [])
-    
+
 
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
@@ -148,7 +148,7 @@ function BendaharaPage(props) {
                         <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">
-                        <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="../../public/assets/bakamla_logo.svg" />
+                        <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />
                         <span className="padd-span-bend"></span>
                         <p>{user.name}</p>
                     </div>

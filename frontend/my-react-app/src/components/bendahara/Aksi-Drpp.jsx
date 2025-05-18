@@ -47,12 +47,12 @@ export default function AksiDrpp(props) {
         try {
             setIsTableLoading(true)
             const tableKeyword = `TRANS_ID:${props.fulldata[1]}`
-            const response = await axios.get("http://localhost:3000/bendahara/data-transaksi", { params: { tableKeyword } })
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
                 if (response.data.keywordRowPos) {
                     const tablePos = { startRow: response.data.keywordRowPos, endRow: response.data.keywordEndRow }
-                    const result = await axios.get("http://localhost:3000/bendahara/cek-drpp", { params: tablePos} )
+                    const result = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/cek-drpp`, { params: tablePos} )
                     if (result.status === 200) {
                         setColoredRow(result.data.data || []);
                         setIsTableLoading(false)
@@ -132,7 +132,7 @@ export default function AksiDrpp(props) {
         try {
             handlePopup()
             setIsLoading(true)
-            const response = await axios.post("http://localhost:3000/bendahara/aksi-drpp", sendData)
+            const response = await axios.post(`${process.env.REACT_APP_API_URL}/bendahara/aksi-drpp`, sendData)
             if (response.status === 200) {
                 setIsLoading(false)
                 props.changeComponent("monitoring-drpp")

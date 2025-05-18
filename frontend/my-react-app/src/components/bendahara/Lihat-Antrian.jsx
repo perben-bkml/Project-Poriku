@@ -27,7 +27,7 @@ function LihatAntrian() {
     async function fetchAntrianData (page) {
         try {
             setIsLoading(true);
-            const response = await axios.get("http://localhost:3000/bendahara/antrian", { params:{ page, limit: rowsPerPage, username: null }});
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/antrian`, { params:{ page, limit: rowsPerPage, username: null }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setAntrianData(responseResult.reverse());

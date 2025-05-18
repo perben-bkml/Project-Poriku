@@ -26,7 +26,7 @@ export default function MonitoringDrpp(props) {
     async function fetchMonitoringData (page) {
         try {
             setIsLoading(true);
-            const response = await axios.get("http://localhost:3000/bendahara/monitoring-drpp", { params:{ page, limit: rowsPerPage }});
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/monitoring-drpp`, { params:{ page, limit: rowsPerPage }});
             if (response.status === 200){
                 const { data: responseResult, realAllDRPPRows, countData } = response.data;
                 setMonitoringData(responseResult);

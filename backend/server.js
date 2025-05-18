@@ -79,7 +79,7 @@ async function withBackoff(apiCallFn, options = {}) {
 
 // Allowing CORS to get request and cookies from frontend
 const corsOption = {
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_ORIGIN,
     credentials: true,
 }
 
@@ -89,12 +89,8 @@ app.use(cors(corsOption));
 app.use(cookieParser())
 
 // Setting Up Postgres
-const sql = postgres({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+const sql = postgres(process.env.DATABASE_URL, {
+    ssl: 'require',
 });
 
 // Credentials for Pengajuan Gsheet

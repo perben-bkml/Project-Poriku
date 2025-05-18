@@ -11,7 +11,7 @@ function Login () {
     })
     //Setting up useNavigate and createContex
     const navigate = useNavigate();
-    const { isAuthenticated, setIsAuthenticated, setUser } = useContext(AuthContext)
+    const { isAuthenticated, setIsAuthenticated, isLoading, setUser } = useContext(AuthContext)
 
     //Handling user input changes
     function handleInputChange(event) {
@@ -23,7 +23,7 @@ function Login () {
 
     //Redirect to home page if user is authenticated
     useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && isLoading) {
             navigate("/home")
         }
     }, [isAuthenticated])
@@ -31,7 +31,7 @@ function Login () {
     async function handleSubmit(event) {
         event.preventDefault();
         try {
-            const response = await axios.post("http://localhost:3000/login-auth", credentials, {
+            const response = await axios.post(`${process.env.REACT_APP_API_URL}/login-auth`, credentials, {
                 withCredentials: true, //Ensure cookies are sent
             })
             if (response.status === 200) {

@@ -1,10 +1,13 @@
 import React, { useContext } from 'react'
 import {NavLink} from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
+import {LoadingScreen} from "../ui/loading";
 
 export default function Landing() {
     //Auth Context
-    const { isAuthenticated } = useContext(AuthContext);
+    const { isAuthenticated, isLoading } = useContext(AuthContext);
+
+    if (isLoading) return <LoadingScreen />;
 
     return (
         <div className='landing-page'>

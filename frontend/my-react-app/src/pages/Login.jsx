@@ -23,7 +23,7 @@ function Login () {
 
     //Redirect to home page if user is authenticated
     useEffect(() => {
-        if (isAuthenticated && isLoading) {
+        if (isLoading && isAuthenticated) {
             navigate("/home")
         }
     }, [isAuthenticated, isLoading, navigate])

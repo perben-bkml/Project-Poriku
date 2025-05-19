@@ -88,7 +88,7 @@ function BuatPengajuan(props) {
         try {
             setIsLoading2(true);
             const tableKeyword = `TRANS_ID:${props.passedData[0]}`
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
                 setRowNum(response.data.data.length);
@@ -639,7 +639,7 @@ function BuatPengajuan(props) {
         setIsLoading(true);
         // Sending to backend
         try {
-            const response = await axios.post(`${process.env.REACT_APP_API_URL}/bendahara/buat-ajuan` , {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/buat-ajuan` , {
                 textdata: inputArray,
                 tabledata: sendTable,
                 userdata: user.name,
@@ -684,7 +684,7 @@ function BuatPengajuan(props) {
             };
         try {
             setIsLoading(true);
-            const response = await axios.patch(`${process.env.REACT_APP_API_URL}/bendahara/edit-table` , requestData)
+            const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/edit-table` , requestData)
             if (response.status === 200){
                 props.alertMessage("Data berhasil diubah.");
                 props.changeComponent(props.fallbackTo);

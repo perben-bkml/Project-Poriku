@@ -80,7 +80,7 @@ export default function FormVerifikasi(props) {
         if (searchValue !== "") {
             try {
                 setLoadingScreen(true);
-                const response = await axios.get(`${process.env.REACT_APP_API_URL}/verifikasi/cari-spm`, { params: { searchValue }});
+                const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/cari-spm`, { params: { searchValue }});
                 if (response.status === 200) {
                     const { data, rowNumber } = response.data;
                     setSearchedData(data);
@@ -98,7 +98,7 @@ export default function FormVerifikasi(props) {
     async function handleGeneratePDF() {
         try {
             setLoadingScreen(true);
-            const response = await axios.post(`${process.env.REACT_APP_API_URL}/verifikasi/generate-pdf`, {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/generate-pdf`, {
                 noSPM: searchedData[0],
                 unitKerja: searchedData[1],
                 tanggalUploadBerkas: formatDate(searchedData[2]), // ISO 8601 format
@@ -145,7 +145,7 @@ export default function FormVerifikasi(props) {
 
         try {
             setLoadingScreen(true);
-            const response = await axios.post(`${process.env.REACT_APP_API_URL}/verifikasi/verifikasi-form`, { data: dataArray, type: type, rowPosition: savedRow })
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/verifikasi-form`, { data: dataArray, type: type, rowPosition: savedRow })
             if (response.status === 200) {
                 setLoadingScreen(false);
                 props.changeComponent("kelola-PJK");

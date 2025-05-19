@@ -5,7 +5,7 @@ import axios from 'axios';
 export async function fetchNotPaidSPM(setNotPaidSPM, setIsLoading1) {
     try {
         setIsLoading1(true);
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/spm-belum-bayar`)
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/spm-belum-bayar`)
         if (response.status === 200){
             setNotPaidSPM(response.data.data)
             setIsLoading1(false);
@@ -22,7 +22,7 @@ export async function handleCariBtn(setSheetTimer) {
     try {
         let cariSPM = document.getElementsByName("cari-input")[0].value;
         if (cariSPM !== "") {
-            const response = await axios.patch(`${process.env.REACT_APP_API_URL}/bendahara/cari-spm`, {data: cariSPM});
+            const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/cari-spm`, {data: cariSPM});
             if (response.status === 200){
                 setSheetTimer(Date.now());
             }
@@ -39,7 +39,7 @@ export async function handleRincianSubmit(event, setIsLoading2, setRincianData, 
     event.preventDefault();
     try {
         setIsLoading2(true);
-        const response = await axios.post(`${process.env.REACT_APP_API_URL}/bendahara/cari-rincian`, rincianSearch)
+        const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/cari-rincian`, rincianSearch)
         if (response.status === 200) {
             setRincianData(response.data.data);
             setIsLoading2(false);

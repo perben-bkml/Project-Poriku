@@ -10,7 +10,7 @@ export function AuthProvider({children}) {
 
     async function checkAuth() {
         try {
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/check-auth`, { withCredentials: true });
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/check-auth`, { withCredentials: true });
             if (response.status === 200) {
                 setIsAuthenticated(true);
                 setUser(response.data.user)
@@ -26,7 +26,7 @@ export function AuthProvider({children}) {
     //Logout functin
     async function logout() {
         try {
-            await axios.post(`${process.env.REACT_APP_API_URL}/logout`, {}, { withCredentials: true });
+            await axios.post(`${import.meta.env.VITE_API_URL}/logout`, {}, { withCredentials: true });
             setIsAuthenticated(false);
             setUser(null);
             localStorage.removeItem("selectedButtonBendahara");

@@ -28,7 +28,7 @@ export default function KelolaPJK() {
         let satkerPrefix = data;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage }});
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage }});
             if (response.status === 200){
                 const { data: rowData, totalPages, countData, message } = response.data;
                 setDashboardData(countData);

@@ -33,7 +33,7 @@ export default function Gaji() {
         const maxRow = 5;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/antrian-gaji`, { params: { page, limit: maxRow } });
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/antrian-gaji`, { params: { page, limit: maxRow } });
             if (response.status === 200) {
                 setTableData(response.data.data);
                 setTotalPage(Math.ceil(response.data.rowLength/maxRow));

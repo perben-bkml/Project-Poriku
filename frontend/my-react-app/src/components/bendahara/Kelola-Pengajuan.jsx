@@ -16,7 +16,7 @@ function KelolaPengajuan(props) {
 
     async function getAjuanData(){
         try {
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/kelola-ajuan`)
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/kelola-ajuan`)
             if (response.status === 200) {
                 const ajuanData = response.data.data;
                 setFullData(ajuanData)

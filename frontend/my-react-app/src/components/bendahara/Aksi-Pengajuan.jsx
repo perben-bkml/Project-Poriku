@@ -51,7 +51,7 @@ function AksiPengajuan(props) {
         try {
             setIsTableLoading(true)
             const tableKeyword = `TRANS_ID:${props.fulldata[0]}`
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
                 setIsTableLoading(false)
@@ -63,7 +63,7 @@ function AksiPengajuan(props) {
 
     async function fetchMonitoringData() {
         try {
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/bendahara/get-ajuan`, {
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/get-ajuan`, {
                 params: { trans_id: props.fulldata[0] },
             });
             if (response.status === 200) {
@@ -224,7 +224,7 @@ function AksiPengajuan(props) {
         try {
             handlePopup();
             setIsLoading(true);
-            const result = await axios.post(`${process.env.REACT_APP_API_URL}/bendahara/aksi-ajuan`, sendData)
+            const result = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/aksi-ajuan`, sendData)
             if (result.status === 200) {
                 props.changeComponent("kelola-pengajuan")
                 setIsLoading(false)

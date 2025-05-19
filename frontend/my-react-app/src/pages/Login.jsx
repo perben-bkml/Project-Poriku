@@ -79,7 +79,7 @@ function Login () {
                     <p className="login-gaji-p1"><NavLink to="/" style={{ textDecoration: "none", color:"inherit"}}>Kembali Ke Halaman Awal</NavLink></p>
                 </div>
             </div>
-            {isAuthenticated && <LoadingScreen />}
+            {isScreenLoading && <LoadingScreen />}
         </div>
     )
 }

@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, NavLink } from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
+import { LoadingScreen } from "../ui/loading.jsx";
 
 function Login () {
     //States
@@ -9,6 +10,7 @@ function Login () {
         username: "",
         password: "",
     })
+    const [isScreenLoading, setScreenLoading] = useState(false)
     //Setting up useNavigate and createContex
     const navigate = useNavigate();
     const { isAuthenticated, setIsAuthenticated, isLoading, setUser } = useContext(AuthContext)
@@ -31,10 +33,12 @@ function Login () {
     async function handleSubmit(event) {
         event.preventDefault();
         try {
+            setScreenLoading(true)
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/login-auth`, credentials, {
                 withCredentials: true, //Ensure cookies are sent
             })
             if (response.status === 200) {
+                setScreenLoading(false)
                 setIsAuthenticated(true)
                 setUser({
                     name: response.data.data[0],
@@ -48,6 +52,7 @@ function Login () {
             } else {
                 console.log("Error sending data to backend.", error)
            }
+            setScreenLoading(false)
         }
     }
 
@@ -73,7 +78,8 @@ function Login () {
                 <div className="login-gaji">
                     <p className="login-gaji-p1"><NavLink to="/" style={{ textDecoration: "none", color:"inherit"}}>Kembali Ke Halaman Awal</NavLink></p>
                 </div>
-            </div>      
+            </div>
+            {isAuthenticated && <LoadingScreen />}
         </div>
     )
 }

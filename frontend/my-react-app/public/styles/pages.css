@@ -417,13 +417,15 @@
     min-height: 100vh;
     width: 100%;
     display: grid;
-    grid-template-rows: 1fr 1fr 1fr;
-    align-items: center;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+    gap: 20px;
+    padding-bottom: 30px;
 }
 
 .gaji-title {
     width: 90%;
-    height: 260px;
+    height: 210px;
     background-image: url("../assets/BG_Home.jpg");
     background-repeat: no-repeat;
     background-size: cover;
@@ -442,12 +444,13 @@
 
 .gaji-button {
     margin-top: 30px;
-    width: 470px;
+    width: 400px;
     display: flex;
     align-items: center;
-    align-self: center ;
+    align-self: center;
     background-color: #1a2433;
     cursor: pointer;
+    font-size: 1.5rem;
 }
 
 .gaji-buttonList {
@@ -470,7 +473,8 @@
 
 .gaji-content {
     width: 90%;
-    height: 300px;
+    min-height: 200px;
+    height: auto;
     margin-top: 0px;
     padding-left: 5%;
     padding-right: 5%;
@@ -486,13 +490,13 @@
 
 .gaji-desc {
     width: 96%;
-    height: 440px;
+    min-height: 200px;
+    height: auto;
     background-color: white;
     border: 1px solid rgb(214, 214, 214);
     border-radius: 20px;
-    padding-left: 2%;
-    padding-right: 2%;
-    padding-bottom: 10px;
+    padding: 15px 2% 20px 2%;
+    overflow-wrap: break-word;
 }
 
 .gaji-desc-head {
@@ -507,11 +511,44 @@
 }
 
 .gaji-table {
-    height: 400px;
+    min-height: 200px;
+    height: auto;
+    margin-bottom: 20px;
+}
+
+.lihat-antri-table {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.table-cell {
+    padding: 10px;
+    word-break: keep-all;
+    white-space: nowrap;
+}
+
+.head-data {
+    font-weight: 550;
+    font-size: 1.1rem;
+}
+
+.lihat-antri-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
 }
 
 .gaji-guide {
-    height: 500px;
+    display: flex;
+    justify-content: center;
+    min-height: 100px;
+    height: auto;
+    width: 100%;
+    margin-bottom: 50px;
+}
+
+.gaji-img {
+    width: 50%;
 }
 
 
@@ -575,7 +612,7 @@
     .welcome-title, .welcome-buttons button {
         transform: scale(0.8, 0.8);
     }
-    
+
     .welcome-buttons button:hover {
         transform: scale(0.9, 0.9);
     }
@@ -606,4 +643,363 @@
         font-size: 2rem;
     }
 
+}
+
+/* Media Queries for Landing Page - Mobile Compatibility */
+@media screen and (max-width: 768px) {
+    /* Landing Page */
+    .landing-title h1 {
+        font-size: 2.5rem;
+        text-align: center;
+        margin-top: 15px;
+    }
+
+    .landing-buttons {
+        margin-top: 40px;
+        width: 90%;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .landing-buttons .page-button {
+        width: 100%;
+        font-size: 1.4rem;
+    }
+
+    /* Login Page */
+    .login-home {
+        padding: 15px;
+    }
+
+    .login-bg {
+        width: 90%;
+        max-width: 450px;
+    }
+
+    .login-logo {
+        height: 70px;
+        width: 70px;
+    }
+
+    .title-1, .title-2 {
+        font-size: 1.8rem;
+    }
+
+    .login-title h3 {
+        font-size: 1.4rem;
+    }
+
+    .login-form input {
+        width: 300px;
+    }
+
+    /* Home Page */
+    .welcome-title h1 {
+        font-size: 3rem;
+        text-align: center;
+        min-width: unset;
+        width: 100%;
+    }
+
+    .welcome-buttons {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .page-button {
+        width: 100%;
+        font-size: 0.6rem;
+    }
+
+    /* Verifikasi Page */
+    .bendahara-home {
+        grid-template-columns: 200px auto;
+    }
+
+    .dash-tab {
+        width: 200px;
+    }
+
+    .dash-title h2 {
+        font-size: 1.2rem;
+    }
+
+    .dash-button {
+        font-size: 0.9rem;
+        padding-left: 15px;
+    }
+
+    .padd-span-bend {
+        padding-left: 10px;
+    }
+
+    .dash-user {
+        font-size: 1rem;
+        padding-left: 20px;
+    }
+
+    .content-title {
+        font-size: 1.8rem;
+        padding: 20px 30px 15px 30px;
+    }
+
+    .toggle-sidebar-btn.outside-sidebar {
+        top: 100px;
+        left: 5px;
+    }
+
+    /* Gaji Page */
+    .gaji-page {
+        grid-template-rows: auto auto auto;
+    }
+
+    .gaji-title {
+        width: 95%;
+        height: auto;
+        padding: 30px 5%;
+    }
+
+    .gaji-buttonList {
+        flex-direction: column;
+        gap: 20px;
+        align-items: center;
+    }
+
+    .gaji-button {
+        width: 90%;
+        max-width: 650px;
+    }
+
+    .gaji-content {
+        width: 95%;
+        height: auto;
+        margin-bottom: 30px;
+    }
+
+    .gaji-desc {
+        height: auto;
+        min-height: 300px;
+        padding: 15px;
+    }
+
+    .gaji-table {
+        overflow-x: auto;
+        height: auto;
+        min-height: 200px;
+    }
+
+    .table-cell {
+        font-size: 0.9rem;
+        padding: 8px;
+    }
+
+    .head-data {
+        font-size: 0.95rem !important;
+    }
+
+    .lihat-antri-pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: 15px;
+    }
+}
+
+/* Extra small devices (phones, 576px and down) */
+@media screen and (max-width: 576px) {
+    /* Landing Page */
+    .landing-title h1 {
+        font-size: 2rem;
+    }
+
+    .landing-buttons {
+        margin-top: 30px;
+    }
+
+    .landing-buttons .page-button {
+        height: 50px;
+        font-size: 1.2rem;
+    }
+
+    /* Login Page */
+    .login-home {
+        padding: 10px;
+    }
+
+    .login-bg {
+        width: 100%;
+        max-width: 350px;
+        margin-top: 20px;
+    }
+
+    .login-logo {
+        height: 60px;
+        width: 60px;
+    }
+
+    .title-1, .title-2 {
+        font-size: 1.4rem;
+    }
+
+    .login-title h3 {
+        font-size: 1.2rem;
+    }
+
+    .login-form input {
+        width: 250px;
+        height: 30px;
+    }
+
+    .login-form {
+        grid-template-rows: repeat(3, 45px);
+        margin-bottom: 20px;
+    }
+
+    /* Home Page */
+    .welcome-title h1 {
+        font-size: 2.5rem;
+        text-align: center;
+        min-width: unset;
+        width: 100%;
+    }
+
+    .welcome-buttons {
+        flex-direction: column;
+    }
+
+    .page-button {
+        width: 100%;
+        font-size: 1.3rem;
+    }
+
+    /* Verifikasi Page */
+    .bendahara-home {
+        grid-template-columns: 0 auto;
+    }
+
+    .bendahara-home.sidebar-hidden {
+        grid-template-columns: 0 auto;
+    }
+
+    /* Default state: sidebar is hidden on mobile */
+    .dash-tab {
+        width: 180px;
+        position: fixed;
+        z-index: 1000;
+        height: 100%;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .dash-title h2 {
+        font-size: 1.1rem;
+    }
+
+    .dash-button {
+        font-size: 0.85rem;
+        padding-left: 10px;
+        margin: 8px 8px 0px 8px;
+    }
+
+    .dash-user {
+        font-size: 0.9rem;
+        padding-left: 15px;
+    }
+
+    .content-title {
+        font-size: 1.5rem;
+        padding: 15px 20px 10px 20px;
+    }
+
+    .page-content {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .page-content.full-width {
+        width: 100%;
+    }
+
+    .toggle-sidebar-btn.outside-sidebar {
+        top: 80px;
+        left: 5px;
+        width: 30px;
+        height: 30px;
+    }
+
+    .toggle-sidebar-btn.inside-sidebar {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Gaji Page */
+    .gaji-page {
+        width: 100vw;
+    }
+
+    .gaji-title {
+        height: auto;
+        font-size: 1.5rem;
+    }
+
+    .gaji-buttonList {
+        flex-direction: column;
+    }
+
+    .gaji-button {
+        width: 350px;
+        font-size: 1.2rem;
+    }
+
+    .gaji-title-desc {
+        font-size: 1.1rem;
+    }
+
+    .gaji-content {
+        width: 90%;
+        font-size: 1.5rem;
+        height: auto;
+    }
+
+    .gaji-guide {
+        margin-bottom: 0px;
+    }
+
+    .gaji-img {
+        width: 100%;
+    }
+
+    .gaji-desc {
+        height: auto;
+        padding: 10px;
+    }
+
+    .gaji-desc-body {
+        font-size: 1.1rem;
+    }
+
+    .gaji-content h2 {
+        font-size: 1.3rem;
+        margin-bottom: 10px;
+    }
+
+    .gaji-desc-head {
+        font-size: 1.2rem;
+        margin: 15px 0px 10px 0px;
+    }
+
+    .table-cell {
+        font-size: 0.8rem;
+        padding: 6px;
+    }
+
+    .head-data {
+        font-size: 0.85rem !important;
+    }
+
+    .lihat-antri-pagination {
+        margin-top: 10px;
+    }
+
+    .pagination {
+        transform: scale(0.9);
+    }
 }

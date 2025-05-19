@@ -20,13 +20,16 @@ import LoadingAnimate from "../ui/loading.jsx";
 export default function Gaji() {
     //State
     const [gajiContentOpen, setGajiContentOpen] = useState(true);
-    const [tableContentOpen, setTableContentOpen] = useState(false);
-    const [guideOpen, setGuideOpen] = useState(false);
+    const [tableContentOpen, setTableContentOpen] = useState(true);
+    const [guideOpen, setGuideOpen] = useState(true);
     const [tableData, setTableData] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     //Page State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPage, setTotalPage] = useState(0);
+
+    //Download link
+    const downURL = "https://drive.google.com/uc?export=download&id=1UfpYQdZv1ZwIuuH4aBh-IteN00hdNv65"
 
     //Get table data
     async function getTableData(page) {
@@ -102,13 +105,17 @@ export default function Gaji() {
                 <div className='gaji-title'>
                     <h3>Selamat datang di</h3>
                     <h1>Pelayanan Gaji Bakamla</h1>
-                    <div className='gaji-buttonList'>
-                        <a href="https://bit.ly/PelayananGajiBakamlaRI" style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></a>
-                        <a href="https://bit.ly/PelayananGajiBakamlaRI" style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Template Pengajuan</button></a>
-                    </div>
+                    <br/>
                     <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke Halaman Awal</p></NavLink>
                 </div>
             <div className='gaji-content' >
+                <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
+                { guideOpen &&
+                <div className={`gaji-guide ${guideOpen ? 'slide-down' : ''}`}>
+                    <img src="/assets/Infografis_BNI.jpg" className="gaji-img" alt='Infografis Gaji' />
+                </div>
+                }
+                <br />
                 <h2 onClick={() => setGajiContentOpen(!gajiContentOpen)}>Ketentuan Pelayanan Gaji {gajiContentOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
                 { gajiContentOpen &&
                 <div className={`gaji-desc ${gajiContentOpen ? 'slide-down' : ''}`}>
@@ -125,10 +132,9 @@ export default function Gaji() {
                 { tableContentOpen &&
                     tableContent()
                 }
-                <br />
-                <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
-                <div className='gaji-guide'>
-
+                <div className='gaji-buttonList'>
+                    <a href="https://bit.ly/PelayananGajiBakamlaRI" style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></a>
+                    <a href={downURL} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Template Pengajuan</button></a>
                 </div>
             </div>
 

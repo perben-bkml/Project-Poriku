@@ -29,7 +29,7 @@ export default function Gaji() {
     const [totalPage, setTotalPage] = useState(0);
 
     //Download link
-    const downURL = "https://drive.google.com/uc?export=download&id=1UfpYQdZv1ZwIuuH4aBh-IteN00hdNv65"
+    const downURL = import.meta.env.VITE_DOCS_URL;
 
     //Get table data
     async function getTableData(page) {

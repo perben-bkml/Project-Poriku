@@ -150,7 +150,7 @@ app.post("/login-auth", async (req, res) => {
         res.cookie("auth_token", token, {   // The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
             secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
-            sameSite: "lax", //Helps with cross site request
+            sameSite: "None",
             maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
 

@@ -125,8 +125,6 @@ const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 app.post("/login-auth", async (req, res) => {
     const { username, password } = req.body;
     try {
-        //Note: i do 12 salting rounds!
-        // const hashedPassword = await bcrypt.hash(password, 12)
 
         //Get user data
         const userData= await sql`

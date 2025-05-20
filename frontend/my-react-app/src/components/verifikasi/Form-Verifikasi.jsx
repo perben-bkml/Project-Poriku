@@ -43,9 +43,9 @@ export default function FormVerifikasi(props) {
 
         // Handle Indonesian format like "6-Mei-2025"
         const indoMonths = {
-            'Januari': 0, 'Februari': 1, 'Maret': 2, 'April': 3,
-            'Mei': 4, 'Juni': 5, 'Juli': 6, 'Agustus': 7,
-            'September': 8, 'Oktober': 9, 'November': 10, 'Desember': 11
+            'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3,
+            'Mei': 4, 'Jun': 5, 'Jul': 6, 'Agu': 7,
+            'Sep': 8, 'Okt': 9, 'Nov': 10, 'Des': 11
         };
 
         const parts = dateString.split('-');
@@ -135,8 +135,12 @@ export default function FormVerifikasi(props) {
 
 
         let verifikator = "";
-        if (user.name === "Admin Verifikasi" || user.name === "Master") {
+        if (user.name === "Admin Verifikasi") {
             verifikator = "Vegga Chrisdiansyah";
+        } else if (user.name === "Admin Verifikasi 2") {
+            verifikator = "Agata Melinda";
+        } else if (user.name === "Admin Verifikasi 3") {
+            verifikator = "Rahmat";
         } else {
             verifikator = user.name;
         }

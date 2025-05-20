@@ -81,7 +81,7 @@ export default function Gaji() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {tableData.reverse().map((rows, rowIndex) => (
+                                    {tableData.map((rows, rowIndex) => (
                                         <TableRow key={rowIndex}>
                                             {rows.map((cells, cellIndex) => (
                                                 <TableCell className="table-cell" key={cellIndex}>{cells}</TableCell>
@@ -134,7 +134,7 @@ export default function Gaji() {
                 }
                 <div className='gaji-buttonList'>
                     <a href="https://bit.ly/PelayananGajiBakamlaRI" style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></a>
-                    <a href={`${import.meta.env.VITE_DOCS_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Template Pengajuan</button></a>
+                    <a href={`${import.meta.env.VITE_DOCS_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Surat Rekomendasi Atasan</button></a>
                 </div>
             </div>
 

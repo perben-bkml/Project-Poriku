@@ -16,27 +16,62 @@ import LoadingAnimate from './loading';
 
 // SPM-Bend.jsx
 export function TableSpmBendahara(props) {
+    // State for pagination
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+
+    // Pagination handlers
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
     return (
-        <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"20px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
-        <Table>
-            <TableHead>
-                <TableRow sx={{ backgroundColor: "#1a284b" }}>
-                    {props.tableData.length > 0 && props.tableData[0].map((col, colIndex) => (
-                        <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white", border: "none"}} align="center">{col}</TableCell>
-                    ))}
-                </TableRow>
-            </TableHead>
-            <TableBody>
-                {props.tableData.length > 0 && props.tableData.slice(1).map((row, rowIndex) => (
-                    <TableRow key={rowIndex}>
-                        {row.map((cell, cellIndex) => (
-                            <TableCell className="table-cell" key={cellIndex}>{cell}</TableCell>
-                        ))}
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
-    </TableContainer>
+        <>
+            <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"20px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+                <Table>
+                    <TableHead>
+                        <TableRow sx={{ backgroundColor: "#1a284b" }}>
+                            {props.tableData.length > 0 && props.tableData[0].map((col, colIndex) => (
+                                <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white", border: "none"}} align="center">{col}</TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {props.tableData.length > 0 && props.tableData.slice(1)
+                            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                            .map((row, rowIndex) => (
+                                <TableRow key={rowIndex}>
+                                    {row.map((cell, cellIndex) => (
+                                        <TableCell className="table-cell" key={cellIndex}>{cell}</TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            <TablePagination
+                rowsPerPageOptions={[10, 25, 50]}
+                component="div"
+                count={props.tableData.length > 0 ? props.tableData.length - 1 : 0}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                sx={{ 
+                    maxWidth: "94%", 
+                    margin: "auto",
+                    borderTop: '1px solid rgba(224, 224, 224, 1)',
+                    '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                        margin: 0
+                    }
+                }}
+            />
+        </>
     )
 }
 

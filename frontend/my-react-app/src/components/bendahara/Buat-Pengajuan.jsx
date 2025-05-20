@@ -535,6 +535,7 @@ function BuatPengajuan(props) {
             case "Enter":
                 event.preventDefault();
                 evaluateEquation(event.target.value, rowIndex, colIndex);
+                handleCellBlur(rowIndex, colIndex, event.target.value);
                 setIsFormulaMode(false);
                 setCurrentEditableCell(null); 
                 setTargetReference(null);
@@ -547,6 +548,7 @@ function BuatPengajuan(props) {
                 event.preventDefault();
                 if (isFormulaMode) {
                     evaluateEquation(event.target.value, rowIndex, colIndex);
+                    handleCellBlur(rowIndex, colIndex, event.target.value);
                     setIsFormulaMode(false);
                     setCurrentEditableCell(null); 
                     setTargetReference(null);
@@ -566,7 +568,7 @@ function BuatPengajuan(props) {
             default:
                 break;
         }
-    }, [tableData.length, evaluateEquation, isFormulaMode, focusCell, clearSelectedCells]);
+    }, [tableData.length, evaluateEquation, isFormulaMode, focusCell, clearSelectedCells, handleCellBlur]);
 
     // Memoize column totals calculation for better performance
     const calculateColumnTotal = useCallback((columnIndex) => {

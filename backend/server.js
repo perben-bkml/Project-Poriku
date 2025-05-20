@@ -149,9 +149,9 @@ app.post("/login-auth", async (req, res) => {
             // Set cookie with the token
         res.cookie("auth_token", token, {   // The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
-            secure: false, // Set to true in production (requires HTTPS)
+            secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
             sameSite: "lax", //Helps with cross site request
-            maxAge: 3 * 60 * 60 * 1000, // 3 hours
+            maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
 
         // Make array to send only Name and Role

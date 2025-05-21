@@ -12,8 +12,9 @@ export default function Landing() {
     return (
         <div className='landing-page'>
             <div className='landing-title slide-down'>
+                <h4>Selamat datang di Poriku!</h4>
                 <h1>Portal Informasi Keuangan</h1>
-                <h1>Bakamla RI</h1>
+                <h2>Bakamla RI</h2>
             </div>
             <div className="landing-buttons slide-down">
                 <NavLink to={isLoading && isAuthenticated ? "/home" : "/login"}><button className='page-button'>Layanan Ajuan</button></NavLink>

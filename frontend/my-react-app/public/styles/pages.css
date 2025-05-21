@@ -13,15 +13,38 @@
     background-position: center;
 }
 
+.landing-title {
+    color: white;
+}
+
+
 .landing-title h1 {
     font-size: 4.5rem;
     font-weight: 800;
     letter-spacing: 1.5px;
-    color: white;
     display: flex;
     justify-content: center;
-    margin-top: 25px;
+    margin-top: 15px;
     margin-bottom: 0px;
+}
+
+.landing-title h2 {
+    font-size: 4rem;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+    margin-bottom: 0px;
+}
+
+.landing-title h4 {
+    font-weight: 400;
+    font-size: 2.5rem;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0px;
+    margin-top: 0px;
 }
 
 .slide-down {
@@ -218,13 +241,15 @@
 
 .welcome-buttons {
     display: flex;
-    justify-content: space-evenly;
-    align-items: center;
-    margin-top: 3%;
+    justify-content: center;
+    column-gap: 4%;
+    row-gap: 100px;
+    margin-top: 5%;
     margin-bottom: auto;
     margin-right: 15%;
     margin-left: 15%;
 }
+
 
 .page-button {
     height: 60px;
@@ -455,6 +480,7 @@
 
 .gaji-buttonList {
     display: flex;
+    justify-content: center;
     gap: 50px;
     margin-bottom: 15px;
 }
@@ -554,6 +580,16 @@
 
   /* Adding Media Queries */
 @media screen and (max-width: 1400px) {
+    /* Sizing Landing Page*/
+
+    .landing-title h1 {
+        font-size: 3.5rem;
+    }
+
+    .landing-buttons {
+        width: 100%;
+    }
+
     /* Sizing Login Page */
     .login-logo {
         height: 75px;
@@ -654,6 +690,17 @@
         margin-top: 15px;
     }
 
+    .landing-title h2 {
+        font-size: 2.2rem;
+        text-align: center;
+        margin-top: 10px;
+    }
+
+    .landing-title h4 {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+
     .landing-buttons {
         margin-top: 40px;
         width: 90%;
@@ -663,7 +710,7 @@
 
     .landing-buttons .page-button {
         width: 100%;
-        font-size: 1.4rem;
+        font-size: 1.5rem;
     }
 
     /* Login Page */
@@ -708,7 +755,7 @@
 
     .page-button {
         width: 100%;
-        font-size: 0.6rem;
+        font-size: 1.5rem;
     }
 
     /* Verifikasi Page */
@@ -811,13 +858,23 @@
         font-size: 2rem;
     }
 
+    .landing-title h2 {
+        font-size: 1.6rem;
+        margin-top: 16px;
+    }
+
+    .landing-title h4 {
+        font-size: 1.2rem;
+    }
+
     .landing-buttons {
         margin-top: 30px;
     }
 
     .landing-buttons .page-button {
         height: 50px;
-        font-size: 1.2rem;
+        font-size: 1.5rem;
+        transform: scale(0.9, 0.9);
     }
 
     /* Login Page */
@@ -868,7 +925,7 @@
 
     .page-button {
         width: 100%;
-        font-size: 1.3rem;
+        font-size: 1.5rem;
     }
 
     /* Verifikasi Page */

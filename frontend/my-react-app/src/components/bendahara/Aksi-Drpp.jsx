@@ -18,6 +18,7 @@ export default function AksiDrpp(props) {
     const [pajakStatus, setPajakStatus] = useState({
         pungutan: '',
         setoran: '',
+        catatan: '',
     })
     const [coloredRow, setColoredRow] = useState([]);
 
@@ -81,6 +82,7 @@ export default function AksiDrpp(props) {
         setPajakStatus({
             pungutan: props.fulldata[7],
             setoran: props.fulldata[8],
+            catatan: props.fulldata[10],
         });
     }, [])
 
@@ -170,6 +172,8 @@ export default function AksiDrpp(props) {
                             <option key={index} style={{backgroundColor: data.color, color: data.textcolor}} value={data.value}>{data.label}</option>
                         ))}
                     </select>
+                    <label htmlFor="catatan">Catatan</label>
+                    <textarea id="catatan" className="type-btn span-row" name="catatan" defaultValue={pajakStatus.catatan} onChange={e => handleInputChange(e.target)}/>
                 </div>
                 <div className='form-submit'>
                     <SubmitButton value='Simpan' name="submit-all" onClick={handlePopup} />
@@ -179,7 +183,7 @@ export default function AksiDrpp(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Transaksi</h2>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi-drpp" header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
+                <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
                 <div className='form-submit'>
                     <SubmitButton value='Kembali' name="submit-all" onClick={() => props.changeComponent('monitoring-drpp')} />
                 </div>

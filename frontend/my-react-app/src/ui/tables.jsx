@@ -1,4 +1,4 @@
-import React, { useState, Fragment, useEffect } from 'react';
+import React, {useState, Fragment, useEffect, useMemo} from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -6,6 +6,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import TableFooter from '@mui/material/TableFooter';
 // Other Material UI
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -113,8 +114,6 @@ export function TableKelola(props) {
         setPage(0);
     };
 
-
-
     function handleAksiClick(index) {
         if (props.type === "kelola") {
             props.changeComponent("aksi-pengajuan")
@@ -126,6 +125,33 @@ export function TableKelola(props) {
             null
         }
     }
+
+    //For footers
+    const summableColumns = [4, 5, 6, 7, 9, 11, 13, 15, 17];
+    function numberFormats(num) {
+        if (!num) {
+            return "";
+        } else {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+        }
+    }
+    function getFooterSums() {
+        const totals = Array(props.header.length).fill(""); // default empty strings
+
+        props.content.forEach(row => {
+            row.forEach((cell, index) => {
+                if (summableColumns.includes(index)) {
+                    const value = typeof cell === "string" ? parseInt(cell.replace(/\./g, '')) : parseInt(cell);
+                    if (!isNaN(value)) {
+                        totals[index] = (totals[index] || 0) + value;
+                    }
+                }
+            });
+        });
+
+        return totals.map(value => typeof value === "number" ? numberFormats(value) : "");
+    }
+
 
     function Row(props) {
         //State
@@ -198,6 +224,17 @@ export function TableKelola(props) {
                             />
                     ))}
                 </TableBody>
+                { props.type === "aksi" &&
+                <TableFooter>
+                    <TableRow>
+                        {getFooterSums().map((value, colIndex) => (
+                            <TableCell key={colIndex} className="table-footer-cell" sx={{ fontWeight: "bold", backgroundColor: "#f5f5f5" }}>
+                                {value}
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                </TableFooter>
+                }
             </Table>
             {props.type !== "monitor" &&
             <TablePagination

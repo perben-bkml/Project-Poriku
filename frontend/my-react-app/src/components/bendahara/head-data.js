@@ -36,6 +36,10 @@ const columns2 = [
     { id:"spp", label: "No. SPP", minWidth: 40 },
     { id:"spm", label: "No. SPM", minWidth: 40 },
     { id:"ukerja", label: "Unit Kerja", minWidth: 40 },
+    { id:"pajak", label: "Pajak", minWidth: 40 },
+    { id:"anggaran", label: "Anggaran", minWidth: 40 },
+    { id:"tgl-mulai", label: "Tgl. Mulai Verif", minWidth: 40 },
+    { id:"tgl-selesai", label: "Tgl. Selesai Verif", minWidth: 40 },
 ]
 
 //For SPM-Bend.jsx
@@ -54,6 +58,34 @@ const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Sat
 //For Aksi-Drpp.jsx
 const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
 
+//For Monitoring-Drpp.jsx
+const placeholderTable = ["No.", "ID Number", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan" ]
+const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor"]
+const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData };
+//For SPM-Bend.jsx
+const satkerNames = [
+    {title: "", value: ""},
+    {title: "Biro Umum", value: "BIRO UMUM"},
+    {title: "Biro Sarana dan Prasarana", value: "SARPRAS"},
+    {title: "Biro Perencanaan", value: "PERENCANAAN"},
+    {title: "Dit Data dan Informasi", value: "DATIN"},
+    {title: "Dit Hukum", value: "HUKUM"},
+    {title: "Dit Kebijakan", value: "KEBIJAKAN"},
+    {title: "Dit Kerja Sama", value: "KERJASAMA"},
+    {title: "Dit Latihan", value: "LATIHAN"},
+    {title: "Dit Litbang", value: "LITBANG"},
+    {title: "Dit Operasi Laut", value: "OPSLA"},
+    {title: "Dit Operasi Udara", value: "OPSUD"},
+    {title: "Dit Strategi", value: "STRATEGI"},
+    {title: "Inspektorat", value: "INSPEKTORAT"},
+    {title: "Puskodal", value: "PUSKODAL"},
+    {title: "Unit Penindakan Hukum", value: "UPH"},
+    {title: "Zona Maritim Barat", value: "ZONA BARAT"},
+    {title: "Zona Maritim Tengah", value: "ZONA TENGAH"},
+    {title: "Zona Maritim Timur", value: "ZONA TIMUR"},
+]
+
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames };
 

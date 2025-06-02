@@ -24,6 +24,7 @@ function AksiPengajuan(props) {
         drpp: "",
         spp: "",
         spm: "",
+        catatan: "",
     })
     const [documentData, setDocumentData] = useState([{
         drpp: "", nominal: "", spp: "", spm: "",
@@ -92,6 +93,7 @@ function AksiPengajuan(props) {
             drpp: props.fulldata[8],
             spp: props.fulldata[9],
             spm: props.fulldata[10],
+            catatan: props.fulldata[16],
         });        
     }, [])
 
@@ -159,6 +161,20 @@ function AksiPengajuan(props) {
         const updatedRows = [...documentData];
         updatedRows[index][name] = name === "nominal" ? formattedValue : value;
         setDocumentData(updatedRows);
+    }
+
+    function dateDoubleClick(event) {
+
+        if (event.name === "tgl_verifikasi") {
+            setAntriData((prevdata) => ({...prevdata,
+                [event.name]: ""
+            }));
+        }
+        if (event.name === "tgl_setuju") {
+            setAntriData((prevdata) => ({...prevdata,
+                [event.name]: ""
+            }));
+        }
     }
 
     // Add and Delete Row For Document inputs
@@ -247,7 +263,7 @@ function AksiPengajuan(props) {
                         <option value="TRUE">Iya</option>
                     </select>
                     <label htmlFor="tgl-verif">Tanggal Selesai Verifikasi</label>
-                    <input id="tgl-verif" className="type-btn" type="date" name="tgl_verifikasi" defaultValue={antriData.tgl_verifikasi} onChange={e => handleInputChange(e.target)} />
+                    <input id="tgl-verif" className="type-btn" type="date" name="tgl_verifikasi" defaultValue={antriData.tgl_verifikasi} onChange={e => handleInputChange(e.target)} onDoubleClick={e=> dateDoubleClick(e.target)} />
                     <label htmlFor="sts-pajak">Status Pajak</label>
                     <select id="sts-pajak" className="type-btn" name="status_pajak" value={!props.fulldata ? null : antriData.status_pajak} onChange={(e) => (selectPajakBackgroundColor(e.target), handleInputChange(e.target))}>
                         {optionPajak.map((data, index) => (
@@ -261,7 +277,9 @@ function AksiPengajuan(props) {
                         ))}
                     </select>
                     <label htmlFor="tgl-acc">Tanggal Disetujui</label>
-                    <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" defaultValue={antriData.tgl_setuju} onChange={e => handleInputChange(e.target)}/>
+                    <input id="tgl-acc" className="type-btn" type="date" name="tgl_setuju" defaultValue={antriData.tgl_setuju} onChange={e => handleInputChange(e.target)} onDoubleClick={e=>dateDoubleClick(e.target)}/>
+                    <label htmlFor="catatan">Catatan</label>
+                    <textarea id="catatan" className="type-btn span-row" name="catatan" defaultValue={antriData.catatan} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="buat-drpp">Buat DRPP?</label>
                     <input id="buat-drpp" className="type-btn" type="checkbox" name="buat_drpp" checked={drppProcess === true} defaultValue={antriData.tgl_setuju} onChange={() => !drppProcess ? setDrppProcess(true) : setDrppProcess(false)}/>
                 </div>

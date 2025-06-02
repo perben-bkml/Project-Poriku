@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import 'dotenv/config'
+import dateFormat from "dateformat";
 
 
 // Initialize tools
@@ -128,7 +129,7 @@ app.post("/login-auth", async (req, res) => {
 
         //Get user data
         const userData= await sql`
-            SELECT * FROM poriku_users WHERE username = ${username}
+            SELECT * FROM poriku_users WHERE username = ${username} LIMIT 1
         `;
         //Check if user exist
         if (userData.length === 0 ){
@@ -262,12 +263,10 @@ app.get("/bendahara/antrian", async (req, res) => {
         const { page = 1, limit = 5, username } = req.query;
 
         // Fetch all data from columns A to L starting from row 3
-        // Using exponential backoff to handle potential rate limiting
         const getAllRowsResponse = await withBackoff(async () => {
-            // Original API call wrapped in a function that returns a promise
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: "'Write Antrian'!A3:L",
+                range: "'Write Antrian'!A3:P",
             });
         });
 
@@ -292,7 +291,7 @@ app.get("/bendahara/antrian", async (req, res) => {
 
         // Ensure each row has 12 columns
         const normalizedRows = paginatedRows.map(row => {
-            while (row.length < 12) row.push("");
+            while (row.length < 16) row.push("");
             return row;
         });
 
@@ -1017,7 +1016,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // Sort rows in reverse order (latest dates first)
         const reversedRows = filteredRows.reverse();
         // Fetch full row data for the selected month with backoff
-        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:P${row.rowIndex}`); // Adjust range if needed
+        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:Q${row.rowIndex}`); // Adjust range if needed
 
         const batchGetResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchGet({
@@ -1027,7 +1026,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         });
 
         let rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
-        const num_Columns = 16;
+        const num_Columns = 17;
         rowData = rowData.map(row => {
             while (row.length < num_Columns) {
                 row.push("");
@@ -1062,7 +1061,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             return res.status(400).json({ message: "Invalid or missing data." });
         }
 
-        const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm} = updatedAntriData;
+        const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm, catatan} = updatedAntriData;
 
         //Handling Write Antrian Sheet update with backoff
         const getAntrianResponse = await withBackoff(async () => {
@@ -1098,6 +1097,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             [`'Write Antrian'!I${rowIndex}`, drpp],
             [`'Write Antrian'!J${rowIndex}`, spp],
             [`'Write Antrian'!K${rowIndex}`, spm],
+            [`'Write Antrian'!Q${rowIndex}`, catatan],
             [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue], // Condition for column O
         ];
 
@@ -1316,35 +1316,63 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
 //Monitoring DRPP component handlers
 app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
-        const { page = 1, limit = 10 } = req.query;
+        const { page = 1, limit = 10, filterKeyword } = req.query;
 
         // Fetch total rows based on A column with backoff
         const getAllRowsResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: "'Monitoring DRPP'!A3:A",
+                range: "'Monitoring DRPP'!A:I",
             });
         });
 
-        const totalRows = getAllRowsResponse.data.values.length || 0;
+        const totalRows = getAllRowsResponse.data.values || [];
+        const totalRowCount = totalRows.length;
+
+        let allRows = totalRows.map((row, index) => ({
+            satker: row[0] || "",
+            pungut: row[7] || "",
+            setor: row[8] || "",
+            rowIndex: index + 1,
+        }));
+
+        //Filter rows based on keyword
+        if (filterKeyword.satker !== "Master") {
+            allRows = allRows.filter(row => row.satker.startsWith(filterKeyword.satker));
+        }
+        if (filterKeyword.pungutan !== "") {
+            allRows = allRows.filter(row => row.pungut.startsWith(filterKeyword.pungutan));
+        }
+        if (filterKeyword.setoran !== "") {
+            allRows = allRows.filter(row => row.setor.startsWith(filterKeyword.setoran));
+        }
 
         // Set rows to fetch from the end of the sheet
-        const actualTotalRows = totalRows + 2; //+2 because totalRows is grabbing data from A3
-        const endRow = actualTotalRows - (page - 1) * limit;
-        const startRow = Math.max(endRow - limit + 1, 3); // Ensure we don't go below row 3
+        const visibleRows = allRows.filter(row => row.rowIndex >= 3);
+        const startIndex = ( page - 1 ) * limit;
+        const endIndex = startIndex + limit;
+        const paginatedRows = visibleRows.slice(startIndex, endIndex)
 
-        const fetchRowRange= `'Monitoring DRPP'!A${startRow}:J${endRow}`;
-
+        const fetchRowRange= paginatedRows.map(row => `'Monitoring DRPP'!A${row.rowIndex}:K${row.rowIndex}` );
         // Fetch Paginated Data with backoff
         const getDRPPResponses = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
+            return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
-                range: fetchRowRange,
+                ranges: fetchRowRange,
             });
         });
 
         //Capture data values
-        const paginatedDRPP = getDRPPResponses.data.values ? getDRPPResponses.data.values.reverse() : [];
+        const paginatedDRPP = getDRPPResponses.data.valueRanges ?
+            getDRPPResponses.data.valueRanges.map(row => {
+                const values = row.values?.[0] || [];
+                while (values.length < 11) {
+                    values.push("");
+                }
+                return values;
+            }) : [];
+
+        const paginatedSlicedDRPP = paginatedDRPP.map(row => row.slice(0, -1))
 
         //Get Total count of pajak status
         // Get column H and I from row 3 downward
@@ -1365,15 +1393,15 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             const colI = row[1]?.trim();
 
             if (colH === "Belum") hBelum++;
-            else if (colH === "Sudah") hSudah++;
+            else hSudah++;
 
             if (colI === "Belum") iBelum++;
-            else if (colI === "Sudah") iSudah++;
+            else iSudah++;
         });
 
         const countData = [hBelum, hSudah, iBelum, iSudah]
 
-        res.json({ data: paginatedDRPP, realAllDRPPRows: totalRows, countData: countData });
+        res.json({ data: paginatedSlicedDRPP, realAllDRPPRows: totalRowCount, countData: countData, fullData: paginatedDRPP });
 
     } catch (error) {
         console.error("Error in /bendahara/monitoring-drpp:", error);
@@ -1470,6 +1498,10 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
                             values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
                         },
                         {
+                          range: `'Monitoring DRPP'!K${trackedRowNum}:K${trackedRowNum}`,
+                            values: [[pajakStatus.catatan || ""]],
+                        },
+                        {
                             range: `'Write Table'!W${foundRow}`,
                             values: colorData.data, 
                         }
@@ -1515,8 +1547,6 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         if (filterKeyword !== "") {
             allRows = allRows.filter(row => row.status.includes(filterKeyword));
         }
-
-
 
 
         let rowData = [];
@@ -1615,7 +1645,9 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
             const minutes = pad(date.getMinutes());
             const seconds = pad(date.getSeconds());
 
-            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+            return dateFormat(date, "dd/mm/yyyy hh:MM:ss");
+
+            // return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
         }
 
         const now = new Date();

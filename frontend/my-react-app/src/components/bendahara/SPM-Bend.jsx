@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 // Import Head Data
-import { jenisSPM, statusSPM } from './head-data.js';
+import { jenisSPM, statusSPM, satkerNames } from './head-data.js';
 // Import Made UI
 import { TableSpmBendahara } from '../../ui/tables.jsx';
 import LoadingAnimate from '../../ui/loading.jsx';
 // Import Functions
 import { fetchNotPaidSPM, handleCariBtn, handleRincianSubmit } from '../../lib/fetches.js';
+import { AuthContext } from '../../lib/AuthContext.jsx';
 
 function InfoSPMBendahara() {
+    // Use Context
+    const { user } = useContext(AuthContext);
+
     // State
     const [sheetTimer, setSheetTimer] = useState(Date.now());
     const [notPaidSPM, setNotPaidSPM] = useState([]);
@@ -16,7 +20,7 @@ function InfoSPMBendahara() {
         endDate: "",
         selectJenis: "GUP", //Default select option
         selectStatus: "DANA BELUM MASUK", //Default select option
-        satkerName: "BIRO UMUM"
+        satkerName: ""
     })
     const [rincianData, setRincianData] = useState([]);
     const [isLoading1, setIsLoading1] = useState(false);
@@ -25,6 +29,13 @@ function InfoSPMBendahara() {
     // Fetch data SPM yang belum selesai dibayarkan on page load
     useEffect(() => {
         fetchNotPaidSPM(setNotPaidSPM, setIsLoading1);
+        if (user.role === "user") {
+            let satkerPrefix = satkerNames.find(item => item.title === user.name).value || "";
+            setRincianSearch(prev => ({
+                ...prev,
+                satkerName: satkerPrefix,
+            }))
+        }
     }, []);
 
     // Handle rincian data
@@ -35,6 +46,20 @@ function InfoSPMBendahara() {
         });
     }
 
+    // Satker Option for admin
+    function SatkerOption() {
+        return (
+            <div className='rincian-filter-details rincian-filter-satker'>
+                <label>Satker:</label>
+                <select name="satkerName" value={rincianSearch.satkerName} onChange={handleChange1} id="satkerName">
+                    {satkerNames.map((data, index) => (
+                        <option value={data.value} key={index}>{data.title}</option>
+                    ))}
+                </select>
+            </div>
+        )
+    }
+
 
     return (
         <div className='spm-bend-container'>
@@ -42,7 +67,7 @@ function InfoSPMBendahara() {
                 <div className='cari spm-container'>
                     <h2 className='spm-titles'>Cari SPM </h2>
                     <label className='cari-label'>Masukkan Nomor SPM: </label>
-                    <input className='cari-input' name='cari-input' type="number" placeholder='Nomor SPM'></input>
+                    <input className='cari-input' name='cari-input' type="number" placeholder='Tulis disini'></input>
                     <button className='cari spm-button' onClick={() => handleCariBtn(setSheetTimer)}>Cari</button>
                     <button className='cari spm-button' onClick={() => setSheetTimer(Date.now())}>Refresh</button>
                 </div>
@@ -85,6 +110,9 @@ function InfoSPMBendahara() {
                             ))}
                         </select>
                     </div>
+                    { user.role === "admin" || user.role === "master admin" ?
+                        <SatkerOption /> : null
+                    }
                 </form>
                 <input type="submit" className='spm-button rincian' form="filter-form" value="Cari" style={{marginBottom: "20px"}}/>
                 {isLoading2 ? <LoadingAnimate />:

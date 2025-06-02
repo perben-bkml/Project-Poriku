@@ -571,6 +571,12 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 0.68rem;
     height: 22px;
 }
+.rincian-filter-satker {
+    justify-content: flex-start;
+    column-gap: 30px;
+    margin: 10px auto;
+
+}
 .spm-button.rincian {
     margin-top: 10px;
     margin-left: 30px;
@@ -661,14 +667,14 @@ input[type="number"]::-webkit-inner-spin-button {
 .aksi-content-label {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
     row-gap: 12px;
     column-gap: 10px;
     padding: 10px 35px;
     font-size: 1.2rem;
     font-weight: 500;
     margin-top: 30px;
-    margin-bottom: 30px;
+    margin-bottom: 60px;
 }
 
 .aksi-content-docs {
@@ -718,6 +724,17 @@ input[type="number"]::-webkit-inner-spin-button {
     border: solid 0.8px rgb(199, 199, 199);
     font-size: 1rem;
     font-weight: 500;
+}
+
+.span-row {
+    border-radius: 10px;
+    font-family: "Outfit", serif;
+    font-size: 0.9rem;
+    font-weight: 400;
+    text-wrap: wrap;
+    height: 70px;
+    width: 220px;
+    grid-row: span 2;
 }
 
 .aksi-content-label input[type="date"].type-btn {
@@ -810,6 +827,10 @@ input[type="number"]::-webkit-inner-spin-button {
     grid-template-rows: 1fr 1fr;
 }
 
+/* Monitoring DRPP styling */
+.filter-monitoring {
+    padding-top: 0px;
+}
 
 
 

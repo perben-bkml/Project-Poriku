@@ -832,6 +832,17 @@ input[type="number"]::-webkit-inner-spin-button {
     padding-top: 0px;
 }
 
+/* Upload Button */
+.upload-btn {
+    display: flex;
+    gap: 20px;
+    height: 60px;
+    align-items: center;
+}
+.upload-name {
+    font-size: 1.1rem;
+    font-weight: 400;
+}
 
 
 /* Trying to add media queries */

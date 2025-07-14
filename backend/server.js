@@ -6,12 +6,16 @@ import postgres from "postgres";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
+import session from "express-session";
 import 'dotenv/config'
 import dateFormat from "dateformat";
+import multer from 'multer';
+import stream from 'stream';
 
 
 // Initialize tools
 const app = express();
+const upload = multer({ storage: multer.memoryStorage() });
 const getFormattedDate = () => {
     const date = new Date();
     // Get date in yyyy-mm-dd
@@ -87,7 +91,13 @@ const corsOption = {
 // Middleware
 app.use(express.json());
 app.use(cors(corsOption));
-app.use(cookieParser())
+app.use(cookieParser());
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key-here',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+}));
 
 // Setting Up Postgres
 const sql = postgres(process.env.DATABASE_URL, {
@@ -111,6 +121,13 @@ const auth2 = new google.auth.JWT(
     SCOPES
 );
 
+// OAuth2 Client for Google Drive
+const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+);
+
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
 const spreadsheetId = process.env.SPREADSHEET_ID_AJUAN;
@@ -121,7 +138,132 @@ const spreadsheetIdGaji = process.env.SPREADSHEET_ID_GAJI;
 const sheets2 = google.sheets({ version: "v4", auth: auth2 })
 const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 
+// Gdrive API Setup (will be initialized with OAuth2 tokens)
+let drive = null;
+const driveFolderId = process.env.DRIVE_FOLDER_ID_AJUAN;
+
 //Endpoints
+// Google OAuth2 Authentication
+app.get("/auth/google", (req, res) => {
+    const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: [
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/userinfo.profile'
+        ],
+        prompt: 'consent'
+    });
+    res.redirect(authUrl);
+});
+
+// Google OAuth2 Callback
+app.get("/auth/google/callback", async (req, res) => {
+    const { code } = req.query;
+    
+    try {
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+        
+        // Initialize Google Drive with OAuth2 tokens
+        drive = google.drive({ version: "v3", auth: oauth2Client });
+        
+        // Store tokens in session/database (for production, use proper token storage)
+        req.session = req.session || {};
+        req.session.tokens = tokens;
+        
+        res.redirect('/auth/success');
+    } catch (error) {
+        console.error('OAuth2 callback error:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+});
+
+// Check authentication status
+app.get("/auth/status", (req, res) => {
+    const isAuthenticated = drive !== null && oauth2Client.credentials.access_token;
+    res.json({ authenticated: isAuthenticated });
+});
+
+// Logout/Remove OAuth2 account
+app.post("/auth/logout", (req, res) => {
+    try {
+        // Clear OAuth2 credentials
+        oauth2Client.setCredentials({});
+        
+        // Clear drive instance
+        drive = null;
+        
+        // Clear session if exists
+        if (req.session) {
+            req.session.tokens = null;
+        }
+        
+        res.json({ message: "Successfully logged out from Google Drive" });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ error: "Failed to logout" });
+    }
+});
+
+// Authentication success page
+app.get("/auth/success", (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Authentication Successful</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    text-align: center;
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                .success {
+                    color: #4CAF50;
+                    font-size: 1.2rem;
+                    margin-bottom: 1rem;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success">✓ Authentication Successful!</div>
+                <p>You can now upload files. This window will close automatically.</p>
+            </div>
+            <script>
+                // Send success message to parent window
+                if (window.opener) {
+                    window.opener.postMessage('oauth-success', '*');
+                }
+                
+                // Close the popup window automatically after 2 seconds
+                setTimeout(() => {
+                    window.close();
+                }, 2000);
+                
+                // Try to close immediately (some browsers allow this)
+                try {
+                    window.close();
+                } catch (e) {
+                    // Fallback: close after delay
+                }
+            </script>
+        </body>
+        </html>
+    `);
+});
+
 // Login page
 app.post("/login-auth", async (req, res) => {
     const { username, password } = req.body;
@@ -369,10 +511,71 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
 
 // Write data from table on sheet
-app.post("/bendahara/buat-ajuan", async (req, res) => {
-    const {textdata, tabledata, userdata} = req.body;
+app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
+    //Extracting each part from formData
+    const textdata = JSON.parse(req.body.textdata);
+    const tabledata = JSON.parse(req.body.tabledata);
+    const userdata = req.body.userdata;
+
     if (textdata && tabledata && userdata) {
         try {
+            // File Upload Handling
+            let fileLink = ""; //Link to see the uploaded file
+
+            //Check if req.file from formData exist
+            if (req.file) {
+                // Check if OAuth2 is authenticated
+                if (!drive || !oauth2Client.credentials.access_token) {
+                    return res.status(401).json({ 
+                        error: "Google Drive authentication required. Please authenticate first.",
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                        redirectToAuth: true
+                    });
+                }
+
+                // Check if token is expired and refresh if needed
+                try {
+                    if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
+                        await oauth2Client.refreshAccessToken();
+                        drive = google.drive({ version: "v3", auth: oauth2Client });
+                    }
+                } catch (refreshError) {
+                    console.error('Token refresh failed:', refreshError);
+                    return res.status(401).json({ 
+                        error: "Authentication expired. Please re-authenticate.",
+                        authUrl: "/auth/google"
+                    });
+                }
+
+                const bufferStream = new stream.Readable();
+                bufferStream.push(req.file.buffer);
+                bufferStream.push(null);
+
+                // This is your 'requestBody' for metadata
+                const requestBody = {
+                    name: req.file.originalname,
+                    parents: [driveFolderId] // <-- The critical part the example omits
+                };
+
+                // This is your 'media' for the file content
+                const media = {
+                    mimeType: req.file.mimetype,
+                    body: bufferStream
+                };
+
+                const driveResponse = await drive.files.create({
+                    requestBody: requestBody,
+                    media: media,
+                    fields: 'webViewLink',
+                    supportsAllDrives: true,
+                    supportsTeamDrives: true
+                });
+
+                fileLink = driveResponse.data.webViewLink;
+            }
+
+            console.log(fileLink);
+
             // Get textdata/input data antrian and tabledata
             const ranges = [
                 "'Write Antrian'!A:A",

@@ -6,7 +6,7 @@ import axios from "axios";
 import Popup from "../../ui/Popup.jsx";
 import { columns } from "./head-data.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
-import { SubmitButton } from "../../ui/buttons.jsx";
+import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
 // Import Table Material UI
 import Table from '@mui/material/Table';
@@ -41,6 +41,12 @@ function BuatPengajuan(props) {
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
 
+    //State for form input tag
+    const [namaPengisi, setNamaPengisi] = useState("");
+    const [ajuan, setAjuan] = useState("gup");
+    const [jumlahAjuan, setJumlahAjuan] = useState("");
+    const [tanggalAjuan, setTanggalAjuan] = useState("");
+
     //State for reading and edit tabledata
     const [keywordRowPos, setKeywordRowPos] = useState("");
     const [keywordEndRow, setKeywordEndRow] = useState("");
@@ -60,6 +66,9 @@ function BuatPengajuan(props) {
     // Pagination state
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(25);
+
+    // State to held file from UploadFile
+    const [file, setFile] = useState(null);
 
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
@@ -137,6 +146,13 @@ function BuatPengajuan(props) {
         } else {
             return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         }
+    }
+
+    // Set Jumlah Ajuan input tag
+    const handleJumlahChange = (event) => {
+        const value = event.target.value;
+        const digitsOnly = value.replace(/[^\d]/g, "");
+        setJumlahAjuan(numberFormats(digitsOnly));
     }
 
     // Helper function to calculate and update column 17 (Nilai Terima)
@@ -263,6 +279,10 @@ function BuatPengajuan(props) {
             return;
         }
 
+        if (cellcolumnIndex >= 18 && cellcolumnIndex <= 21) {
+            return;
+        }
+
         // Check if the value starts with "=" (formula mode)
         if (value.startsWith("=")) {
             // No formatting should occur in formula mode
@@ -270,7 +290,7 @@ function BuatPengajuan(props) {
         }
 
         // Only format if the value is numeric
-        const numericValue = value.replace(/,/g, ""); // Remove any existing commas
+        const numericValue = value.replace(/[,.]/g, ""); // Remove any existing commas
         if (!isNaN(numericValue) && numericValue.trim() !== "") {
             // Format the number with commas for thousands
             const formattedValue = numberFormats(numericValue);
@@ -284,8 +304,8 @@ function BuatPengajuan(props) {
                 if (cellcolumnIndex === 4) {
                     const baseValue = parseFloat(numericValue);
                     if (!isNaN(baseValue)) {
-                        updatedData[cellrowIndex][5] = numberFormats((baseValue * 100/111).toFixed(0)); // Column 5 for normal DPP
-                        updatedData[cellrowIndex][6] = numberFormats((baseValue * 100/111 * 11/12).toFixed(0)); // Column 6 for DPP Nilai Lain
+                        updatedData[cellrowIndex][5] = numberFormats((baseValue * 100 / 111).toFixed(0)); // Column 5 for normal DPP
+                        updatedData[cellrowIndex][6] = numberFormats((baseValue * 100 / 111 * 11 / 12).toFixed(0)); // Column 6 for DPP Nilai Lain
                     }
                 }
 
@@ -296,7 +316,23 @@ function BuatPengajuan(props) {
 
                 return updatedData;
             });
-        }   
+        }  else if (cellcolumnIndex === 4) {
+            // --- NEW: If column 4 is empty, clear columns 5 and 6 ---
+            setTableData(prevData => {
+                const updatedData = [...prevData];
+                updatedData[cellrowIndex] = [...updatedData[cellrowIndex]];
+
+                // Ensure columns 4, 5, and 6 are set to empty strings
+                updatedData[cellrowIndex][4] = "";
+                updatedData[cellrowIndex][5] = "";
+                updatedData[cellrowIndex][6] = "";
+
+                // Recalculate Nilai Terima since column 4 has changed
+                updateNilaiTerima(updatedData, cellrowIndex);
+
+                return updatedData;
+            });
+        }
     }, [numberFormats, updateNilaiTerima]);
 
     // Handling formula mode - optimized with useCallback
@@ -628,23 +664,33 @@ function BuatPengajuan(props) {
     async function handleSubmit(event){
         event.preventDefault();
         setIsPopup(false);
+
+        // Grabbing input & select tag values from useState
+        const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan];
+
+        //Handling file upload. Create FormData object
+        const formData = new FormData();
+        if (file) {
+            formData.append('file', file);
+        }
+
         // Converting column info into data, then insert in existing tableData
         const tableHead = columns.map(col => col.label)
         const sendTable = [[...tableHead], ...tableData]
-        // Grabbing input & select tag values
-        const inputNama = document.getElementsByName("nama-pengisi")[0].value;
-        const selectAjuan = document.getElementsByName("ajuan")[0].value;
-        const inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
-        const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
-        const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
+
+        //Append other data (inputArray, sendTable, user name) into formData
+        formData.append('textdata', JSON.stringify(inputArray));
+        formData.append('tabledata', JSON.stringify(sendTable));
+        formData.append('userdata', user.name);
+
         // Set loading state
         setIsLoading(true);
         // Sending to backend
         try {
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/buat-ajuan` , {
-                textdata: inputArray,
-                tabledata: sendTable,
-                userdata: user.name,
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/buat-ajuan` , formData, {
+                headers:{
+                    'Content-Type': 'multipart/form-data',
+                }
             })
             if (response.status === 200){
                 props.alertMessage("Data berhasil dibuat.")
@@ -652,7 +698,52 @@ function BuatPengajuan(props) {
             }
             setIsLoading(false);
         } catch (err) {
+            // Handle 401 authentication error
+            if (err.response && err.response.status === 401) {
+                const errorData = err.response.data;
+                if (errorData.redirectToAuth) {
+                    // Open Google auth in a new popup window
+                    const authWindow = window.open(
+                        errorData.authUrl,
+                        'googleAuth',
+                        'width=500,height=600,scrollbars=yes,resizable=yes'
+                    );
+                    
+                    // Listen for auth completion
+                    const checkAuthComplete = setInterval(() => {
+                        try {
+                            // Check if popup is closed (user completed auth)
+                            if (authWindow.closed) {
+                                clearInterval(checkAuthComplete);
+                                // Wait a moment then retry the original request
+                                setTimeout(() => {
+                                    handleSubmit(event);
+                                }, 500);
+                                return;
+                            }
+                        } catch (error) {
+                            // Cross-origin error, ignore
+                        }
+                    }, 1000);
+                    
+                    // Also listen for window message (better method)
+                    const messageListener = (event) => {
+                        if (event.data === 'oauth-success') {
+                            clearInterval(checkAuthComplete);
+                            window.removeEventListener('message', messageListener);
+                            authWindow.close();
+                            setTimeout(() => {
+                                handleSubmit(event);
+                            }, 500);
+                        }
+                    };
+                    window.addEventListener('message', messageListener);
+                    
+                    return;
+                }
+            }
             console.log("Failed to send data.", err)
+            setIsLoading(false);
         }
     }
 
@@ -664,18 +755,18 @@ function BuatPengajuan(props) {
         const tableHead = columns.map(col => col.label)
         const sendTable = [[...tableHead], ...tableData]
         // Grabbing input & select tag values
-        let inputNama = document.getElementsByName("nama-pengisi")[0].value;
-        const selectAjuan = document.getElementsByName("ajuan")[0].value;
-        let inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
-        const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
-        if (inputNama === "") {
-            inputNama = props.passedData[1];
+        // let inputNama = document.getElementsByName("nama-pengisi")[0].value;
+        // const selectAjuan = document.getElementsByName("ajuan")[0].value;
+        // let inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
+        // const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
+        if (namaPengisi === "") {
+            setNamaPengisi(props.passedData[1]);
         }
-        if (inputJumlah === "") {
-            inputJumlah = props.passedData[3]
+        if (jumlahAjuan === "") {
+            setJumlahAjuan(props.passedData[3]);
         }
 
-        const inputArray = [inputNama, selectAjuan, inputJumlah, inputTanggal];
+        const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan];
         // Sending to backend
         const requestData = {
             textdata: inputArray,
@@ -821,13 +912,14 @@ function BuatPengajuan(props) {
                 <form className="pengajuan-form" onSubmit={componentType === "buat" ? handleSubmit : handleSubmitEdit}>
                     <div className="pengajuan-form-textdata">
                         <label htmlFor="aju-name">Nama Pengisi Form:</label>
-                        <input type="text" id="aju-name" name="nama-pengisi" 
+                        <input type="text" id="aju-name" name="nama-pengisi" value={namaPengisi}
                             readOnly={componentType === "lihat"}
+                            onChange={(e) => setNamaPengisi(e.target.value)}
                             placeholder={componentType === "buat"? null : (props.passedData && props.passedData[1]) }
                             required/>
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
-                        <select name="ajuan" id="ajuan">
+                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)}>
                             <option value="gup">GUP</option>
                             <option value="ptup">PTUP</option>
                         </select>
@@ -838,13 +930,16 @@ function BuatPengajuan(props) {
                         </select>))
                         }
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
-                        <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan" 
-                            onChange={(e)=> e.target.value = numberFormats(e.target.value.replace(/[^\d]/g, ""))}
+                        <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan"
+                            value={jumlahAjuan}
+                            onChange={handleJumlahChange}
                             readOnly={componentType === "lihat"} 
                             required/>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
                         <input type="date" id="aju-date" name="tanggal-ajuan" className="pengajuan-date"
                             readOnly={componentType === "lihat"}
+                            value={tanggalAjuan}
+                            onChange={(e)=>setTanggalAjuan(e.target.value)}
                             defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
                     </div>
                     <br/>
@@ -856,6 +951,7 @@ function BuatPengajuan(props) {
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
+                        <UploadButton title={"Bupot"} onFileSelect={setFile}/>
                         {isLoading2 ? <LoadingAnimate /> : TableComponent}
                     </div>
                     {componentType === "buat" ?

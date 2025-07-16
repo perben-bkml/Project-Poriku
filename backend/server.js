@@ -290,10 +290,11 @@ app.post("/login-auth", async (req, res) => {
         );
 
             // Set cookie with the token
-        res.cookie("auth_token", token, {   // The cookie name is "auth_token"
+        res.cookie("auth_token", token, {   //The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
             secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
-            sameSite: "None",
+            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
             maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
 
@@ -311,8 +312,9 @@ app.post("/login-auth", async (req, res) => {
 app.post("/logout", (req, res) => {
     res.clearCookie("auth_token", {
         httpOnly: true,
-        secure: false,
-        sameSite: "lax"
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+        domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
     })
     res.status(200).json({ message: "Logout Successful!"})
 })

@@ -337,6 +337,7 @@ app.post("/logout", (req, res) => {
             sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
             domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
             path: '/', // Add explicit path
+            maxAge: 5 * 60 * 60 * 1000, // 5 hours - must match cookie setting
         })
         console.log("Cookie cleared successfully");
         res.status(200).json({ message: "Logout Successful!"})

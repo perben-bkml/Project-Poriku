@@ -290,11 +290,22 @@ app.post("/login-auth", async (req, res) => {
         );
 
             // Set cookie with the token
+        console.log("Setting auth cookie for user:", userData[0].name);
+        console.log("Cookie config:", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            path: '/',
+            maxAge: 5 * 60 * 60 * 1000
+        });
+        
         res.cookie("auth_token", token, {   //The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
             secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
             sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
             domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            path: '/', // Add explicit path
             maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
 
@@ -310,30 +321,51 @@ app.post("/login-auth", async (req, res) => {
 
 //Logout Handler
 app.post("/logout", (req, res) => {
-    res.clearCookie("auth_token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-        domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
-    })
-    res.status(200).json({ message: "Logout Successful!"})
+    try {
+        console.log("Logout request received");
+        console.log("Clear cookie config:", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            path: '/'
+        });
+        
+        res.clearCookie("auth_token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            path: '/', // Add explicit path
+        })
+        console.log("Cookie cleared successfully");
+        res.status(200).json({ message: "Logout Successful!"})
+    } catch (error) {
+        console.error("Error during logout:", error);
+        res.status(500).json({ error: "Logout failed" });
+    }
 })
 
 //Check user cookies
 app.get("/check-auth", (req, res) => {
     const token = req.cookies.auth_token;
+    console.log("Auth check - Token present:", !!token);
+    console.log("Auth check - Cookies:", Object.keys(req.cookies));
+    
     if (!token) {
         return res.status(401).json({ message: "Not authenticated" });
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("Auth check - Token valid for user:", decoded.name);
         res.status(200).json({ 
             user: {
                 name: decoded.name,
                 role: decoded.role } 
             });
     } catch (error) {
+        console.log("Auth check - Token invalid:", error.message);
         res.status(400).json({ message: "Invalid token" });
     }
 });

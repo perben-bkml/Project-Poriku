@@ -609,8 +609,6 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
                 fileLink = driveResponse.data.webViewLink;
             }
 
-            console.log(fileLink);
-
             // Get textdata/input data antrian and tabledata
             const ranges = [
                 "'Write Antrian'!A:A",
@@ -668,6 +666,11 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
                         range: `'Write Antrian'!L${startAntrianRow}`,
                         values: [[userdata]],
                     },
+                    {
+                        //Write file name
+                        range: `'Write Antrian'!T${startAntrianRow}`,
+                        values: [[fileLink]],
+                    }
                 ],
                 valueInputOption: "RAW",
             }
@@ -857,12 +860,76 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
 })
 
 // Patch/Updates table data based on edited data from user
-app.patch("/bendahara/edit-table", async (req, res) => {
-    const {textdata, tabledata, tablePosition, antriPosition, lastTableEndRow} = req.body;
+app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
+    //Extracting each part from formData
+    const textdata = JSON.parse(req.body.textdata);
+    const tabledata = JSON.parse(req.body.tabledata);
+    const tablePosition = JSON.parse(req.body.tablePosition);
+    const antriPosition = JSON.parse(req.body.antriPosition);
+    const lastTableEndRow = JSON.parse(req.body.lastTableEndRow);
+
     if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
         return res.status(400).json({message: "Invalid Data."})  
     }
     try {
+
+        // File Upload Handling
+        let fileLink = "";
+
+        //Check if req.file from formData exist
+        if (req.file) {
+            // Check if OAuth2 is authenticated
+            if (!drive || !oauth2Client.credentials.access_token) {
+                return res.status(401).json({
+                    error: "Google Drive authentication required. Please authenticate first.",
+                    authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                    redirectToAuth: true
+                });
+            }
+
+            // Check if token is expired and refresh if needed
+            try {
+                if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
+                    await oauth2Client.refreshAccessToken();
+                    drive = google.drive({ version: "v3", auth: oauth2Client });
+                }
+            } catch (refreshError) {
+                console.error('Token refresh failed:', refreshError);
+                return res.status(401).json({
+                    error: "Authentication expired. Please re-authenticate.",
+                    authUrl: "/auth/google"
+                });
+            }
+
+            const bufferStream = new stream.Readable();
+            bufferStream.push(req.file.buffer);
+            bufferStream.push(null);
+
+            // This is your 'requestBody' for metadata
+            const requestBody = {
+                name: req.file.originalname,
+                parents: [driveFolderId] // <-- The critical part the example omits
+            };
+
+            // This is your 'media' for the file content
+            const media = {
+                mimeType: req.file.mimetype,
+                body: bufferStream
+            };
+
+            const driveResponse = await drive.files.create({
+                requestBody: requestBody,
+                media: media,
+                fields: 'webViewLink',
+                supportsAllDrives: true,
+                supportsTeamDrives: true
+            });
+
+            fileLink = driveResponse.data.webViewLink;
+        }
+
+        console.log(fileLink);
+        console.log("you hit the edit-table path")
 
         // Setting antrian data range
         textdata.unshift(fullDateFormat);
@@ -994,6 +1061,19 @@ app.patch("/bendahara/edit-table", async (req, res) => {
             },
         });
 
+        // Update Uploaded File Link
+        requests.push({
+            pasteData: {
+                coordinate: {
+                    sheetId: antriSheetId,
+                    rowIndex: antriRow - 1, //Zero based index
+                    columnIndex: 19, //Start from col T
+                },
+                data: fileLink,
+                type: "PASTE_VALUES",
+                delimiter: "\t",
+            },
+        });
         // Execute Batch Update with backoff
         await withBackoff(async () => {
             return await sheets.spreadsheets.batchUpdate({

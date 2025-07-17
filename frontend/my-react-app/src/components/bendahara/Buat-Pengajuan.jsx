@@ -751,14 +751,8 @@ function BuatPengajuan(props) {
     async function handleSubmitEdit(event){
         event.preventDefault();
         setIsPopup(false);
-        // Converting column info into data, then insert in existing tableData
-        const tableHead = columns.map(col => col.label)
-        const sendTable = [[...tableHead], ...tableData]
-        // Grabbing input & select tag values
-        // let inputNama = document.getElementsByName("nama-pengisi")[0].value;
-        // const selectAjuan = document.getElementsByName("ajuan")[0].value;
-        // let inputJumlah = document.getElementsByName("jumlah-ajuan")[0].value;
-        // const inputTanggal = document.getElementsByName("tanggal-ajuan")[0].value
+
+        // Input Array data fill
         if (namaPengisi === "") {
             setNamaPengisi(props.passedData[1]);
         }
@@ -766,7 +760,31 @@ function BuatPengajuan(props) {
             setJumlahAjuan(props.passedData[3]);
         }
 
+        console.log(props.passedData);
+
         const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan];
+
+        //Handling file upload. Create FormData object
+        const formData = new FormData();
+        if (file) {
+            formData.append('file', file);
+        }
+
+
+        // Converting column info into data, then insert in existing tableData
+        const tableHead = columns.map(col => col.label)
+        const sendTable = [[...tableHead], ...tableData]
+        const antriPosition = parseInt(props.passedData[5]);
+
+
+        // Append to formData and send to backend
+        formData.append('textdata', JSON.stringify(inputArray));
+        formData.append('tabledata', JSON.stringify(sendTable));
+        formData.append('tablePosition', JSON.stringify(keywordRowPos));
+        formData.append('antriPosition', JSON.stringify(antriPosition));
+        formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
+
+
         // Sending to backend
         const requestData = {
             textdata: inputArray,
@@ -775,16 +793,66 @@ function BuatPengajuan(props) {
             antriPosition: parseInt(props.passedData[5]),
             lastTableEndRow: keywordEndRow,
             };
+
         try {
             setIsLoading(true);
-            const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/edit-table` , requestData)
+            const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/edit-table`, formData, {
+                headers:{
+                    'Content-Type': 'multipart/form-data',
+                }
+            })
             if (response.status === 200){
                 props.alertMessage("Data berhasil diubah.");
                 props.changeComponent(props.fallbackTo);
             }
             setIsLoading(false);
         } catch (err) {
+            // Handle 401 authentication error
+            if (err.response && err.response.status === 401) {
+                const errorData = err.response.data;
+                if (errorData.redirectToAuth) {
+                    // Open Google auth in a new popup window
+                    const authWindow = window.open(
+                        errorData.authUrl,
+                        'googleAuth',
+                        'width=500,height=600,scrollbars=yes,resizable=yes'
+                    );
+
+                    // Listen for auth completion
+                    const checkAuthComplete = setInterval(() => {
+                        try {
+                            // Check if popup is closed (user completed auth)
+                            if (authWindow.closed) {
+                                clearInterval(checkAuthComplete);
+                                // Wait a moment then retry the original request
+                                setTimeout(() => {
+                                    handleSubmitEdit(event);
+                                }, 500);
+                                return;
+                            }
+                        } catch (error) {
+                            // Cross-origin error, ignore
+                        }
+                    }, 1000);
+
+                    // Also listen for window message (better method)
+                    const messageListener = (event) => {
+                        if (event.data === 'oauth-success') {
+                            clearInterval(checkAuthComplete);
+                            window.removeEventListener('message', messageListener);
+                            authWindow.close();
+                            setTimeout(() => {
+                                handleSubmitEdit(event);
+                            }, 500);
+                        }
+                    };
+                    window.addEventListener('message', messageListener);
+
+                    return;
+                }
+            }
             console.log("Failed to send data.", err)
+            setIsLoading(false);
         }
     }
     // Memoize the table component to prevent unnecessary re-renders
@@ -951,7 +1019,7 @@ function BuatPengajuan(props) {
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
-                        <UploadButton title={"Bupot"} onFileSelect={setFile}/>
+                        {componentType === "lihat" ? null : <UploadButton title={"Bupot"} onFileSelect={setFile}/> }
                         {isLoading2 ? <LoadingAnimate /> : TableComponent}
                     </div>
                     {componentType === "buat" ?

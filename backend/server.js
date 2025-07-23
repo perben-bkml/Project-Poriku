@@ -443,7 +443,7 @@ app.get("/bendahara/antrian", async (req, res) => {
         const getAllRowsResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: "'Write Antrian'!A3:P",
+                range: "'Write Antrian'!A3:T",
             });
         });
 
@@ -466,9 +466,9 @@ app.get("/bendahara/antrian", async (req, res) => {
         const endIndex = startIndex + parseInt(limit);
         const paginatedRows = filteredRows.slice(startIndex, endIndex);
 
-        // Ensure each row has 12 columns
+        // Ensure each row has 20 columns
         const normalizedRows = paginatedRows.map(row => {
-            while (row.length < 16) row.push("");
+            while (row.length < 20) row.push("");
             return row;
         });
 

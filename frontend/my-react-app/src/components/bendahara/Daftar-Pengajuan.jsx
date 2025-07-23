@@ -166,6 +166,7 @@ function DaftarPengajuan(props){
                     antriSum={data[4]}
                     antriDate={data[5]}
                     handleDelPopup={handleDelPopup}
+                    fileLink={data[19]}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />

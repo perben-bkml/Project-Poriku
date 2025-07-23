@@ -17,7 +17,9 @@ function Pengajuan(props) {
         createDate: props.createDate,
         accDate: props.accDate,
         status: props.status,
+        fileLink: props.fileLink,
     }
+    console.log(passData.fileLink)
 
     return (
         <div className="pengajuan-info">

@@ -784,16 +784,6 @@ function BuatPengajuan(props) {
         formData.append('antriPosition', JSON.stringify(antriPosition));
         formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
 
-
-        // Sending to backend
-        const requestData = {
-            textdata: inputArray,
-            tabledata: sendTable,
-            tablePosition: keywordRowPos,
-            antriPosition: parseInt(props.passedData[5]),
-            lastTableEndRow: keywordEndRow,
-            };
-
         try {
             setIsLoading(true);
             const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/edit-table`, formData, {
@@ -1020,6 +1010,10 @@ function BuatPengajuan(props) {
                                 readOnly={componentType === "lihat"} min="0" />
                         </div>
                         {componentType === "lihat" ? null : <UploadButton title={"Bupot"} onFileSelect={setFile}/> }
+                        {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
+                            <div>
+                                <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>
+                            </div> : null}
                         {isLoading2 ? <LoadingAnimate /> : TableComponent}
                     </div>
                     {componentType === "buat" ?

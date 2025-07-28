@@ -92,11 +92,28 @@ const corsOption = {
 app.use(express.json());
 app.use(cors(corsOption));
 app.use(cookieParser());
+
+// Cookie debugging middleware (only in development)
+if (process.env.NODE_ENV !== "production") {
+    app.use((req, res, next) => {
+        if (req.path === '/check-auth' || req.path === '/login-auth' || req.path === '/logout') {
+            console.log(`[${req.method}] ${req.path} - Cookies:`, Object.keys(req.cookies));
+            console.log("Cookie header:", req.headers.cookie);
+        }
+        next();
+    });
+}
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-here',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+    cookie: { 
+        secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true, // Prevent XSS attacks
+        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax' // Consistent with auth cookies
+    },
+    name: 'session_id' // Custom session name for better security
 }));
 
 // Setting Up Postgres
@@ -290,7 +307,11 @@ app.post("/login-auth", async (req, res) => {
         );
 
             // Set cookie with the token
+        console.log("=== COOKIE SETTING DEBUG ===");
         console.log("Setting auth cookie for user:", userData[0].name);
+        console.log("Environment:", process.env.NODE_ENV);
+        console.log("Frontend Origin:", process.env.FRONTEND_ORIGIN);
+        console.log("Hostname Domain:", process.env.HOSTNAME_DOMAIN);
         console.log("Cookie config:", {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -309,6 +330,8 @@ app.post("/login-auth", async (req, res) => {
             maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
 
+        console.log("✅ Auth cookie set successfully");
+        
         // Make array to send only Name and Role
         const sendData = [userData[0].name, userData[0].role]
 
@@ -322,14 +345,6 @@ app.post("/login-auth", async (req, res) => {
 //Logout Handler
 app.post("/logout", (req, res) => {
     try {
-        console.log("Logout request received");
-        console.log("Clear cookie config:", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
-            path: '/'
-        });
         
         res.clearCookie("auth_token", {
             httpOnly: true,
@@ -337,7 +352,7 @@ app.post("/logout", (req, res) => {
             sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
             domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
             path: '/', // Add explicit path
-            maxAge: 5 * 60 * 60 * 1000, // 5 hours - must match cookie setting
+            expires: new Date(0) // Set to past date to ensure deletion
         })
         console.log("Cookie cleared successfully");
         res.status(200).json({ message: "Logout Successful!"})
@@ -350,23 +365,23 @@ app.post("/logout", (req, res) => {
 //Check user cookies
 app.get("/check-auth", (req, res) => {
     const token = req.cookies.auth_token;
-    console.log("Auth check - Token present:", !!token);
-    console.log("Auth check - Cookies:", Object.keys(req.cookies));
     
     if (!token) {
+        console.log("❌ Authentication failed: No token found");
         return res.status(401).json({ message: "Not authenticated" });
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("Auth check - Token valid for user:", decoded.name);
+        console.log("✅ Auth check successful for user:", decoded.name);
+        console.log("Token expires at:", new Date(decoded.exp * 1000));
         res.status(200).json({ 
             user: {
                 name: decoded.name,
                 role: decoded.role } 
             });
     } catch (error) {
-        console.log("Auth check - Token invalid:", error.message);
+        console.log("❌ Auth check failed - Token invalid:", error.message);
         res.status(400).json({ message: "Invalid token" });
     }
 });

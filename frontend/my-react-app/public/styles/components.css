@@ -184,6 +184,10 @@
     font-size: 1rem;
 }
 
+.info.data.info-status {
+    font-size: 0.9rem;
+}
+
 .info.nomor {
     padding-left: 35px;
 }
@@ -289,6 +293,10 @@
     height: 25px;
     width: 150px;
     
+}
+
+.pengajuan-form-tableinfo-message {
+    margin-left: 25px;
 }
 
 .head-data {
@@ -660,6 +668,7 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .aksi-submit {
+    margin-top: 45px;
     margin-left: 110px;
     transform: scale(1.1, 1.1);
 }
@@ -674,7 +683,7 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 1.2rem;
     font-weight: 500;
     margin-top: 30px;
-    margin-bottom: 60px;
+    margin-bottom: 10px;
 }
 
 .aksi-content-docs {
@@ -706,6 +715,7 @@ input[type="number"]::-webkit-inner-spin-button {
     display: inline-block;
     height: 30px;
     width: 150px;
+    margin-top: 10px;
     border-radius: 20px;
     border: solid 0.8px rgb(199, 199, 199);
     font-size: 1rem;
@@ -755,6 +765,13 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .aksi-content-title {
     margin-bottom: 20px;
+}
+
+.lampiran-aksi-pengajuan {
+    margin-left: 32px;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 30px;
 }
 
 /* For Aksi-Drpp.jsx */

@@ -25,6 +25,7 @@ function AksiPengajuan(props) {
         spp: "",
         spm: "",
         catatan: "",
+        lampiran: "",
     })
     const [documentData, setDocumentData] = useState([{
         drpp: "", nominal: "", spp: "", spm: "",
@@ -94,7 +95,8 @@ function AksiPengajuan(props) {
             spp: props.fulldata[9],
             spm: props.fulldata[10],
             catatan: props.fulldata[16],
-        });        
+            lampiran: props.fulldata[19],
+        });
     }, [])
 
     //Automatically change background color for select tag
@@ -112,7 +114,7 @@ function AksiPengajuan(props) {
                 selectPajakBackgroundColor(selectElement);
             }
         }
-    }, [antriData.sedia_anggaran, antriData.status_pajak]);
+    }, [antriData]);
 
     //Number format generator
     function numberFormats(num) {
@@ -282,6 +284,12 @@ function AksiPengajuan(props) {
                     <textarea id="catatan" className="type-btn span-row" name="catatan" defaultValue={antriData.catatan} onChange={e => handleInputChange(e.target)}/>
                     <label htmlFor="buat-drpp">Buat DRPP?</label>
                     <input id="buat-drpp" className="type-btn" type="checkbox" name="buat_drpp" checked={drppProcess === true} defaultValue={antriData.tgl_setuju} onChange={() => !drppProcess ? setDrppProcess(true) : setDrppProcess(false)}/>
+                </div>
+
+                <div className="lampiran-aksi-pengajuan">
+                    <p>Lampiran: <span className={"padd-span-bend"}/>{ antriData.lampiran !== "" ?
+                        <a href={antriData.lampiran} target={"_blank"} rel="noopener noreferrer">Klik disini</a>: <a>-</a> }
+                    </p>
                 </div>
                 { drppProcess &&
                 <div className="aksi-content-docs">

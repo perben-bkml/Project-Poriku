@@ -19,7 +19,6 @@ function Pengajuan(props) {
         status: props.status,
         fileLink: props.fileLink,
     }
-    console.log(passData.fileLink)
 
     return (
         <div className="pengajuan-info">
@@ -47,7 +46,7 @@ function Pengajuan(props) {
             </div>
             <div className="info status">
                 <p>Status:</p>
-                <p className="info data">{props.status}</p>
+                <p className="info data info-status">{props.status}</p>
             </div>
             <div className="info status">
                 <p>DRPP:</p>

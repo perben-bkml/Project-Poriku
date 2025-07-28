@@ -752,17 +752,22 @@ function BuatPengajuan(props) {
         event.preventDefault();
         setIsPopup(false);
 
+        const finalNama = namaPengisi === "" ? props.passedData[1] : namaPengisi;
+        const finalJumlah = jumlahAjuan === "" ? props.passedData[3] : jumlahAjuan;
+
         // Input Array data fill
         if (namaPengisi === "") {
-            setNamaPengisi(props.passedData[1]);
+            setNamaPengisi(finalNama);
         }
         if (jumlahAjuan === "") {
-            setJumlahAjuan(props.passedData[3]);
+            setJumlahAjuan(finalJumlah);
         }
 
-        console.log(props.passedData);
 
-        const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan];
+        const inputArray = [finalNama, ajuan, finalJumlah, tanggalAjuan];
+
+        console.log(inputArray);
+        console.log(props.passedData);
 
         //Handling file upload. Create FormData object
         const formData = new FormData();
@@ -1008,12 +1013,12 @@ function BuatPengajuan(props) {
                             <input type="number" value={rowNum > 0 ? rowNum : ""} 
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
                                 readOnly={componentType === "lihat"} min="0" />
+                            {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
+                                <div className={"pengajuan-form-tableinfo-message"}>
+                                    <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>
+                                </div> : null}
                         </div>
                         {componentType === "lihat" ? null : <UploadButton title={"Bupot"} onFileSelect={setFile}/> }
-                        {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
-                            <div>
-                                <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>
-                            </div> : null}
                         {isLoading2 ? <LoadingAnimate /> : TableComponent}
                     </div>
                     {componentType === "buat" ?

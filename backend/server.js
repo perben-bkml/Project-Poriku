@@ -963,7 +963,6 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
             return await sheets.spreadsheets.get({ spreadsheetId });
         });
 
-        const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
         const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
 
         // For Border Style
@@ -1019,68 +1018,50 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
             });
         }
 
-        // Update Table Data (Preserves Formatting)
-        requests.push({
-            pasteData: {
-                coordinate: {
-                    sheetId: tableSheetId,
-                    rowIndex: startTableRow - 1, //Zero Based Index
-                    columnIndex: 0, //Start from A
-                },
-                data: tabledata.map(row => row.join("\t")).join("\n"),
-                type: "PASTE_VALUES", // Keeps formatting
-                delimiter: "\t",
+        // Prepare batch data updates (Preserves text formatting with single API call)
+        const batchDataUpdates = [
+            {
+                range: `'Write Table'!A${startTableRow}:${String.fromCharCode(65 + tableColumnCount - 1)}${endTableRow}`,
+                values: tabledata
             },
-        });
+            {
+                range: `'Write Antrian'!B${antriRow}:${String.fromCharCode(66 + textdata.length - 1)}${antriRow}`,
+                values: [textdata]
+            },
+            {
+                range: `'Write Table'!Y${startTableRow}`,
+                values: [[`${tabledata.length - 1}`]]
+            }
+        ];
 
-        // Update Antrian Data (Preserves Formatting)
-        requests.push({
-            pasteData: {
-                coordinate: {
-                    sheetId: antriSheetId,
-                    rowIndex: antriRow - 1, //Zero based index
-                    columnIndex: 1, //Start from B
-                },
-                data: textdata.join("\t"),
-                type: "PASTE_VALUES",
-                delimiter: "\t",
-            },
-        });
+        // Add file link update if file was uploaded
+        if (fileLink) {
+            batchDataUpdates.push({
+                range: `'Write Antrian'!T${antriRow}`,
+                values: [[fileLink]]
+            });
+        }
 
-        // Update Row number info
-        requests.push({
-            pasteData: {
-                coordinate: {
-                    sheetId: tableSheetId,
-                    rowIndex: startTableRow - 1, //Zero based index
-                    columnIndex: 24, //Start from Y
-                },
-                data: `${tabledata.length - 1}`,
-                type: "PASTE_VALUES",
-                delimiter: "\t",
-            },
-        });
-
-        // Update Uploaded File Link
-        requests.push({
-            pasteData: {
-                coordinate: {
-                    sheetId: antriSheetId,
-                    rowIndex: antriRow - 1, //Zero based index
-                    columnIndex: 19, //Start from col T
-                },
-                data: fileLink,
-                type: "PASTE_VALUES",
-                delimiter: "\t",
-            },
-        });
-        // Execute Batch Update with backoff
+        // Execute batch data update with backoff (preserves text format)
         await withBackoff(async () => {
-            return await sheets.spreadsheets.batchUpdate({
+            return await sheets.spreadsheets.values.batchUpdate({
                 spreadsheetId,
-                resource: { requests },
+                resource: {
+                    data: batchDataUpdates,
+                    valueInputOption: "RAW" // Prevents auto-conversion of text like "100.000" to 100
+                }
             });
         });
+
+        // Execute Batch Update for row adjustments only (if any requests remain)
+        if (requests.length > 0) {
+            await withBackoff(async () => {
+                return await sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: { requests },
+                });
+            });
+        }
 
         console.log("✅ Update successful!");
 
@@ -1195,7 +1176,7 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
             return await sheets.spreadsheets.values.update({
                 spreadsheetId: spreadsheetIdCariSPM,
                 range: cariRange,
-                valueInputOption: "USER_ENTERED",
+                valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
                 resource: { values: [[data]] },
             });
         });
@@ -1268,7 +1249,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
                     values: [[selectStatus]],
                 },
             ],
-            valueInputOption: "USER_ENTERED",
+            valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
         }
 
         // Apply backoff for batch update
@@ -1334,7 +1315,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // Sort rows in reverse order (latest dates first)
         const reversedRows = filteredRows.reverse();
         // Fetch full row data for the selected month with backoff
-        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:Q${row.rowIndex}`); // Adjust range if needed
+        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:T${row.rowIndex}`); // Adjust range if needed
 
         const batchGetResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchGet({
@@ -1344,7 +1325,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         });
 
         let rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
-        const num_Columns = 17;
+        const num_Columns = 20;
         rowData = rowData.map(row => {
             while (row.length < num_Columns) {
                 row.push("");
@@ -1424,7 +1405,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             return await sheets.spreadsheets.values.batchUpdate({
                 spreadsheetId,
                 requestBody: {
-                    valueInputOption: "USER_ENTERED", // Keep number formatting
+                    valueInputOption: "USER_ENTERED",
                     data: updateData.map(([range, value]) => ({
                         range,
                         values: [[value]]
@@ -1665,11 +1646,14 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             allRows = allRows.filter(row => row.setor.startsWith(filterKeyword.setoran));
         }
 
-        // Set rows to fetch from the end of the sheet
         const visibleRows = allRows.filter(row => row.rowIndex >= 3);
+        
+        // Sort by rowIndex in descending order to get latest rows first
+        const sortedRows = visibleRows.sort((a, b) => b.rowIndex - a.rowIndex);
+        
         const startIndex = ( page - 1 ) * limit;
         const endIndex = startIndex + limit;
-        const paginatedRows = visibleRows.slice(startIndex, endIndex)
+        const paginatedRows = sortedRows.slice(startIndex, endIndex)
 
         const fetchRowRange= paginatedRows.map(row => `'Monitoring DRPP'!A${row.rowIndex}:K${row.rowIndex}` );
         // Fetch Paginated Data with backoff
@@ -1979,7 +1963,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
                 return await sheets2.spreadsheets.values.update({
                     spreadsheetId: spreadsheetIdVerif,
                     range: `'Data'!A${rowPosition}:G${rowPosition}`,
-                    valueInputOption: "USER_ENTERED",
+                    valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
                     resource: { values: [data] }
                 })
             })
@@ -1999,7 +1983,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
                 return await sheets2.spreadsheets.values.update({
                     spreadsheetId: spreadsheetIdVerif,
                     range: `'Data'!A${nextRow}:G${nextRow}`,
-                    valueInputOption: "USER_ENTERED",
+                    valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
                     resource: { values: [data] }
                 })
             })

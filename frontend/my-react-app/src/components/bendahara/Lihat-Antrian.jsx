@@ -30,7 +30,7 @@ function LihatAntrian() {
             const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/antrian`, { params:{ page, limit: rowsPerPage, username: null }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
-                setAntrianData(responseResult.slice(-4).reverse());
+                setAntrianData(responseResult.map(row => row.slice(0, -4)).reverse());
                 setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
             }
             setIsLoading(false);
@@ -62,7 +62,7 @@ function LihatAntrian() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {[...antrianData].reverse().map((rows, rowIndex) => (
+                            {[...antrianData].slice(-4).reverse().map((rows, rowIndex) => (
                                 <TableRow key={rowIndex}>
                                     {rows.map((cells, cellIndex) => (
                                         <TableCell className="table-cell" key={cellIndex}>{cells}</TableCell>

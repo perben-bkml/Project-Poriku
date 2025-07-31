@@ -148,6 +148,22 @@ function BuatPengajuan(props) {
         }
     }
 
+    // Helper function to clean currency values from Excel data
+    function cleanCurrencyValue(value) {
+        if (!value || typeof value !== 'string') {
+            return value;
+        }
+        
+        // Remove common currency symbols and prefixes
+        // Supports: Rp, $, €, £, ¥, and other common formats
+        let cleaned = value
+            .replace(/^(Rp\.?\s*|USD?\s*|\$\s*|EUR?\s*|€\s*|GBP?\s*|£\s*|JPY?\s*|¥\s*)/i, '') // Remove currency prefixes
+            .replace(/[^\d.,]/g, '') // Remove any non-digit, non-comma, non-period characters
+            .replace(/[,.]/g, ''); // Remove commas and periods for validation
+            
+        return cleaned;
+    }
+
     // Set Jumlah Ajuan input tag
     const handleJumlahChange = (event) => {
         const value = event.target.value;
@@ -289,11 +305,11 @@ function BuatPengajuan(props) {
             return;
         }
 
-        // Only format if the value is numeric
-        const numericValue = value.replace(/[,.]/g, ""); // Remove any existing commas
-        if (!isNaN(numericValue) && numericValue.trim() !== "") {
+        // Clean currency formatting and check if the value is numeric
+        const cleanedValue = cleanCurrencyValue(value);
+        if (!isNaN(cleanedValue) && cleanedValue.trim() !== "") {
             // Format the number with commas for thousands
-            const formattedValue = numberFormats(numericValue);
+            const formattedValue = numberFormats(cleanedValue);
 
             setTableData(prevData => {
                 const updatedData = [...prevData];
@@ -302,7 +318,7 @@ function BuatPengajuan(props) {
 
                 // Format column 5 and 6 if column 4 is filled
                 if (cellcolumnIndex === 4) {
-                    const baseValue = parseFloat(numericValue);
+                    const baseValue = parseFloat(cleanedValue);
                     if (!isNaN(baseValue)) {
                         updatedData[cellrowIndex][5] = numberFormats((baseValue * 100 / 111).toFixed(0)); // Column 5 for normal DPP
                         updatedData[cellrowIndex][6] = numberFormats((baseValue * 100 / 111 * 11 / 12).toFixed(0)); // Column 6 for DPP Nilai Lain
@@ -547,7 +563,16 @@ function BuatPengajuan(props) {
                             const adjustedFormula = adjustFormulaReferences(cell.trim(), sourceRow, targetRow);
                             updatedData[targetRow][targetCol] = adjustedFormula;
                         } else {
-                            updatedData[targetRow][targetCol] = cell.trim();
+                            // Clean currency formatting from pasted values for numeric columns
+                            const trimmedCell = cell.trim();
+                            // Apply currency cleaning to numeric columns (exclude columns 0-3 and 18-21)
+                            if (!(targetCol >= 0 && targetCol <= 3) && !(targetCol >= 18 && targetCol <= 21)) {
+                                const cleanedValue = cleanCurrencyValue(trimmedCell);
+                                // If it's a valid number after cleaning, use the cleaned value, otherwise use original
+                                updatedData[targetRow][targetCol] = (!isNaN(cleanedValue) && cleanedValue.trim() !== "") ? cleanedValue : trimmedCell;
+                            } else {
+                                updatedData[targetRow][targetCol] = trimmedCell;
+                            }
                         }
                     }
                     //Auto format pasted values

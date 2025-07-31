@@ -555,16 +555,19 @@ function BuatPengajuan(props) {
                 row.forEach((cell, j) => {
                     const targetCol = startCol + j;
                     if (targetCol < updatedData[targetRow].length) {
+                        // Safely handle undefined/null cells
+                        const safeCell = cell != null ? String(cell) : "";
+                        
                         // Check if the cell contains a formula
-                        if (cell.trim().startsWith('=')) {
+                        if (safeCell.trim().startsWith('=')) {
                             // Get the source row (where the formula is being copied from)
                             const sourceRow = mouseSelectRange.start ? mouseSelectRange.start.row : targetRow;
                             // Adjust the formula references
-                            const adjustedFormula = adjustFormulaReferences(cell.trim(), sourceRow, targetRow);
+                            const adjustedFormula = adjustFormulaReferences(safeCell.trim(), sourceRow, targetRow);
                             updatedData[targetRow][targetCol] = adjustedFormula;
                         } else {
                             // Clean currency formatting from pasted values for numeric columns
-                            const trimmedCell = cell.trim();
+                            const trimmedCell = safeCell.trim();
                             // Apply currency cleaning to numeric columns (exclude columns 0-3 and 18-21)
                             if (!(targetCol >= 0 && targetCol <= 3) && !(targetCol >= 18 && targetCol <= 21)) {
                                 const cleanedValue = cleanCurrencyValue(trimmedCell);

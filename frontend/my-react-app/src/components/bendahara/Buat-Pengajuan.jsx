@@ -299,6 +299,11 @@ function BuatPengajuan(props) {
             return;
         }
 
+        // Exclude columns 8, 10, 12, 14, and 16 from auto formatting
+        if (cellcolumnIndex === 8 || cellcolumnIndex === 10 || cellcolumnIndex === 12 || cellcolumnIndex === 14 || cellcolumnIndex === 16) {
+            return;
+        }
+
         // Check if the value starts with "=" (formula mode)
         if (value.startsWith("=")) {
             // No formatting should occur in formula mode
@@ -326,7 +331,7 @@ function BuatPengajuan(props) {
                 }
 
                 //Automatically calculate total Nilai Terima
-                if (cellcolumnIndex >= 4 && cellcolumnIndex <= 17) {
+                if (cellcolumnIndex >= 4 && cellcolumnIndex <= 16) {
                     updateNilaiTerima(updatedData, cellrowIndex);
                 }
 

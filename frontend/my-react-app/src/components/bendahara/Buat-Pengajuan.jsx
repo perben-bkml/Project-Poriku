@@ -573,8 +573,8 @@ function BuatPengajuan(props) {
                         } else {
                             // Clean currency formatting from pasted values for numeric columns
                             const trimmedCell = safeCell.trim();
-                            // Apply currency cleaning to numeric columns (exclude columns 0-3 and 18-21)
-                            if (!(targetCol >= 0 && targetCol <= 3) && !(targetCol >= 18 && targetCol <= 21)) {
+                            // Apply currency cleaning to numeric columns (exclude columns 0-3, 8, 10, 12, 14, 16, and 18-21)
+                            if (!(targetCol >= 0 && targetCol <= 3) && !(targetCol >= 18 && targetCol <= 21) && targetCol !== 8 && targetCol !== 10 && targetCol !== 12 && targetCol !== 14 && targetCol !== 16) {
                                 const cleanedValue = cleanCurrencyValue(trimmedCell);
                                 // If it's a valid number after cleaning, use the cleaned value, otherwise use original
                                 updatedData[targetRow][targetCol] = (!isNaN(cleanedValue) && cleanedValue.trim() !== "") ? cleanedValue : trimmedCell;

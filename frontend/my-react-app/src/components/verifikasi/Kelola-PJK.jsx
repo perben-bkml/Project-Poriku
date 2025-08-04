@@ -76,10 +76,12 @@ export default function KelolaPJK() {
         if (option === "") {
             setStatusFilter("");
         }
+        setCurrentPage(1);
     }
     function handleStatusSelectChange(event) {
         const option = event.target.value;
         setStatusFilter(option);
+        setCurrentPage(1);
     }
     //Pagination
     function handlePaginationChange(event, value) {

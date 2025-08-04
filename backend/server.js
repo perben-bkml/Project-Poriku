@@ -1853,6 +1853,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         //Format setup
         allRows = allRows.map((row, index) => ({
             satker: row[0] || "",           // Column A
+            nomorSpm: row[1] || "",         // Column B
             status: row[7] || "",           // Column H
             rowIndex: index + 1
         }));
@@ -1873,8 +1874,21 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         if (allRows.length === 0) {
             message = false;
         } else {
-            //Sort reverse
-            allRows = allRows.reverse();
+            //Sort by Column B (nomorSpm) from highest to lowest number
+            allRows = allRows.sort((a, b) => {
+                // Extract numeric part from nomorSpm (e.g., "00001A" -> 1)
+                const getNumericPart = (spm) => {
+                    if (!spm) return 0;
+                    const match = spm.match(/^(\d+)/);
+                    return match ? parseInt(match[1], 10) : 0;
+                };
+                
+                const numA = getNumericPart(a.nomorSpm);
+                const numB = getNumericPart(b.nomorSpm);
+                
+                // Sort from highest to lowest
+                return numB - numA;
+            });
 
             //Pagination logic
             const startIndex = (page - 1) * limit;

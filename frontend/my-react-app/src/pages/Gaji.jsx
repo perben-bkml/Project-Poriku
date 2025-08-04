@@ -135,6 +135,7 @@ export default function Gaji() {
                 <div className='gaji-buttonList'>
                     <a href="https://bit.ly/PelayananGajiBakamlaRI" style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></a>
                     <a href={`${import.meta.env.VITE_DOCS_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Surat Rekomendasi Atasan</button></a>
+                    <a href={`${import.meta.env.VITE_DOCS_TWO_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Surat Pernyataan</button></a>
                 </div>
             </div>
 

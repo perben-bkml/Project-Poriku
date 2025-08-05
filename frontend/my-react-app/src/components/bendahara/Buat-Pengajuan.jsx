@@ -541,12 +541,25 @@ function BuatPengajuan(props) {
         });
     }, []);
 
+
     // Handle pasting data to cell - optimized with useCallback
     const handlePaste = useCallback((event, startRow, startCol) => {
         event.preventDefault();
 
         const clipboardData = event.clipboardData.getData("text/plain");
-        const rows = clipboardData.split("\n").map((row) => row.split("\t"));
+        
+        // Clean clipboard data to handle quoted strings with internal newlines
+        let cleanedClipboardData = clipboardData
+            .replace(/\r\n/g, '\n')  // Normalize Windows line endings
+            .replace(/\r/g, '\n')    // Handle Mac line endings
+            .replace(/"([^"]*?)\n([^"]*?)"/g, '"$1$2"')  // Remove newlines inside quoted strings
+            .replace(/\n+$/, '')     // Remove trailing newlines that cause empty rows
+        .trim();
+        
+        const rows = cleanedClipboardData
+            .split("\n")
+            .map((row) => row.split("\t"))
+            .filter(row => row.some(cell => cell != null && cell.trim() !== "")); // Filter empty/whitespace-only rows
 
         setTableData(prevData => {
             const updatedData = [...prevData];
@@ -572,7 +585,13 @@ function BuatPengajuan(props) {
                             updatedData[targetRow][targetCol] = adjustedFormula;
                         } else {
                             // Clean currency formatting from pasted values for numeric columns
-                            const trimmedCell = safeCell.trim();
+                            let trimmedCell = safeCell.trim();
+                            
+                            // Special handling for column 3 (SPM numbers) - remove quotes and newlines
+                            if (targetCol === 3) {
+                                trimmedCell = trimmedCell.replace(/^["']|["']$/g, '').replace(/\n/g, '').trim();
+                            }
+                            
                             // Apply currency cleaning to numeric columns (exclude columns 0-3, 8, 10, 12, 14, 16, and 18-21)
                             if (!(targetCol >= 0 && targetCol <= 3) && !(targetCol >= 18 && targetCol <= 21) && targetCol !== 8 && targetCol !== 10 && targetCol !== 12 && targetCol !== 14 && targetCol !== 16) {
                                 const cleanedValue = cleanCurrencyValue(trimmedCell);

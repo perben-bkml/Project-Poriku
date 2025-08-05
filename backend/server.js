@@ -159,6 +159,54 @@ const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 let drive = null;
 const driveFolderId = process.env.DRIVE_FOLDER_ID_AJUAN;
 
+// OAuth Token Management Functions
+async function saveOAuthTokens(tokens) {
+    try {
+        // Delete existing tokens first
+        await sql`DELETE FROM oauth_tokens WHERE id = 1`;
+        
+        // Insert new tokens
+        await sql`
+            INSERT INTO oauth_tokens (id, access_token, refresh_token, expiry_date, created_at)
+            VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expiry_date = EXCLUDED.expiry_date,
+                updated_at = NOW()
+        `;
+        console.log('OAuth tokens saved to database');
+    } catch (error) {
+        console.error('Failed to save OAuth tokens:', error);
+    }
+}
+
+async function loadOAuthTokens() {
+    try {
+        const result = await sql`SELECT * FROM oauth_tokens WHERE id = 1 LIMIT 1`;
+        if (result.length > 0) {
+            const tokenData = result[0];
+            const tokens = {
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                expiry_date: tokenData.expiry_date
+            };
+            
+            oauth2Client.setCredentials(tokens);
+            drive = google.drive({ version: "v3", auth: oauth2Client });
+            console.log('OAuth tokens loaded from database');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to load OAuth tokens:', error);
+        return false;
+    }
+}
+
+// Initialize OAuth tokens on server startup
+loadOAuthTokens();
+
 //Endpoints
 // Google OAuth2 Authentication
 app.get("/auth/google", (req, res) => {
@@ -184,9 +232,8 @@ app.get("/auth/google/callback", async (req, res) => {
         // Initialize Google Drive with OAuth2 tokens
         drive = google.drive({ version: "v3", auth: oauth2Client });
         
-        // Store tokens in session/database (for production, use proper token storage)
-        req.session = req.session || {};
-        req.session.tokens = tokens;
+        // Save tokens to database for persistence across server restarts
+        await saveOAuthTokens(tokens);
         
         res.redirect('/auth/success');
     } catch (error) {
@@ -574,26 +621,36 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
 
             //Check if req.file from formData exist
             if (req.file) {
-                // Check if OAuth2 is authenticated
+                // Check if OAuth2 is authenticated, try to load from database if not
                 if (!drive || !oauth2Client.credentials.access_token) {
-                    return res.status(401).json({ 
-                        error: "Google Drive authentication required. Please authenticate first.",
-                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
-                        redirectToAuth: true
-                    });
+                    console.log('No OAuth tokens in memory, attempting to load from database...');
+                    const tokensLoaded = await loadOAuthTokens();
+                    
+                    if (!tokensLoaded) {
+                        return res.status(401).json({ 
+                            error: "Google Drive authentication required. Please authenticate first.",
+                            authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                            redirectToAuth: true
+                        });
+                    }
                 }
 
                 // Check if token is expired and refresh if needed
                 try {
                     if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
+                        console.log('Token expired, refreshing...');
                         await oauth2Client.refreshAccessToken();
                         drive = google.drive({ version: "v3", auth: oauth2Client });
+                        
+                        // Save refreshed tokens to database
+                        await saveOAuthTokens(oauth2Client.credentials);
                     }
                 } catch (refreshError) {
                     console.error('Token refresh failed:', refreshError);
                     return res.status(401).json({ 
                         error: "Authentication expired. Please re-authenticate.",
-                        authUrl: "/auth/google"
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                        redirectToAuth: true
                     });
                 }
 
@@ -893,26 +950,36 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
 
         //Check if req.file from formData exist
         if (req.file) {
-            // Check if OAuth2 is authenticated
+            // Check if OAuth2 is authenticated, try to load from database if not
             if (!drive || !oauth2Client.credentials.access_token) {
-                return res.status(401).json({
-                    error: "Google Drive authentication required. Please authenticate first.",
-                    authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
-                    redirectToAuth: true
-                });
+                console.log('No OAuth tokens in memory, attempting to load from database...');
+                const tokensLoaded = await loadOAuthTokens();
+                
+                if (!tokensLoaded) {
+                    return res.status(401).json({
+                        error: "Google Drive authentication required. Please authenticate first.",
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                        redirectToAuth: true
+                    });
+                }
             }
 
             // Check if token is expired and refresh if needed
             try {
                 if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
+                    console.log('Token expired, refreshing...');
                     await oauth2Client.refreshAccessToken();
                     drive = google.drive({ version: "v3", auth: oauth2Client });
+                    
+                    // Save refreshed tokens to database
+                    await saveOAuthTokens(oauth2Client.credentials);
                 }
             } catch (refreshError) {
                 console.error('Token refresh failed:', refreshError);
                 return res.status(401).json({
                     error: "Authentication expired. Please re-authenticate.",
-                    authUrl: "/auth/google"
+                    authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                    redirectToAuth: true
                 });
             }
 

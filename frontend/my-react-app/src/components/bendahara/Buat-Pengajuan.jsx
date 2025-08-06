@@ -1039,7 +1039,7 @@ function BuatPengajuan(props) {
                             <option value="ptup">PTUP</option>
                         </select>
                         :
-                        (props.passedData && (<select name="ajuan" id="ajuan" disabled={componentType === "lihat"}>
+                        (props.passedData && (<select name="ajuan" id="ajuan" onChange={(e) => setAjuan(e.target.value)} disabled={componentType === "lihat"}>
                             <option value={props.passedData[2]}>{props.passedData[2].toUpperCase()}</option>
                             <option value={props.passedData[2] === "gup"? "ptup": "gup"}>{props.passedData[2] === "gup" ? "PTUP" : "GUP"}</option>
                         </select>))

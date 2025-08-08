@@ -66,7 +66,7 @@ function AksiPengajuan(props) {
     async function fetchMonitoringData() {
         try {
             const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/get-ajuan`, {
-                params: { trans_id: props.fulldata[0] },
+                params: { trans_id: props.fulldata[0], spm: props.fulldata[10] },
             });
             if (response.status === 200) {
                 const firstDRPP = response.data.data[0].drpp;
@@ -216,14 +216,21 @@ function AksiPengajuan(props) {
     //Submit Handler
     async function handleOnSubmit(){
         const drppArray = documentData.map(row => row.drpp).join(", ");
+        const sppArray = documentData.map(row => row.spp).filter(spp => spp.trim() !== "");
+        const sppString = [...new Set(sppArray)].join(", ");
+
+        const spmArray = documentData.map(row => row.spm).filter(spm => spm.trim() !== "");
+        const spmString = [...new Set(spmArray)].join(", ");
+
         const updatedAntriData = {
             ...antriData,
             drpp: drppArray, 
-            spp: documentData[0]?.spp, 
-            spm: documentData[0]?.spm
+            spp: sppString,
+            spm: spmString,
         };
 
         const nominalArray = documentData.map(row => row.nominal).join(", ");
+        const spmArrayString = documentData.map(row => row.spp).join(", ");
         let monitoringDrppData = null
         if (drppProcess) {
             monitoringDrppData = {
@@ -231,12 +238,13 @@ function AksiPengajuan(props) {
                 satker: props.fulldata[11],
                 nominal: nominalArray,
                 jenis: props.fulldata[3],
+                spmDrpp: spmArrayString,
             }
         }
 
         const sendData = {
             updatedAntriData,
-            monitoringDrppData
+            monitoringDrppData,
         }
 
         try {

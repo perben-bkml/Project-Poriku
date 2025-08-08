@@ -1437,7 +1437,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 //Aksi-Pengajuan Handler
 app.post("/bendahara/aksi-ajuan", async (req, res) => {
     try {
-        const {updatedAntriData, monitoringDrppData} = req.body
+        const {updatedAntriData, monitoringDrppData, documentData} = req.body
         if (!updatedAntriData) {
             return res.status(400).json({ message: "Invalid or missing data." });
         }
@@ -1498,11 +1498,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {
-            const {trans_id, satker, nominal, jenis} = monitoringDrppData;
+            const {trans_id, satker, nominal, jenis, spmDrpp} = monitoringDrppData;
 
             //Split drpp and nominal into arrays
             const drppArray = drpp.split(", ").map(num => num.trim());
             const nominalArray = nominal.split(", ").map(num => num.trim());
+            const spmDrppArray = spmDrpp.split(", ").map(num => num.trim());
 
             if (drppArray.length !== nominalArray.length) {
                 return res.status(400).json({message: "DRPP and Nominal data mismatch."});
@@ -1542,7 +1543,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                     fullDateFormat, // Column C
                     satker, // Column D
                     drppArray[i], // Column E
-                    spm, // Column F
+                    spmDrppArray[i], // Column F
                     nominalArray[i], // Column G
                     "Belum", // Column H
                     "Belum", // Column I
@@ -1640,7 +1641,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
 //Fetch monitoring data for Aksi-Pengajuan
 app.get("/bendahara/get-ajuan", async (req, res) => {
-    const { trans_id } = req.query;
+    const { trans_id, spm } = req.query;
     if (!trans_id) {
         return res.status(400).json({ error: "Missing trans_id" });
     }
@@ -1677,7 +1678,7 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
                     drpp: row[3] || "",
                     nominal: row[5] || "",
                     spp: row[4] || "",
-                    spm: row[4] || "",
+                    spm: spm !== "" ? row[4] : "",
                 });
             }
         }

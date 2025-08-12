@@ -1010,9 +1010,6 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
             fileLink = driveResponse.data.webViewLink;
         }
 
-        console.log(fileLink);
-        console.log("you hit the edit-table path")
-
         // Setting antrian data range
         textdata.unshift(fullDateFormat);
 
@@ -1100,6 +1097,16 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
             });
         }
 
+        // Execute Batch Update for row adjustments first (if any requests remain)
+        if (requests.length > 0) {
+            await withBackoff(async () => {
+                return await sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: { requests },
+                });
+            });
+        }
+
         // Prepare batch data updates (Preserves text formatting with single API call)
         const batchDataUpdates = [
             {
@@ -1134,16 +1141,6 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
                 }
             });
         });
-
-        // Execute Batch Update for row adjustments only (if any requests remain)
-        if (requests.length > 0) {
-            await withBackoff(async () => {
-                return await sheets.spreadsheets.batchUpdate({
-                    spreadsheetId,
-                    resource: { requests },
-                });
-            });
-        }
 
         console.log("✅ Update successful!");
 

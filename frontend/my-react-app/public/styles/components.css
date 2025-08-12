@@ -299,6 +299,11 @@
     margin-left: 25px;
 }
 
+.table-lock {
+    display: flex;
+    margin-left: 10px;
+}
+
 .head-data {
     font-size: 100px;
 }

@@ -16,6 +16,8 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import { TableFooter, TablePagination } from "@mui/material";
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import LockIcon from '@mui/icons-material/Lock';
 
 // Import Context
 import { AuthContext } from "../../lib/AuthContext.jsx";
@@ -46,6 +48,7 @@ function BuatPengajuan(props) {
     const [ajuan, setAjuan] = useState("gup");
     const [jumlahAjuan, setJumlahAjuan] = useState("");
     const [tanggalAjuan, setTanggalAjuan] = useState("");
+    const [lockRow, setLockRow] = useState(false);
 
     //State for reading and edit tabledata
     const [keywordRowPos, setKeywordRowPos] = useState("");
@@ -1064,7 +1067,12 @@ function BuatPengajuan(props) {
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""} 
                                 onChange={handleRowChange} onBlur={handleRowBlur} 
-                                readOnly={componentType === "lihat"} min="0" />
+                                readOnly={componentType === "lihat"} min="0"
+                                disabled={lockRow}
+                            />
+                            <div className="table-lock" onClick={() => setLockRow(!lockRow)}>
+                                {lockRow === false ? <LockOpenIcon fontSize={"medium"} /> : <LockIcon fontSize={"medium"} />}
+                            </div>
                             {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
                                 <div className={"pengajuan-form-tableinfo-message"}>
                                     <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>

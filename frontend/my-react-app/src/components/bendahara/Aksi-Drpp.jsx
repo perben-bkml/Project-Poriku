@@ -125,7 +125,10 @@ export default function AksiDrpp(props) {
     //Handle submit button
     async function handleSubmit(){
         let numbers = { data: props.fulldata[0] };
-        let colorData = { data: coloredRow, id: `TRANS_ID:${props.fulldata[1]}` };
+        const processedColoredRow = Array.from({ length: coloredRow.length }, (_, i) => 
+            coloredRow[i] && coloredRow[i].length > 0 ? coloredRow[i] : [""]
+        );
+        let colorData = { data: processedColoredRow, id: `TRANS_ID:${props.fulldata[1]}` };
         const sendData = {
             numbers,
             pajakStatus,

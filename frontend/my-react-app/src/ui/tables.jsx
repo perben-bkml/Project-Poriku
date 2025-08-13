@@ -10,7 +10,8 @@ import TableFooter from '@mui/material/TableFooter';
 // Other Material UI
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import { IconButton, TablePagination } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { IconButton, TablePagination, Tooltip } from '@mui/material';
 import Collapse from '@mui/material/Collapse';
 // Components
 import LoadingAnimate from './loading';
@@ -152,6 +153,79 @@ export function TableKelola(props) {
         return totals.map(value => typeof value === "number" ? numberFormats(value) : "");
     }
 
+    function CopyableTableCell({ children, ...props }) {
+        const [isHovered, setIsHovered] = useState(false);
+        const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
+
+        const copyToClipboard = async (text) => {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
+                
+                setShowCopiedTooltip(true);
+                setTimeout(() => setShowCopiedTooltip(false), 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        };
+
+        const handleCopyClick = (e) => {
+            e.stopPropagation();
+            const text = typeof children === 'string' ? children : 
+                        typeof children === 'object' && children?.props?.children ? children.props.children : 
+                        children?.toString() || '';
+            copyToClipboard(text);
+        };
+
+        return (
+            <TableCell
+                {...props}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                sx={{
+                    ...props.sx,
+                    position: 'relative',
+                    '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.02)'
+                    }
+                }}
+            >
+                {children}
+                {isHovered && (
+                    <Tooltip title={showCopiedTooltip ? "Copied!" : "Copy cell content"} arrow>
+                        <IconButton
+                            size="small"
+                            onClick={handleCopyClick}
+                            sx={{
+                                position: 'absolute',
+                                top: 2,
+                                right: 2,
+                                padding: '2px',
+                                opacity: 0.7,
+                                '&:hover': {
+                                    opacity: 1,
+                                    backgroundColor: 'rgba(0, 0, 0, 0.08)'
+                                }
+                            }}
+                        >
+                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
+            </TableCell>
+        );
+    }
 
     function Row(props) {
         //State
@@ -176,9 +250,11 @@ export function TableKelola(props) {
                     </TableCell>
                     : null}
                     {props.rowData.map((data, index) => (
-                        <TableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" } sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'} : null} >
+                        <CopyableTableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" }
+                                   sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'}
+                                       : (index === 1 || index === 19 ? {maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word', borderBottom: '2px solid rgb(214, 214, 214)'} : {borderBottom: '2px solid rgb(214, 214, 214)'})} >
                             {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ? <p style={{margin: '0px', fontWeight: '700'}}>{data}</p> : data}
-                        </TableCell>
+                        </CopyableTableCell>
                     ))}
                 </TableRow>
 

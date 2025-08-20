@@ -1,4 +1,4 @@
-import React, {useState, Fragment, useEffect, useMemo} from 'react';
+import React, {useState, Fragment, useEffect, useMemo, useRef} from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -12,6 +12,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { IconButton, TablePagination, Tooltip } from '@mui/material';
+import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
 // Components
 import LoadingAnimate from './loading';
@@ -84,6 +85,10 @@ export function TableKelola(props) {
     const [isLoading, setIsLoading] = useState(true)
     const [page, setPage] = useState(0)
     const [rowsPerPage, setRowsPerPage] = useState(10)
+    const [sudahVerifSum, setSudahVerifSum] = useState("0");
+    const [checkedItems, setCheckedItems] = useState(new Set());
+    const mousePositionRef = useRef({ x: 0, y: 0 });
+    const popupRef = useRef(null);
 
     useEffect(() => {
         setTableType(props.type);
@@ -152,8 +157,8 @@ export function TableKelola(props) {
 
         return totals.map(value => typeof value === "number" ? numberFormats(value) : "");
     }
-
-    function CopyableTableCell({ children, ...props }) {
+    //For copy button feature
+    function CopyableTableCell({ children, showCheckbox, isChecked, onCheckboxChange, ...props }) {
         const [isHovered, setIsHovered] = useState(false);
         const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
 
@@ -202,6 +207,24 @@ export function TableKelola(props) {
                 }}
             >
                 {children}
+                {showCheckbox && (isHovered || isChecked) && (
+                    <Checkbox
+                        checked={isChecked}
+                        onChange={(e) => onCheckboxChange && onCheckboxChange(e.target.checked, e)}
+                        size="small"
+                        sx={{
+                            position: 'absolute',
+                            top: 2,
+                            left: 2,
+                            padding: '2px',
+                            opacity: 0.8,
+                            '&:hover': {
+                                opacity: 1,
+                                backgroundColor: 'rgba(0, 0, 0, 0.08)'
+                            }
+                        }}
+                    />
+                )}
                 {isHovered && (
                     <Tooltip title={showCopiedTooltip ? "Copied!" : "Copy cell content"} arrow>
                         <IconButton
@@ -226,7 +249,7 @@ export function TableKelola(props) {
             </TableCell>
         );
     }
-
+    // For monitoring DRPP
     function CustomColoredCell(props) {
         return(
             <p style={{margin: '0px', fontWeight: '700', height: "40px", width: "110px",
@@ -234,6 +257,52 @@ export function TableKelola(props) {
                 backgroundColor: props.color}}>{props.data}</p>
         )
     }
+
+    // Mouse tracking for AksiDrpp popup (regular function to avoid hooks rule issues)
+    function handleMouseMove(e) {
+        if (props.feature === "AksiDrpp") {
+            mousePositionRef.current = { x: e.clientX, y: e.clientY };
+            
+            // Update popup position directly via DOM manipulation
+            if (popupRef.current) {
+                popupRef.current.style.left = `${e.clientX + 15}px`;
+                popupRef.current.style.top = `${e.clientY - 10}px`;
+            }
+        }
+    }
+
+    // For sudah verifikasi and aksi drpp checkbox sum calculation
+    function handleCheckboxChange(rowIndex, columnIndex, cellData, isChecked, event) {
+        // Prevent scroll for AksiDrpp
+        if (props.feature === "AksiDrpp" && event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        const itemId = `${rowIndex}-${columnIndex}`; // rowIndex + column index
+        const newCheckedItems = new Set(checkedItems);
+        
+        // Convert cellData to number
+        const dataString = String(cellData || "");
+        const cleanValue = dataString.replace(/\./g, "").replace(/[^0-9]/g, "");
+        const valueNum = parseInt(cleanValue, 10);
+        const finalValueNum = isNaN(valueNum) ? 0 : valueNum;
+        
+        const currentSum = parseInt(sudahVerifSum, 10);
+        
+        if (isChecked) {
+            // Add to checked items and sum
+            newCheckedItems.add(itemId);
+            setSudahVerifSum((currentSum + finalValueNum).toString());
+        } else {
+            // Remove from checked items and subtract from sum
+            newCheckedItems.delete(itemId);
+            setSudahVerifSum((currentSum - finalValueNum).toString());
+        }
+        
+        setCheckedItems(newCheckedItems);
+    }
+
 
     function Row(props) {
         //State
@@ -257,8 +326,17 @@ export function TableKelola(props) {
                         </IconButton>
                     </TableCell>
                     : null}
-                    {props.rowData.map((data, index) => (
+                    {props.rowData.map((data, index) => {
+                        const itemId = `${props.rowIndex}-${index}`;
+                        const shouldShowCheckbox = props.feature === "SudahVerif" && index === 4
+                            || props.feature === "AksiDrpp" && (index === 7 || index === 9 || index === 11 || index === 13 || index === 15);
+                        const isItemChecked = checkedItems.has(itemId);
+                        
+                        return (
                         <CopyableTableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" }
+                                   showCheckbox={shouldShowCheckbox}
+                                   isChecked={isItemChecked}
+                                   onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
                                    sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'}
                                        : (index === 1 || index === 19 ? {maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word', borderBottom: '2px solid rgb(214, 214, 214)'} : {borderBottom: '2px solid rgb(214, 214, 214)'})} >
                             {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ?
@@ -270,7 +348,8 @@ export function TableKelola(props) {
                                          <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
                                 : data}
                         </CopyableTableCell>
-                    ))}
+                        );
+                    })}
                 </TableRow>
 
                 <TableRow>
@@ -287,7 +366,10 @@ export function TableKelola(props) {
     }
 
     return (
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900 }}>
+        <div style={{ position: 'relative' }}>
+        <TableContainer 
+            sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900 }}
+            onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
                     <TableRow sx={{backgroundColor: "#1a284b"}}>
@@ -311,7 +393,8 @@ export function TableKelola(props) {
                                 rowData={row} 
                                 rowIndex={page * rowsPerPage + index} 
                                 coloredRow={props.coloredRow} 
-                                addColorData={props.addColorData} 
+                                addColorData={props.addColorData}
+                                feature={props.feature}
                             />
                     ))}
                 </TableBody>
@@ -323,6 +406,15 @@ export function TableKelola(props) {
                                 {value}
                             </TableCell>
                         ))}
+                    </TableRow>
+                </TableFooter>
+                }
+                { props.feature === "SudahVerif" &&
+                <TableFooter>
+                    <TableRow>
+                        <TableCell colSpan={props.header ? props.header.length : 1}>
+                            <strong>Total yang dipilih: {numberFormats(sudahVerifSum)}</strong>
+                        </TableCell>
                     </TableRow>
                 </TableFooter>
                 }
@@ -345,6 +437,30 @@ export function TableKelola(props) {
             />
             }
         </TableContainer>
+        
+        {/* Floating popup for AksiDrpp sum display */}
+        {props.feature === "AksiDrpp" && checkedItems.size > 0 && (
+            <div
+                ref={popupRef}
+                style={{
+                    position: 'fixed',
+                    left: 0,
+                    top: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    color: 'white',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                    whiteSpace: 'nowrap'
+                }}
+            >
+                Total: {numberFormats(sudahVerifSum)}
+            </div>
+        )}
+        </div>
     )
 }
 

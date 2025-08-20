@@ -186,7 +186,7 @@ export default function AksiDrpp(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Transaksi</h2>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi-drpp" header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
+                <TableKelola type="aksi-drpp" feature={"AksiDrpp"} header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
                 <div className='form-submit'>
                     <SubmitButton value='Kembali' name="submit-all" onClick={() => props.changeComponent('monitoring-drpp')} />
                 </div>

@@ -24,17 +24,23 @@ const getFormattedDate = () => {
     const prevMonth = String(date.getMonth()).padStart(2, '0'); // Prev Month
     const day = String(date.getDate()).padStart(2, '0');
     const fullDateFormat = `${year}-${month}-${day}`;
+    // Get time in hh:mm:ss
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const fullDateTimeFormat = `${fullDateFormat} ${hours}:${minutes}:${seconds}`;
     // Date in yyyy-mm
     const MonthDateFormat = `${year}-${month}`;
     // Previous Month
     const PrevMonthDate =  `${year}-${prevMonth}`;
     return {
         fullDateFormat,
+        fullDateTimeFormat,
         MonthDateFormat,
         PrevMonthDate,
     }
 }
-const { fullDateFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
+const { fullDateFormat, fullDateTimeFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
 
 //Exponential Backoff for GSheet API Limits
 async function withBackoff(apiCallFn, options = {}) {
@@ -703,7 +709,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
             const lastFilledRows = responseAntrian.length || 0;
             const lastTableRows = responseTable.length || [];
             // Add date to beginning of textdata array
-            textdata.unshift(fullDateFormat);
+            textdata.unshift(fullDateTimeFormat);
             // Add counter increment and unshift to textdata
             const newIdCounter = parseInt(responseId) + 1;
             textdata.unshift(newIdCounter)
@@ -1011,7 +1017,7 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
         }
 
         // Setting antrian data range
-        textdata.unshift(fullDateFormat);
+        textdata.unshift(fullDateTimeFormat);
 
         // Apply backoff strategy for getting antrian data
         const antriResponse = await withBackoff(async () => {
@@ -1466,7 +1472,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? fullDateFormat : "";
 
-        // Update multiple columns in a single request
+        // Update multiple columns in a single request. If tgl_verifikasi exist then don't update tgl mulai verif.
         const updateData = [
             [`'Write Antrian'!P${rowIndex}`, tgl_verifikasi],
             [`'Write Antrian'!M${rowIndex}`, status_pajak],
@@ -1476,8 +1482,8 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             [`'Write Antrian'!J${rowIndex}`, spp],
             [`'Write Antrian'!K${rowIndex}`, spm],
             [`'Write Antrian'!Q${rowIndex}`, catatan],
-            [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue], // Condition for column O
-        ];
+            tgl_verifikasi === "" ? [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue]  : null, // Condition for column O
+        ].filter(item => item !== null); //filter null to exclude it from the array
 
         // Apply backoff for batch update
         await withBackoff(async () => {

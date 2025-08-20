@@ -19,19 +19,25 @@ export default function MonitoringDrpp(props) {
     const [isLoading, setIsLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
-    const [cardContent, setCardContent] = useState([0, 0, 0, 0]);
+    const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
     const [filterSelect, setFilterSelect] = useState({
         satker: "",
         pungutan: "",
         setoran: ""
     });
+    const [cariInput, setCariInput] = useState({
+        spm: "",
+        spby: "",
+        drpp: ""
+    })
+    const [cariSelect, setCariSelect] = useState({});
 
     //Fetch Data
     const rowsPerPage = 10;
-    async function fetchMonitoringData (page, status) {
+    async function fetchMonitoringData (page, status, search) {
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/monitoring-drpp`, { params:{ page, limit: rowsPerPage, filterKeyword: status }});
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/monitoring-drpp`, { params:{ page, limit: rowsPerPage, filterKeyword: status, cariNomor: search }});
             if (response.status === 200){
                 const { data: responseResult, realAllDRPPRows, countData, fullData } = response.data;
                 setMonitoringData(responseResult);
@@ -46,8 +52,8 @@ export default function MonitoringDrpp(props) {
     }
 
     useEffect(() => {
-        fetchMonitoringData(currentPage, filterSelect);
-    }, [currentPage, filterSelect]);
+        fetchMonitoringData(currentPage, filterSelect, cariSelect);
+    }, [currentPage, filterSelect, cariSelect]);
 
     // Handle Pagination
     function handlePaginationChange (event, value) {
@@ -56,7 +62,30 @@ export default function MonitoringDrpp(props) {
 
     // Handle Filter Changes
     function handleFilterChange (event) {
+        if (cariInput.spm !== "" || cariInput.spby === "" || cariInput.drpp === "") {
+            setCariInput({ spm: "", spby: "", drpp: ""})
+            setCariSelect({});
+        }
         setFilterSelect({...filterSelect, [event.target.name]: event.target.value});
+    }
+
+    // Handle Cari Input Changes
+    function handleCariChange (event) {
+        const eventName = event.target.name;
+        const eventValue = event.target.value.toString();
+        
+        if (eventName === "spm") {
+            setCariInput({spm: eventValue, spby: "", drpp: ""});
+        } else if (eventName === "spby") {
+            setCariInput({spm: "", spby: eventValue, drpp: ""});
+        } else {
+            setCariInput({spm: "", spby: "", drpp: eventValue});
+        }
+    }
+
+    // Handle Cari input request when onBlur
+    function handleCariSearch () {
+        setCariSelect(cariInput)
     }
 
 
@@ -69,7 +98,6 @@ export default function MonitoringDrpp(props) {
             </div>
             <div className="pengajuan-filter filter-monitoring">
                 <h3 className="wide-card-title">Filter</h3>
-                <form className="filter-form">
                     <label className="filter-label2">Satker:</label>
                     <div className="filter-select filter-select2">
                         <select value={filterSelect.satker} name={"satker"} onChange={event => handleFilterChange(event)}>
@@ -94,7 +122,18 @@ export default function MonitoringDrpp(props) {
                             ))}
                         </select>
                     </div>
-                </form>
+
+                    <div className={"filter-search"}>
+                        <h3 className="wide-card-title">Cari</h3>
+                        <input className={'cari-input'} type={"number"} name={"drpp"} value={cariInput.drpp} placeholder={"DRPP..."}
+                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
+                        <input className={'cari-input'} type={"number"} name={"spm"} value={cariInput.spm} placeholder={"SPM..."}
+                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
+                        <input className={'cari-input'} type={"number"} name={"spby"} value={cariInput.spby} placeholder={"SPBY..."}
+                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
+                        <button className='cari spm-button' onClick={handleCariSearch} >Go</button>
+                    </div>
+
             </div>
             <div className="bg-card">
                 {isLoading ? <LoadingAnimate /> :

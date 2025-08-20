@@ -1695,13 +1695,23 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
 //Monitoring DRPP component handlers
 app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
-        const { page = 1, limit = 10, filterKeyword } = req.query;
+        const { page = 1, limit = 10, filterKeyword, cariNomor } = req.query;
+        
+        // Parse cariNomor if it exists
+        let parsedCariNomor = null;
+        if (cariNomor) {
+            try {
+                parsedCariNomor = typeof cariNomor === 'string' ? JSON.parse(cariNomor) : cariNomor;
+            } catch (e) {
+                parsedCariNomor = null;
+            }
+        }
 
         // Fetch total rows based on A column with backoff
         const getAllRowsResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: "'Monitoring DRPP'!A:I",
+                range: "'Monitoring DRPP'!A:K",
             });
         });
 
@@ -1709,7 +1719,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         const totalRowCount = totalRows.length;
 
         let allRows = totalRows.map((row, index) => ({
-            satker: row[0] || "",
+            satker: row[3] || "",
             pungut: row[7] || "",
             setor: row[8] || "",
             rowIndex: index + 1,
@@ -1726,7 +1736,258 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             allRows = allRows.filter(row => row.setor.startsWith(filterKeyword.setoran));
         }
 
+        //Get Total count of pajak status
+        // Get column H and I from row 3 downward
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Monitoring DRPP'!H:I", // Columns H and I
+            });
+        });
+
+        const rows = response.data.values || [];
+
+        let hBelum = 0, hSudah = 0;
+        let iBelum = 0, iSudah = 0;
+
+        rows.forEach(row => {
+            const colH = row[0]?.trim();
+            const colI = row[1]?.trim();
+
+            if (colH === "Belum") hBelum++;
+            else hSudah++;
+
+            if (colI === "Belum") iBelum++;
+            else iSudah++;
+        });
+
+        const countData = [hBelum, hSudah, iBelum, iSudah, totalRowCount]
+
+        // Handle cariNomor search logic
+        if (parsedCariNomor && (parsedCariNomor.spm || parsedCariNomor.spby || parsedCariNomor.drpp)) {
+
+            if (parsedCariNomor.spm && parsedCariNomor.spm !== "") {
+                // Search for SPM in column index 5 (column F)
+                const spmValue = parsedCariNomor.spm;
+                const matchedRows = [];
+
+                const normalizedSpmValue = spmValue.padStart(5, '0');
+                
+                totalRows.forEach((row, index) => {
+                    const columnFValue = row[5] || "";
+                    // Check if the column value matches (exact match or padded match)
+                    if (columnFValue === spmValue || columnFValue === normalizedSpmValue) {
+                        matchedRows.push({
+                            data: row,
+                            rowIndex: index + 1
+                        });
+                    }
+                });
+                
+                // Filter to get only rows from row 3 downward
+                const visibleMatchedRows = matchedRows.filter(row => row.rowIndex >= 3);
+
+                if (visibleMatchedRows.length > 0) {
+                    const resultData = visibleMatchedRows.map(row => {
+                        const values = [...row.data];
+                        while (values.length < 11) {
+                            values.push("");
+                        }
+                        return values.slice(0, -1); // Remove last column like paginatedSlicedDRPP
+                    });
+                    
+                    return res.json({ 
+                        data: resultData, 
+                        realAllDRPPRows: visibleMatchedRows.length, 
+                        countData: countData,
+                        fullData: visibleMatchedRows.map(row => {
+                            const values = [...row.data];
+                            while (values.length < 11) {
+                                values.push("");
+                            }
+                            return values;
+                        })
+                    });
+                } else {
+                    return res.json({ 
+                        data: [], 
+                        realAllDRPPRows: 0, 
+                        countData: {}, 
+                        fullData: []
+                    });
+                }
+            } else if (parsedCariNomor.spby && parsedCariNomor.spby !== "") {
+                // Get all data from column D
+                const getAllSpby = await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.get({
+                        spreadsheetId,
+                        range: "'Write Table'!D:D",
+                    });
+                });
+
+                const spbyRows = getAllSpby.data.values || [];
+                const spbyValue = parsedCariNomor.spby;
+                let matchedRowPosition = -1;
+
+                // Find first match of spby in column D
+                for (let i = 0; i < spbyRows.length; i++) {
+                    const cellValue = spbyRows[i][0] || "";
+                    if (cellValue.includes(spbyValue)) {
+                        matchedRowPosition = i + 1; // Convert to 1-based indexing
+                        break;
+                    }
+                }
+
+                if (matchedRowPosition === -1) {
+                    return res.json({ 
+                        data: [], 
+                        realAllDRPPRows: 0, 
+                        countData: countData, 
+                        fullData: []
+                    });
+                }
+
+                // Calculate search range (from matched row up to 170 rows above)
+                const searchStartRow = Math.max(1, matchedRowPosition - 170);
+                const searchEndRow = matchedRowPosition;
+                
+                // Get both column D and X data for the search range in one request
+                const searchRange = `'Write Table'!D${searchStartRow}:X${searchEndRow}`;
+                const searchResponse = await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.get({
+                        spreadsheetId,
+                        range: searchRange,
+                    });
+                });
+
+                const searchData = searchResponse.data.values || [];
+                let nomorSpbyRowPosition = -1;
+                let transId = null;
+
+                // Find "Nomor SPBY" exact match in column D within the range
+                for (let i = searchData.length - 1; i >= 0; i--) { // Search from bottom to top (nearest to matched row)
+                    if (searchData[i][0] === "Nomor SPBY") {
+                        nomorSpbyRowPosition = searchStartRow + i;
+                        // Get TRANS_ID from column X
+                        const columnXValue = searchData[i][20] || ""; // X is at index 20 in D:X range
+                        
+                        // Extract number from "TRANS_ID:xx" format
+                        const transIdMatch = columnXValue.match(/TRANS_ID:(\d+)/);
+                        if (transIdMatch) {
+                            transId = transIdMatch[1]; // Extract just the number as string
+                        }
+                        break;
+                    }
+                }
+
+                if (!transId) {
+                    return res.json({ 
+                        data: [], 
+                        realAllDRPPRows: 0, 
+                        countData: countData, 
+                        fullData: []
+                    });
+                }
+
+                // Find matches in Monitoring DRPP column B using already fetched totalRows
+                const matchedDrppRows = [];
+                totalRows.forEach((row, index) => {
+                    const columnBValue = row[1] || ""; // Column B index 1
+                    if (columnBValue === transId) {
+                        matchedDrppRows.push({
+                            data: row,
+                            rowIndex: index + 1
+                        });
+                    }
+                });
+
+                // Filter to get only rows from row 3 downward
+                const visibleMatchedDrppRows = matchedDrppRows.filter(row => row.rowIndex >= 3);
+
+                if (visibleMatchedDrppRows.length > 0) {
+                    const resultData = visibleMatchedDrppRows.map(row => {
+                        const values = [...row.data];
+                        while (values.length < 11) {
+                            values.push("");
+                        }
+                        return values.slice(0, -1); // Remove last column like paginatedSlicedDRPP
+                    });
+                    
+                    return res.json({ 
+                        data: resultData, 
+                        realAllDRPPRows: visibleMatchedDrppRows.length, 
+                        countData: countData,
+                        fullData: visibleMatchedDrppRows.map(row => {
+                            const values = [...row.data];
+                            while (values.length < 11) {
+                                values.push("");
+                            }
+                            return values;
+                        })
+                    });
+                } else {
+                    return res.json({ 
+                        data: [], 
+                        realAllDRPPRows: 0, 
+                        countData: countData, 
+                        fullData: []
+                    });
+                }
+            } else if (parsedCariNomor.drpp && parsedCariNomor.drpp !=="") {
+                // Search for DRPP in column index 4 (column E)
+                const drppValue = parsedCariNomor.drpp;
+                const matchedRow = [];
+
+                const normalizedDrppValue = drppValue.padStart(5, '0');
+
+                totalRows.forEach((row, index) => {
+                    const columnFValue = row[4] || "";
+                    // Check if the column value matches (exact match or padded match)
+                    if (columnFValue === drppValue || columnFValue === normalizedDrppValue) {
+                        matchedRow.push({
+                            data: row,
+                            rowIndex: index + 1
+                        });
+                    }
+                });
+
+                // Filter to get only rows from row 3 downward
+                const drppMatchedRows = matchedRow.filter(row => row.rowIndex >= 3);
+
+                if (drppMatchedRows.length > 0) {
+                    const resultData = drppMatchedRows.map(row => {
+                        const values = [...row.data];
+                        while (values.length < 11) {
+                            values.push("");
+                        }
+                        return values.slice(0, -1); // Remove last column like paginatedSlicedDRPP
+                    });
+
+                    return res.json({
+                        data: resultData,
+                        realAllDRPPRows: drppMatchedRows.length,
+                        countData: countData,
+                        fullData: drppMatchedRows.map(row => {
+                            const values = [...row.data];
+                            while (values.length < 11) {
+                                values.push("");
+                            }
+                            return values;
+                        })
+                    });
+                } else {
+                    return res.json({
+                        data: [],
+                        realAllDRPPRows: 0,
+                        countData: {},
+                        fullData: []
+                    });
+                }
+            }
+        }
+
         const visibleRows = allRows.filter(row => row.rowIndex >= 3);
+        const paginatedDRPPLength = visibleRows.length;
         
         // Sort by rowIndex in descending order to get latest rows first
         const sortedRows = visibleRows.sort((a, b) => b.rowIndex - a.rowIndex);
@@ -1756,34 +2017,8 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 
         const paginatedSlicedDRPP = paginatedDRPP.map(row => row.slice(0, -1))
 
-        //Get Total count of pajak status
-        // Get column H and I from row 3 downward
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Monitoring DRPP'!H:I", // Columns H and I
-            });
-        });
 
-        const rows = response.data.values || [];
-
-        let hBelum = 0, hSudah = 0;
-        let iBelum = 0, iSudah = 0;
-
-        rows.forEach(row => {
-            const colH = row[0]?.trim();
-            const colI = row[1]?.trim();
-
-            if (colH === "Belum") hBelum++;
-            else hSudah++;
-
-            if (colI === "Belum") iBelum++;
-            else iSudah++;
-        });
-
-        const countData = [hBelum, hSudah, iBelum, iSudah]
-
-        res.json({ data: paginatedSlicedDRPP, realAllDRPPRows: totalRowCount, countData: countData, fullData: paginatedDRPP });
+        res.json({ data: paginatedSlicedDRPP, realAllDRPPRows: paginatedDRPPLength, countData: countData, fullData: paginatedDRPP });
 
     } catch (error) {
         console.error("Error in /bendahara/monitoring-drpp:", error);

@@ -219,12 +219,20 @@ export function TableKelola(props) {
                                 }
                             }}
                         >
-                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                            <ContentCopyIcon sx={{ fontSize: 20 }} />
                         </IconButton>
                     </Tooltip>
                 )}
             </TableCell>
         );
+    }
+
+    function CustomColoredCell(props) {
+        return(
+            <p style={{margin: '0px', fontWeight: '700', height: "40px", width: "110px",
+                borderRadius:"5%", display:"flex", justifyContent:"center", alignItems:"center",
+                backgroundColor: props.color}}>{props.data}</p>
+        )
     }
 
     function Row(props) {
@@ -253,7 +261,14 @@ export function TableKelola(props) {
                         <CopyableTableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" }
                                    sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'}
                                        : (index === 1 || index === 19 ? {maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word', borderBottom: '2px solid rgb(214, 214, 214)'} : {borderBottom: '2px solid rgb(214, 214, 214)'})} >
-                            {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ? <p style={{margin: '0px', fontWeight: '700'}}>{data}</p> : data}
+                            {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ?
+                                (data === "Sudah" && index === 7 || data === "Sudah" && index === 8 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
+                                    (data === "Belum" && index === 7 || data === "Belum" && index === 8 ? <CustomColoredCell color={"#f27272"} data={data} /> :
+                                        (data === "Ada Masalah" && index === 7 || data === "Ada Masalah" && index === 8 ? <CustomColoredCell color={"#eb3d3d"} data={data} /> :
+                                            (data === "Tidak Ada Pajak" && index === 7 || data === "Tidak Ada Pajak" && index === 8 ? <CustomColoredCell color={"white"} data={data} /> :
+                                                (data === "Pajak Manual" && index === 7 || data === "Pajak Manual" && index === 8 ? <CustomColoredCell color={"#b39979"} data={data} /> :
+                                         <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
+                                : data}
                         </CopyableTableCell>
                     ))}
                 </TableRow>

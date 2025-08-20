@@ -60,7 +60,7 @@ const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pun
 
 //For Monitoring-Drpp.jsx
 const placeholderTable = ["No.", "ID Number", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan" ]
-const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor"]
+const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
 //For SPM-Bend.jsx

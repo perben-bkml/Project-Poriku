@@ -200,7 +200,7 @@ export function TableKelola(props) {
                 onMouseLeave={() => setIsHovered(false)}
                 sx={{
                     ...props.sx,
-                    position: 'relative',
+                    ...(props.column < 2 && props.feature === "AksiDrpp" ? { position: "sticky", left: '0px', zIndex: 1000, backgroundColor: "white" } : { position: 'relative'}),
                     '&:hover': {
                         backgroundColor: 'rgba(0, 0, 0, 0.02)'
                     }
@@ -334,6 +334,8 @@ export function TableKelola(props) {
                         
                         return (
                         <CopyableTableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" }
+                                   column={index}
+                                   feature={props.feature}
                                    showCheckbox={shouldShowCheckbox}
                                    isChecked={isItemChecked}
                                    onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
@@ -368,18 +370,21 @@ export function TableKelola(props) {
     return (
         <div style={{ position: 'relative' }}>
         <TableContainer 
-            sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900 }}
+            sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900, overflowX: 'auto' }}
             onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
                     <TableRow sx={{backgroundColor: "#1a284b"}}>
                     {tableType === "kelola" || tableType === "monitor"?  <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}
                     {props.header.map((data, index) => (
-                        <TableCell key={index} sx={
-                            tableType === "kelola" || tableType === "monitor"?
+                        <TableCell key={index} sx={{
+                            ...( tableType === "kelola" || tableType === "monitor"?
                             { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}
                             :
-                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b", minWidth: data.minWidth}}>
+                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b", minWidth: data.minWidth}),
+                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: "#1a284b" } )
+
+                            }}>
                             {tableType === "kelola" || tableType === "monitor"?  data : data.label}</TableCell>
                     ))}
                     </TableRow>

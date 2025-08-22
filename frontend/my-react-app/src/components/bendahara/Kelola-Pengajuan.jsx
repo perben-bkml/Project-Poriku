@@ -49,7 +49,7 @@ function KelolaPengajuan(props) {
                     row[2],
                     row[3],
                     row[4],
-                    row[14],
+                    row[15],
                     row[6],
                     row[12],
                     row[13],

@@ -1770,7 +1770,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         const countData = [hBelum, hSudah, iBelum, iSudah, totalRowCount]
 
         // Handle cariNomor search logic
-        if (parsedCariNomor && (parsedCariNomor.spm || parsedCariNomor.spby || parsedCariNomor.drpp)) {
+        if (parsedCariNomor && (parsedCariNomor.spm || parsedCariNomor.spby || parsedCariNomor.drpp || parsedCariNomor.bupot)) {
 
             if (parsedCariNomor.spm && parsedCariNomor.spm !== "") {
                 // Search for SPM in column index 5 (column F)
@@ -1854,7 +1854,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 }
 
                 // Calculate search range (from matched row up to 170 rows above)
-                const searchStartRow = Math.max(1, matchedRowPosition - 170);
+                const searchStartRow = Math.max(1, matchedRowPosition - 150);
                 const searchEndRow = matchedRowPosition;
                 
                 // Get both column D and X data for the search range in one request
@@ -1986,6 +1986,133 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                         data: [],
                         realAllDRPPRows: 0,
                         countData: {},
+                        fullData: []
+                    });
+                }
+            } else if (parsedCariNomor.bupot && parsedCariNomor.bupot !== "") {
+                // Search for Bupot/Faktur in col I and Q
+                const getAllBupot = await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.get({
+                        spreadsheetId,
+                        range: "'Write Table'!I:Q",
+                    });
+                });
+
+                const bupotRows = getAllBupot.data.values || [];
+                const bupotValue = parsedCariNomor.bupot;
+                let matchedRowPosition = -1;
+
+                // Find first match of bupot in any column from I to Q
+                for (let i = 0; i < bupotRows.length; i++) {
+                    let foundMatch = false;
+                    
+                    // Check all columns in the I:Q range (indices 0 through 8)
+                    for (let j = 0; j < 9; j++) { // I to Q is 9 columns
+                        const cellValue = bupotRows[i][j] || "";
+                        if (cellValue.includes(bupotValue)) {
+                            matchedRowPosition = i + 1; // Convert to 1-based indexing
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                    
+                    if (foundMatch) {
+                        break;
+                    }
+                }
+
+                if (matchedRowPosition === -1) {
+                    return res.json({
+                        data: [],
+                        realAllDRPPRows: 0,
+                        countData: countData,
+                        fullData: []
+                    });
+                }
+
+                // Calculate search range (from matched row up to 170 rows above)
+                const searchStartRow = Math.max(1, matchedRowPosition - 150);
+                const searchEndRow = matchedRowPosition;
+
+                // Get both column D and X data for the search range in one request
+                const searchRange = `'Write Table'!D${searchStartRow}:X${searchEndRow}`;
+                const searchResponse = await withBackoff(async () => {
+                    return await sheets.spreadsheets.values.get({
+                        spreadsheetId,
+                        range: searchRange,
+                    });
+                });
+
+                const searchData = searchResponse.data.values || [];
+                let nomorBupotRowPosition = -1;
+                let transId = null;
+
+                // Find "Nomor SPBY" exact match in column D within the range
+                for (let i = searchData.length - 1; i >= 0; i--) { // Search from bottom to top (nearest to matched row)
+                    if (searchData[i][0] === "Nomor SPBY") {
+                        nomorBupotRowPosition = searchStartRow + i;
+                        // Get TRANS_ID from column X
+                        const columnXValue = searchData[i][20] || ""; // X is at index 20 in D:X range
+
+                        // Extract number from "TRANS_ID:xx" format
+                        const transIdMatch = columnXValue.match(/TRANS_ID:(\d+)/);
+                        if (transIdMatch) {
+                            transId = transIdMatch[1]; // Extract just the number as string
+                        }
+                        break;
+                    }
+                }
+
+                if (!transId) {
+                    return res.json({
+                        data: [],
+                        realAllDRPPRows: 0,
+                        countData: countData,
+                        fullData: []
+                    });
+                }
+
+                // Find matches in Monitoring DRPP column B using already fetched totalRows
+                const matchedDrppRows = [];
+                totalRows.forEach((row, index) => {
+                    const columnBValue = row[1] || ""; // Column B index 1
+                    if (columnBValue === transId) {
+                        matchedDrppRows.push({
+                            data: row,
+                            rowIndex: index + 1
+                        });
+                    }
+                });
+
+                // Filter to get only rows from row 3 downward
+                const visibleMatchedDrppRows = matchedDrppRows.filter(row => row.rowIndex >= 3);
+
+                if (visibleMatchedDrppRows.length > 0) {
+                    const resultData = visibleMatchedDrppRows.map(row => {
+                        const values = [...row.data];
+                        while (values.length < 11) {
+                            values.push("");
+                        }
+                        return values.slice(0, -1); // Remove last column like paginatedSlicedDRPP
+                    });
+
+                    return res.json({
+                        data: resultData,
+                        realAllDRPPRows: visibleMatchedDrppRows.length,
+                        countData: countData,
+                        fullData: visibleMatchedDrppRows.map(row => {
+                            const values = [...row.data];
+                            while (values.length < 11) {
+                                values.push("");
+                            }
+                            return values;
+                        })
+                    });
+                } else {
+                    return res.json({
+                        data: [],
+                        realAllDRPPRows: 0,
+                        countData: countData,
                         fullData: []
                     });
                 }

@@ -28,7 +28,8 @@ export default function MonitoringDrpp(props) {
     const [cariInput, setCariInput] = useState({
         spm: "",
         spby: "",
-        drpp: ""
+        drpp: "",
+        bupot: "",
     })
     const [cariSelect, setCariSelect] = useState({});
 
@@ -62,8 +63,8 @@ export default function MonitoringDrpp(props) {
 
     // Handle Filter Changes
     function handleFilterChange (event) {
-        if (cariInput.spm !== "" || cariInput.spby === "" || cariInput.drpp === "") {
-            setCariInput({ spm: "", spby: "", drpp: ""})
+        if (cariInput.spm !== "" || cariInput.spby !== "" || cariInput.drpp !== "" || cariInput.bupot !== "") {
+            setCariInput({ spm: "", spby: "", drpp: "", bupot: ""})
             setCariSelect({});
         }
         setFilterSelect({...filterSelect, [event.target.name]: event.target.value});
@@ -75,11 +76,13 @@ export default function MonitoringDrpp(props) {
         const eventValue = event.target.value.toString();
         
         if (eventName === "spm") {
-            setCariInput({spm: eventValue, spby: "", drpp: ""});
+            setCariInput({spm: eventValue, spby: "", drpp: "", bupot: ""});
         } else if (eventName === "spby") {
-            setCariInput({spm: "", spby: eventValue, drpp: ""});
+            setCariInput({spm: "", spby: eventValue, drpp: "", bupot: ""});
+        } else if (eventName === "drpp") {
+            setCariInput({spm: "", spby: "", drpp: eventValue, bupot: ""});
         } else {
-            setCariInput({spm: "", spby: "", drpp: eventValue});
+            setCariInput({spm: "", spby: "", drpp: "", bupot: eventValue});
         }
     }
 
@@ -130,6 +133,8 @@ export default function MonitoringDrpp(props) {
                         <input className={'cari-input'} type={"number"} name={"spm"} value={cariInput.spm} placeholder={"SPM..."}
                                onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
                         <input className={'cari-input'} type={"number"} name={"spby"} value={cariInput.spby} placeholder={"SPBY..."}
+                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
+                        <input className={'cari-input'} type={"text"} name={"bupot"} value={cariInput.bupot} placeholder={"Faktur/Bupot..."}
                                onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
                         <button className='cari spm-button' onClick={handleCariSearch} >Go</button>
                     </div>

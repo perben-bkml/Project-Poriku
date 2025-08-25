@@ -20,15 +20,17 @@ export default function KelolaPJK() {
     const [tableData, setTableData] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
+    const [spmSearch, setSpmSearch] = useState("");
+    const [cariSpm, setCariSpm] = useState("");
 
 
     //Fetch data with filter
-    async function fetchData(data, page, status) {
+    async function fetchData(data, page, status, cari) {
         const rowsPerPage = 10;
         let satkerPrefix = data;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage }});
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, searchKeyword: cari }});
             if (response.status === 200){
                 const { data: rowData, totalPages, countData, message } = response.data;
                 setDashboardData(countData);
@@ -47,8 +49,8 @@ export default function KelolaPJK() {
     }
 
     useEffect(() => {
-        fetchData(filterData, currentPage, statusFilter);
-    }, [filterData, currentPage, statusFilter]);
+        fetchData(filterData, currentPage, statusFilter, cariSpm);
+    }, [filterData, currentPage, statusFilter, cariSpm]);
 
 
     //Titles for card
@@ -88,6 +90,26 @@ export default function KelolaPJK() {
         setCurrentPage(value);
     }
 
+    // SPM Search
+    function handleSpmChange(event) {
+        const option = event.target.value;
+        setSpmSearch(option);
+    }
+    function handleCariSearch() {
+        setCariSpm(spmSearch);
+    }
+    function handleSearchBlur(event) {
+        if (event.target.name === 'spm') {
+            if (spmSearch.length === 0) {
+                setCariSpm("");
+            }
+        } else {
+            setSpmSearch("");
+            setCariSpm("");
+        }
+
+    }
+
     return (
         <div>
             <div className="pengajuan-filter">
@@ -125,6 +147,13 @@ export default function KelolaPJK() {
                 {cardTitles.map((card, index) => (
                     <Card key={index} title={card.title} content={card.content}/>
                 ))}
+            </div>
+            <div className={'pengajuan-filter filter-search'}>
+                <label className="filter-label1">Cari:</label>
+                <input className="cari-input" type={'text'} name={'spm'} placeholder={'SPM...'} value={spmSearch}
+                       onChange={handleSpmChange} onBlur={(e) => handleSearchBlur(e)}/>
+                <button className='cari spm-button' onClick={handleCariSearch} >Go</button>
+                <button className='cari spm-button' onClick={(e) => {handleSearchBlur(e);}} >Hapus</button>
             </div>
             <div className={"bg-card pjk-table"}>
                 {isLoading ? <LoadingAnimate /> :

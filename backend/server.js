@@ -33,14 +33,17 @@ const getFormattedDate = () => {
     const MonthDateFormat = `${year}-${month}`;
     // Previous Month
     const PrevMonthDate =  `${year}-${prevMonth}`;
+    // Timestamp for Verifikasi
+    const fullDateTimeVerifFormat = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
     return {
         fullDateFormat,
         fullDateTimeFormat,
+        fullDateTimeVerifFormat,
         MonthDateFormat,
         PrevMonthDate,
     }
 }
-const { fullDateFormat, fullDateTimeFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
+const { fullDateFormat, fullDateTimeFormat, fullDateTimeVerifFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
 
 //Exponential Backoff for GSheet API Limits
 async function withBackoff(apiCallFn, options = {}) {
@@ -2272,7 +2275,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
 //Kelola-PJK Page
 app.get("/verifikasi/data-pjk", async (req, res) => {
     try {
-        const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10 } = req.query;
+        const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10, searchKeyword = "" } = req.query;
 
         //Get all data from range A
         const response = await withBackoff(async () => {
@@ -2291,12 +2294,15 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             rowIndex: index + 1
         }));
 
-        //Filter if satkerPrefix exist
+        //Filter if keyword exist
         if (satkerPrefix !== "") {
             allRows = allRows.filter(row => row.satker.startsWith(satkerPrefix));
         }
         if (filterKeyword !== "") {
             allRows = allRows.filter(row => row.status.includes(filterKeyword));
+        }
+        if (searchKeyword !== "") {
+            allRows = allRows.filter(row => row.nomorSpm.includes(searchKeyword));
         }
 
 
@@ -2329,7 +2335,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             const paginatedRows = allRows.slice(startIndex, endIndex);
 
             //Fetch Rows with pagination
-            const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:H${row.rowIndex}`);
+            const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:I${row.rowIndex}`);
             const batchGetResponse = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.batchGet({
                     spreadsheetId: spreadsheetIdVerif,
@@ -2338,7 +2344,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             })
             rowData = batchGetResponse.data.valueRanges.map(row => row.values[0]);
             totalPages = Math.ceil(allRows.length / limit);
-            if (satkerPrefix === "" && filterKeyword === "" && parseInt(page) === parseInt(totalPages)) {
+            if (satkerPrefix === "" && filterKeyword === "" && searchKeyword === "" && parseInt(page) === parseInt(totalPages)) {
                 rowData.pop()
             }
         }
@@ -2397,26 +2403,8 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 app.post("/verifikasi/verifikasi-form", async (req, res) => {
     try {
         const { data, type, rowPosition } = req.body;
-        //Current Date converter to dd/mm/yyyy hh:mm:ss
-        function formatDateTime(date) {
-            const pad = (n) => String(n).padStart(2, '0');
 
-            const day = pad(date.getDate());
-            const month = pad(date.getMonth() + 1); // Months are 0-indexed
-            const year = date.getFullYear();
-
-            const hours = pad(date.getHours());
-            const minutes = pad(date.getMinutes());
-            const seconds = pad(date.getSeconds());
-
-            return dateFormat(date, "dd/mm/yyyy hh:MM:ss");
-
-            // return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-        }
-
-        const now = new Date();
-        const formatted = formatDateTime(now);
-        data.push(formatted);
+        data.push(fullDateTimeVerifFormat);
 
 
         if (type === "filled") {

@@ -35,13 +35,24 @@ export default function FormVerifikasi(props) {
 
     //Date converter
     function formatDate(dateString) {
-        // Check if the string is already in YYYY-MM-DD format
+        // Check if the string is in YYYY-MM-DD format - convert to Indonesian format
         const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (isoRegex.test(dateString)) {
-            return dateString;
+            const indoMonthNames = [
+                'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+                'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+            ];
+            
+            const [year, month, day] = dateString.split('-');
+            const monthIndex = parseInt(month, 10) - 1;
+            const dayNum = parseInt(day, 10);
+            
+            if (monthIndex >= 0 && monthIndex < 12) {
+                return `${dayNum}-${indoMonthNames[monthIndex]}-${year}`;
+            }
         }
 
-        // Handle Indonesian format like "6-Mei-2025"
+        // Handle Indonesian format like "6-Mei-2025" - convert to ISO format
         const indoMonths = {
             'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3,
             'Mei': 4, 'Jun': 5, 'Jul': 6, 'Agu': 7,
@@ -75,8 +86,8 @@ export default function FormVerifikasi(props) {
     }
 
     //Handler Onblur Search
-    async function handleOnBlur(event) {
-        const searchValue = event.target.value || "";
+    async function handleOnBlur() {
+        const searchValue = document.getElementById("find-spm").value;
         if (searchValue !== "") {
             try {
                 setLoadingScreen(true);
@@ -92,6 +103,12 @@ export default function FormVerifikasi(props) {
                 setLoadingScreen(false);
             }
         }
+    }
+
+    //Handle Input Form Reset
+    function handleResetInputForm() {
+        document.getElementById("find-spm").value = "";
+        setSearchedData([]);
     }
 
     //Handle Generate PDF
@@ -131,8 +148,7 @@ export default function FormVerifikasi(props) {
         const hasil = form["verif"].value || "";
         const catatan = form["catatan"].value || "";
 
-        const date = new Date(tglUpload).toISOString().split("T")[0];
-
+        const date = formatDate(tglUpload);
 
         let verifikator = "";
         if (user.name === "Admin Verifikasi") {
@@ -141,6 +157,8 @@ export default function FormVerifikasi(props) {
             verifikator = "Agata Melinda";
         } else if (user.name === "Admin Verifikasi 3") {
             verifikator = "Rahmat";
+        } else if (user.name === "Admin Verifikasi 4") {
+            verifikator = "Esteria Sitanggang";
         } else {
             verifikator = user.name;
         }
@@ -212,7 +230,13 @@ export default function FormVerifikasi(props) {
             <div>
                 <div className="form-verif verif-find">
                     <label htmlFor="find-spm">Input Nomor SPM</label>
-                    <input type="text" id="find-spm" name="find-spm" onBlur={(e) => handleOnBlur(e)} />
+                    <input type="text" id="find-spm" name="find-spm" />
+                    <br />
+                    <div>
+                        <button className='cari spm-button find-btn' onClick={handleOnBlur} >Cari</button>
+                        <button className='cari spm-button find-btn' onClick={handleResetInputForm} >Hapus</button>
+                    </div>
+
                 </div>
                 { searchedData.length > 0 && <CreateForm type="filled" /> }
             </div>

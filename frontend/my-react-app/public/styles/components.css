@@ -824,7 +824,7 @@ input[type="number"]::-webkit-inner-spin-button {
     font-weight: 500;
 }
 
-.form-verif input, .form-verif select {
+.form-verif input, .form-verif select, .form-verif button {
     height: 30px;
     margin-top: 0px;
 }
@@ -861,6 +861,13 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .verif-find {
     grid-template-rows: 1fr 1fr;
+
+}
+
+.find-btn {
+    margin-top: 0px;
+    margin-left: 0px;
+    margin-right: 15px;
 }
 
 /* Monitoring DRPP styling */

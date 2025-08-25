@@ -89,6 +89,7 @@ export function TableKelola(props) {
     const [checkedItems, setCheckedItems] = useState(new Set());
     const mousePositionRef = useRef({ x: 0, y: 0 });
     const popupRef = useRef(null);
+    const tableContainerRef = useRef(null);
 
     useEffect(() => {
         setTableType(props.type);
@@ -273,8 +274,12 @@ export function TableKelola(props) {
 
     // For sudah verifikasi and aksi drpp checkbox sum calculation
     function handleCheckboxChange(rowIndex, columnIndex, cellData, isChecked, event) {
+        // Capture scroll position before state changes
+        const scrollTop = tableContainerRef.current?.scrollTop || 0;
+        const scrollLeft = tableContainerRef.current?.scrollLeft || 0;
+        
         // Prevent scroll for AksiDrpp
-        if (props.feature === "AksiDrpp" && event) {
+        if ((props.feature === "AksiDrpp" || props.feature === "SudahVerif" ) && event) {
             event.preventDefault();
             event.stopPropagation();
         }
@@ -301,6 +306,14 @@ export function TableKelola(props) {
         }
         
         setCheckedItems(newCheckedItems);
+        
+        // Restore scroll position after state update
+        requestAnimationFrame(() => {
+            if (tableContainerRef.current) {
+                tableContainerRef.current.scrollTop = scrollTop;
+                tableContainerRef.current.scrollLeft = scrollLeft;
+            }
+        });
     }
 
 
@@ -370,6 +383,7 @@ export function TableKelola(props) {
     return (
         <div style={{ position: 'relative' }}>
         <TableContainer 
+            ref={tableContainerRef}
             sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900, overflowX: 'auto' }}
             onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>

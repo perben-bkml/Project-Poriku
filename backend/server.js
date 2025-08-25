@@ -17,7 +17,7 @@ import stream from 'stream';
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 const getFormattedDate = () => {
-    const date = new Date();
+    const date = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
     // Get date in yyyy-mm-dd
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
@@ -363,20 +363,20 @@ app.post("/login-auth", async (req, res) => {
         );
 
             // Set cookie with the token
-        console.log("=== COOKIE SETTING DEBUG ===");
-        console.log("Setting auth cookie for user:", userData[0].name);
-        console.log("Environment:", process.env.NODE_ENV);
-        console.log("Frontend Origin:", process.env.FRONTEND_ORIGIN);
-        console.log("Hostname Domain:", process.env.HOSTNAME_DOMAIN);
-        console.log("Cookie config:", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
-            path: '/',
-            maxAge: 5 * 60 * 60 * 1000
-        });
-        
+        // console.log("=== COOKIE SETTING DEBUG ===");
+        // console.log("Setting auth cookie for user:", userData[0].name);
+        // console.log("Environment:", process.env.NODE_ENV);
+        // console.log("Frontend Origin:", process.env.FRONTEND_ORIGIN);
+        // console.log("Hostname Domain:", process.env.HOSTNAME_DOMAIN);
+        // console.log("Cookie config:", {
+        //     httpOnly: true,
+        //     secure: process.env.NODE_ENV === "production",
+        //     sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
+        //     domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+        //     path: '/',
+        //     maxAge: 5 * 60 * 60 * 1000
+        // });
+
         res.cookie("auth_token", token, {   //The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
             secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
@@ -387,7 +387,7 @@ app.post("/login-auth", async (req, res) => {
         });
 
         console.log("✅ Auth cookie set successfully");
-        
+
         // Make array to send only Name and Role
         const sendData = [userData[0].name, userData[0].role]
 

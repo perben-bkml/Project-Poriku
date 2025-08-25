@@ -12,7 +12,7 @@ function Navbar(){
                 <p><NavLink to="/menu-bendahara">Menu Bendahara</NavLink></p>
                 <p><NavLink to="/menu-verifikasi">Menu Verifikasi</NavLink></p>
                 <p>
-                    <a href="https://quickconnect.to/sipku" target="_blank" rel="noopener noreferrer">
+                    <a href="https://sipku.sg4.quickconnect.to/porikudrive/" target="_blank" rel="noopener noreferrer">
                         <button className="Nav-SIPKU">Login SIPKU</button>
                     </a>
                 </p>

@@ -525,7 +525,10 @@ export function TableInfoPJK(props) {
                 {props.body.map((row, index) => (
                     <TableRow key={index}>
                         {row.map((data, index) => (
-                            <TableCell key={index}>{data}</TableCell>
+                            <TableCell key={index}>
+                                {index === 9 ? <a href={data} target="_blank" rel="noopener noreferrer">{ data !== "" ? 'Klik untuk lihat' : ""}</a>
+                                    : data}
+                            </TableCell>
                         ))}
                     </TableRow>
                 ))}

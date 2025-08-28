@@ -119,29 +119,30 @@ export default function FormVerifikasi(props) {
     }
 
     //Handle Generate PDF
-    async function handleGeneratePDF() {
-        try {
-            setLoadingScreen(true);
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/generate-pdf`, {
-                noSPM: searchedData[0],
-                unitKerja: searchedData[1],
-                tanggalUploadBerkas: formatDate(searchedData[2]), // ISO 8601 format
-                hasilVerifikasi: searchedData[3],
-                catatan: searchedData[4],
-                operator: searchedData[5]
-            });
-            if (response.status === 200) {
-                setLoadingScreen(false);
-                setIsAlert(true);
-                setTimeout(() => {
-                    setIsAlert(false);
-                }, 3000);
-            }
-        } catch (error) {
-            console.log("Error sending data to website.", error)
-            setLoadingScreen(false);
-        }
-    }
+    // async function handleGeneratePDF() {
+    //     try {
+    //         setLoadingScreen(true);
+    //         const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/generate-pdf`, {
+    //             noSPM: searchedData[0],
+    //             unitKerja: searchedData[1],
+    //             tanggalUploadBerkas: formatDate(searchedData[2]), // ISO 8601 format
+    //             hasilVerifikasi: searchedData[3],
+    //             catatan: searchedData[4],
+    //             operator: searchedData[5]
+    //         });
+    //         if (response.status === 200) {
+    //             setLoadingScreen(false);
+    //             setPopupType("PDF");
+    //             setIsAlert(true);
+    //             setTimeout(() => {
+    //                 setIsAlert(false);
+    //             }, 3000);
+    //         }
+    //     } catch (error) {
+    //         console.log("Error sending data to website.", error)
+    //         setLoadingScreen(false);
+    //     }
+    // }
 
 
     //Handler for form submit
@@ -158,13 +159,13 @@ export default function FormVerifikasi(props) {
         const date = formatDate(tglUpload);
 
         let verifikator = "";
-        if (user.name === "Admin Verifikasi") {
+        if (user.name === "Vegga") {
             verifikator = "Vegga Chrisdiansyah";
-        } else if (user.name === "Admin Verifikasi 2") {
+        } else if (user.name === "Agata") {
             verifikator = "Agata Melinda";
-        } else if (user.name === "Admin Verifikasi 3") {
-            verifikator = "Rahmat";
-        } else if (user.name === "Admin Verifikasi 4") {
+        } else if (user.name === "Rachmat") {
+            verifikator = "M. Rachmat Abdul Rahman";
+        } else if (user.name === "Esteria") {
             verifikator = "Esteria Sitanggang";
         } else {
             verifikator = user.name;
@@ -241,7 +242,7 @@ export default function FormVerifikasi(props) {
                         <VerifButton type="submit" value="Submit Formulir" name="submit-form"/>:
                         <div className="verif-submit-buttons">
                             <VerifButton type="submit" value="Update Formulir" name="submit-form"/>
-                            <VerifButton type="button" value="Generate PDF" name="submit-form" onClick={handleGeneratePDF}/>
+                            {/*<VerifButton type="button" value="Generate PDF" name="submit-form" onClick={handleGeneratePDF}/>*/}
                         </div>
                     }
                 </div>

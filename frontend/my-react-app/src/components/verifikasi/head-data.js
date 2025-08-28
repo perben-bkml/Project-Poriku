@@ -22,7 +22,7 @@ const satkerNames = [
 ]
 
 const tableHead = [
-    "Unit Kerja", "No. SPM", "Tanggal SP2D", "Bulan SP2D", "Jenis SPM", "Nominal", "Jenis Belanja", "Status Verifikasi", "Catatan"
+    "Unit Kerja", "No. SPM", "Tanggal SP2D", "Bulan SP2D", "Jenis SPM", "Nominal", "Jenis Belanja", "Status Verifikasi", "Catatan", "Dokumen Verif"
 ]
 
 const userSatkerNames = [

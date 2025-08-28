@@ -147,11 +147,18 @@ const auth2 = new google.auth.JWT(
     SCOPES
 );
 
-// OAuth2 Client for Google Drive
+// OAuth2 Client for Google Drive Ajuan
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI
+);
+
+// OAuth2 Client for Google Drive Verif
+const oauth2ClientVerif = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID_VERIF,
+    process.env.GOOGLE_CLIENT_SECRET_VERIF,
+    process.env.GOOGLE_REDIRECT_URI_VERIF
 );
 
 // Gsheet API Setup
@@ -167,6 +174,11 @@ const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 // Gdrive API Setup (will be initialized with OAuth2 tokens)
 let drive = null;
 const driveFolderId = process.env.DRIVE_FOLDER_ID_AJUAN;
+
+// Gdrive and Gdocs API for Verifikasi
+let driveVerif = null;
+let docsVerif = null;
+const driveFolderIdVerif = process.env.DRIVE_FOLDER_ID_VERIF;
 
 // OAuth Token Management Functions
 async function saveOAuthTokens(tokens) {
@@ -202,7 +214,7 @@ async function loadOAuthTokens() {
             };
             
             oauth2Client.setCredentials(tokens);
-            drive = google.drive({ version: "v3", auth: oauth2Client });
+        drive = google.drive({ version: "v3", auth: oauth2Client });
             console.log('OAuth tokens loaded from database');
             return true;
         }
@@ -213,8 +225,72 @@ async function loadOAuthTokens() {
     }
 }
 
+// OAuth Token Management Functions for Verification
+async function saveVerifOAuthTokens(tokens) {
+    try {
+        // Delete existing verification tokens first
+        await sql`DELETE FROM oauth_tokens_verif WHERE id = 1`;
+        
+        // Insert new verification tokens
+        await sql`
+            INSERT INTO oauth_tokens_verif (id, access_token, refresh_token, expiry_date, created_at)
+            VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expiry_date = EXCLUDED.expiry_date,
+                updated_at = NOW()
+        `;
+        console.log('Verification OAuth tokens saved to database');
+    } catch (error) {
+        console.error('Failed to save verification OAuth tokens:', error);
+    }
+}
+
+async function loadVerifOAuthTokens() {
+    try {
+        const result = await sql`SELECT * FROM oauth_tokens_verif WHERE id = 1 LIMIT 1`;
+        if (result.length > 0) {
+            const tokenData = result[0];
+            const tokens = {
+                access_token: tokenData.access_token,
+                refresh_token: tokenData.refresh_token,
+                expiry_date: tokenData.expiry_date
+            };
+            
+            oauth2ClientVerif.setCredentials(tokens);
+            console.log('Verification OAuth tokens loaded from database');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to load verification OAuth tokens:', error);
+        return false;
+    }
+}
+
+// Function to initialize Verifikasi APIs with OAuth tokens
+async function initializeVerifAPIs() {
+    try {
+        // Load verification tokens first
+        await loadVerifOAuthTokens();
+        
+        // Check if oauth2ClientVerif has credentials
+        if (oauth2ClientVerif.credentials && Object.keys(oauth2ClientVerif.credentials).length > 0) {
+            driveVerif = google.drive({ version: 'v3', auth: oauth2ClientVerif });
+            docsVerif = google.docs({ version: 'v1', auth: oauth2ClientVerif });
+            console.log('Verifikasi Google APIs initialized successfully');
+        } else {
+            console.log('No OAuth tokens found for Verifikasi APIs initialization');
+        }
+    } catch (error) {
+        console.error('Error initializing Verifikasi APIs:', error);
+    }
+}
+
 // Initialize OAuth tokens on server startup
 loadOAuthTokens();
+initializeVerifAPIs();
 
 //Endpoints
 // Google OAuth2 Authentication
@@ -248,6 +324,42 @@ app.get("/auth/google/callback", async (req, res) => {
     } catch (error) {
         console.error('OAuth2 callback error:', error);
         res.status(500).json({ error: 'Authentication failed' });
+    }
+});
+
+// Google OAuth2 Verification Authentication
+app.get("/auth/google/verif", (req, res) => {
+    const authUrl = oauth2ClientVerif.generateAuthUrl({
+        access_type: 'offline',
+        scope: [
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/documents',
+            'https://www.googleapis.com/auth/userinfo.profile'
+        ],
+        prompt: 'consent'
+    });
+    res.redirect(authUrl);
+});
+
+// Google OAuth2 Verification Callback
+app.get("/auth/google/verif/callback", async (req, res) => {
+    const { code } = req.query;
+    
+    try {
+        const { tokens } = await oauth2ClientVerif.getToken(code);
+        oauth2ClientVerif.setCredentials(tokens);
+        
+        // Initialize Verifikasi APIs with OAuth2 tokens
+        driveVerif = google.drive({ version: 'v3', auth: oauth2ClientVerif });
+        docsVerif = google.docs({ version: 'v1', auth: oauth2ClientVerif });
+        
+        // Save verification tokens to database
+        await saveVerifOAuthTokens(tokens);
+        
+        res.redirect('/auth/verif/success');
+    } catch (error) {
+        console.error('OAuth2 verification callback error:', error);
+        res.status(500).json({ error: 'Verification authentication failed' });
     }
 });
 
@@ -2335,14 +2447,21 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             const paginatedRows = allRows.slice(startIndex, endIndex);
 
             //Fetch Rows with pagination
-            const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:I${row.rowIndex}`);
+            const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:J${row.rowIndex}`);
             const batchGetResponse = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.batchGet({
                     spreadsheetId: spreadsheetIdVerif,
                     ranges: rowRanges,
                 })
             })
-            rowData = batchGetResponse.data.valueRanges.map(row => row.values[0]);
+            rowData = batchGetResponse.data.valueRanges.map(row => {
+                const rowValues = row.values[0] || [];
+                // Ensure each row has 10 columns by filling blanks with ""
+                while (rowValues.length < 10) {
+                    rowValues.push("");
+                }
+                return rowValues;
+            });
             totalPages = Math.ceil(allRows.length / limit);
             if (satkerPrefix === "" && filterKeyword === "" && searchKeyword === "" && parseInt(page) === parseInt(totalPages)) {
                 rowData.pop()
@@ -2406,18 +2525,147 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 
         data.push(fullDateTimeVerifFormat);
 
-        let formStatus = ""
+        //Function to generate pdf from Google Docs template
+        async function generatePdf(dataArray) {
+            try {
+                // Check if verification APIs are initialized
+                if (!driveVerif || !docsVerif) {
+                    console.log('Verification Google APIs not authenticated. Skipping PDF generation.');
+                    return null;
+                }
+
+                const templateDocId = process.env.DOCS_ID_VERIF;
+                if (!templateDocId) {
+                    console.log('Template document ID not configured. Skipping PDF generation.');
+                    return null;
+                }
+
+                // Map array data to template placeholders
+                const templateData = {
+                    NoSPM: dataArray[0],           // noSpm
+                    UnitKerja: dataArray[1],       // unitKerja  
+                    TanggalUpload: dataArray[2],   // date
+                    HasilVerifikasi: dataArray[3], // hasil
+                    Catatan: dataArray[4],         // catatan
+                    Operator: dataArray[5]         // verifikator
+                };
+
+                // Create a copy of the template
+                const copyResponse = await driveVerif.files.copy({
+                    fileId: templateDocId,
+                    requestBody: {
+                        name: `Verifikasi_${templateData.Operator}_SPM_${templateData.NoSPM}`
+                    }
+                });
+
+                const newDocId = copyResponse.data.id;
+
+                //Replace placeholders in the copied document
+                const requests = [];
+                
+                // Replace text placeholders with actual data
+                for (const [placeholder, value] of Object.entries(templateData)) {
+                    requests.push({
+                        replaceAllText: {
+                            containsText: {
+                                text: `{{${placeholder}}}`,
+                                matchCase: false
+                            },
+                            replaceText: String(value || '')
+                        }
+                    });
+                }
+
+                // Execute the replacements
+                if (requests.length > 0) {
+                    await docsVerif.documents.batchUpdate({
+                        documentId: newDocId,
+                        requestBody: { requests }
+                    });
+                }
+
+                //Export the document as PDF
+                const pdfResponse = await driveVerif.files.export({
+                    fileId: newDocId,
+                    mimeType: 'application/pdf'
+                });
+
+                //Create a new PDF file in Drive
+                const pdfFileName = `Verifikasi_${templateData.Operator}_SPM_${templateData.NoSPM}.pdf`;
+                
+                // Convert Blob to Buffer if needed
+                let pdfBuffer;
+                if (pdfResponse.data instanceof Buffer) {
+                    pdfBuffer = pdfResponse.data;
+                } else {
+                    // Handle Blob data
+                    const arrayBuffer = await pdfResponse.data.arrayBuffer();
+                    pdfBuffer = Buffer.from(arrayBuffer);
+                }
+                
+                const pdfFile = await driveVerif.files.create({
+                    requestBody: {
+                        name: pdfFileName,
+                        parents: [driveFolderIdVerif]
+                    },
+                    media: {
+                        mimeType: 'application/pdf',
+                        body: stream.Readable.from(pdfBuffer)
+                    }
+                });
+
+                //Make the PDF shareable and get link
+                await driveVerif.permissions.create({
+                    fileId: pdfFile.data.id,
+                    requestBody: {
+                        role: 'reader',
+                        type: 'anyone'
+                    }
+                });
+
+                // Get the shareable link
+                const fileInfo = await driveVerif.files.get({
+                    fileId: pdfFile.data.id,
+                    fields: 'webViewLink, webContentLink'
+                });
+
+                //Clean up - delete the temporary doc copy
+                await driveVerif.files.delete({
+                    fileId: newDocId
+                });
+
+                console.log(`PDF generated successfully: ${pdfFileName}`);
+                return {
+                    success: true,
+                    pdfId: pdfFile.data.id,
+                    fileName: pdfFileName,
+                    viewLink: fileInfo.data.webViewLink,
+                    downloadLink: fileInfo.data.webContentLink
+                };
+
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                return null;
+            }
+        }
 
         if (type === "filled") {
+            // Generate PDF after writing data
+            const pdf = await generatePdf(data);
+            const pdfFileLink = pdf.viewLink;
+
+            data.push(pdfFileLink)
+
             //Directly write into the row
             const writeResponse = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.update({
                     spreadsheetId: spreadsheetIdVerif,
-                    range: `'Data'!A${rowPosition}:G${rowPosition}`,
+                    range: `'Data'!A${rowPosition}:H${rowPosition}`,
                     valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
                     resource: { values: [data] }
                 })
             })
+
         } else {
             //Get all row information
             const getAllRowsResponse = await withBackoff(async () => {
@@ -2448,11 +2696,17 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
                 return;
             } else {
                 const nextRow = getAllRows.length + 1;
-                
+
+                // Generate PDF after writing data
+                const pdf = await generatePdf(data);
+                const pdfFileLink = pdf.viewLink;
+
+                data.push(pdfFileLink)
+
                 const writeResponse = await withBackoff(async () => {
                     return await sheets2.spreadsheets.values.update({
                         spreadsheetId: spreadsheetIdVerif,
-                        range: `'Data'!A${nextRow}:G${nextRow}`,
+                        range: `'Data'!A${nextRow}:H${nextRow}`,
                         valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
                         resource: { values: [data] }
                     })
@@ -2461,7 +2715,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 
         }
 
-        res.status(200).json({ message: "Data successfully written." })
+        res.status(200).json({ message: "Data successfully written."})
 
     } catch (error) {
         console.error("Error fetching Data PJK", error);
@@ -2522,8 +2776,6 @@ app.post("/verifikasi/generate-pdf", async (req, res) => {
         res.status(500).json({ message: "Error creating PDF", error: error.message });
     }
 })
-
-
 
 
 // Ports

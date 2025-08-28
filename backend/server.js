@@ -2406,6 +2406,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 
         data.push(fullDateTimeVerifFormat);
 
+        let formStatus = ""
 
         if (type === "filled") {
             //Directly write into the row
@@ -2427,16 +2428,36 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
             })
 
             const getAllRows = getAllRowsResponse.data.values || [];
-            const nextRow = getAllRows.length + 1;
-
-            const writeResponse = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.update({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Data'!A${nextRow}:G${nextRow}`,
-                    valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-                    resource: { values: [data] }
+            
+            // Search for existing noSpm in the data
+            let existingRowPosition = null;
+            if (data && data[0]) {
+                for (let i = 0; i < getAllRows.length; i++) {
+                    const row = getAllRows[i];
+                    // Check if noSpm exists in column A of this row
+                    if (row && row.some(cell => cell === data[0])) {
+                        existingRowPosition = i + 1; // 1-based indexing for sheets
+                        break;
+                    }
+                }
+            }
+            
+            if (existingRowPosition) {
+                //Notify front-end that the SPM exist, and redirect to the "filled" form type.
+                res.status(201).json({ message:"Nomor SPM already exist!", existingData: data[0] } );
+                return;
+            } else {
+                const nextRow = getAllRows.length + 1;
+                
+                const writeResponse = await withBackoff(async () => {
+                    return await sheets2.spreadsheets.values.update({
+                        spreadsheetId: spreadsheetIdVerif,
+                        range: `'Data'!A${nextRow}:G${nextRow}`,
+                        valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
+                        resource: { values: [data] }
+                    })
                 })
-            })
+            }
 
         }
 

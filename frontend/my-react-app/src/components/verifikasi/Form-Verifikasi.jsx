@@ -20,6 +20,7 @@ export default function FormVerifikasi(props) {
     const [savedRow, setSavedRow] = useState(null);
     const [isAlert, setIsAlert] = useState(false);
     const [activeButton, setActiveButton] = useState("buat-form");
+    const [popupType, setPopupType] = useState("");
 
     //Menu display handler
     function handleDisplay(event) {
@@ -86,8 +87,14 @@ export default function FormVerifikasi(props) {
     }
 
     //Handler Onblur Search
-    async function handleOnBlur() {
-        const searchValue = document.getElementById("find-spm").value;
+    async function handleOnBlur(data) {
+        let searchValue = "";
+        if (data) {
+            searchValue = data;
+        } else {
+            searchValue = document.getElementById("find-spm").value;
+        }
+
         if (searchValue !== "") {
             try {
                 setLoadingScreen(true);
@@ -169,8 +176,26 @@ export default function FormVerifikasi(props) {
             setLoadingScreen(true);
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/verifikasi-form`, { data: dataArray, type: type, rowPosition: savedRow })
             if (response.status === 200) {
+                setPopupType("Buat/Edit")
+                setIsAlert(true);
+                setTimeout(() => {
+                    setIsAlert(false);
+                }, 1000);
+                setTimeout( () => {
+                    setLoadingScreen(false); props.changeComponent("kelola-PJK");
+                    }, 1000);
+
+            } else if (response.status === 201) {
+                const { existingData } = response.data
+                setDisplay(false);
+                setActiveButton("cari/perbarui");
+                await handleOnBlur(existingData.toString());
                 setLoadingScreen(false);
-                props.changeComponent("kelola-PJK");
+                setPopupType("Data Exist")
+                setIsAlert(true);
+                setTimeout(() => {
+                    setIsAlert(false);
+                }, 3000);
             }
         } catch (error) {
             setLoadingScreen(false);
@@ -233,7 +258,7 @@ export default function FormVerifikasi(props) {
                     <input type="text" id="find-spm" name="find-spm" />
                     <br />
                     <div>
-                        <button className='cari spm-button find-btn' onClick={handleOnBlur} >Cari</button>
+                        <button className='cari spm-button find-btn' onClick={() => handleOnBlur()} >Cari</button>
                         <button className='cari spm-button find-btn' onClick={handleResetInputForm} >Hapus</button>
                     </div>
 
@@ -251,7 +276,9 @@ export default function FormVerifikasi(props) {
             </div>
             {display ? <CreateForm type="basic" /> : <FindReplaceForm />}
             {loadingScreen && <LoadingScreen />}
-            {isAlert && <PopupAlert isAlert={isAlert} severity="success" message="PDF Berhasil Dibuat"/>}
+            {isAlert && popupType === "PDF" ? <PopupAlert isAlert={isAlert} severity="success" message="PDF Berhasil Dibuat"/> : null}
+            {isAlert && popupType === "Data Exist" ? <PopupAlert isAlert={isAlert} severity="error" message="Nomor SPM Sudah Dicatat"/> : null}
+            {isAlert && popupType === "Buat/Edit" ? <PopupAlert isAlert={isAlert} severity="success" message="Form Berhasil Di Buat/Update"/> : null}
         </div>
     )
 }

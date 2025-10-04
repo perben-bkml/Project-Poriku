@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate, NavLink } from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
 import { LoadingScreen } from "../ui/loading.jsx";
+import { PopupAlert } from "../ui/Popup.jsx";
 
 function Login () {
     //States
@@ -11,6 +12,8 @@ function Login () {
         password: "",
     })
     const [isScreenLoading, setScreenLoading] = useState(false)
+    const [showErrorPopup, setShowErrorPopup] = useState(false)
+    const [errorMessage, setErrorMessage] = useState("")
     //Setting up useNavigate and createContex
     const navigate = useNavigate();
     const { isAuthenticated, setIsAuthenticated, isLoading, setUser } = useContext(AuthContext)
@@ -30,6 +33,16 @@ function Login () {
         }
     }, [isAuthenticated, isLoading, navigate])
 
+    //Auto-dismiss error popup after 4 seconds
+    useEffect(() => {
+        if (showErrorPopup) {
+            const timer = setTimeout(() => {
+                setShowErrorPopup(false)
+            }, 4000)
+            return () => clearTimeout(timer)
+        }
+    }, [showErrorPopup])
+
     async function handleSubmit(event) {
         event.preventDefault();
         try {
@@ -48,9 +61,11 @@ function Login () {
             } 
         } catch (error) {
             if (error.status === 401) {
-                console.log("Invalid Username or Password.")
+                setErrorMessage("Username atau Password Salah.")
+                setShowErrorPopup(true)
             } else {
-                console.log("Error sending data to backend.", error)
+                setErrorMessage("Masalah koneksi ke server. Coba lagi.")
+                setShowErrorPopup(true)
            }
             setScreenLoading(false)
         }
@@ -80,6 +95,11 @@ function Login () {
                 </div>
             </div>
             {isScreenLoading && <LoadingScreen />}
+            <PopupAlert 
+                isAlert={showErrorPopup}
+                severity="error"
+                message={errorMessage}
+            />
         </div>
     )
 }

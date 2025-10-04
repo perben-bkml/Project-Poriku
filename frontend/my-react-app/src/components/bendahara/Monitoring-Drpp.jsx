@@ -17,7 +17,12 @@ export default function MonitoringDrpp(props) {
     const [fullDRPPData, setFullDRPPData] = useState([])
     const [monitoringData, setMonitoringData] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(() => {
+        const savedPage = localStorage.getItem('monitoring-drpp-pagination');
+        const pageNumber = savedPage ? parseInt(savedPage, 10) : 1;
+        // Ensure page number is valid (will be validated against totalPages in useEffect)
+        return pageNumber > 0 ? pageNumber : 1;
+    });
     const [totalPages, setTotalPages] = useState(0);
     const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
     const [filterSelect, setFilterSelect] = useState({
@@ -32,6 +37,7 @@ export default function MonitoringDrpp(props) {
         bupot: "",
     })
     const [cariSelect, setCariSelect] = useState({});
+    const [pageInput, setPageInput] = useState("");
 
     //Fetch Data
     const rowsPerPage = 10;
@@ -56,9 +62,21 @@ export default function MonitoringDrpp(props) {
         fetchMonitoringData(currentPage, filterSelect, cariSelect);
     }, [currentPage, filterSelect, cariSelect]);
 
+    // Validate currentPage against totalPages
+    useEffect(() => {
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(1);
+            localStorage.setItem('monitoring-drpp-pagination', '1');
+        }
+    }, [totalPages, currentPage]);
+
     // Handle Pagination
     function handlePaginationChange (event, value) {
-        setCurrentPage(value);
+        // Validate page number is within bounds
+        if (value >= 1 && value <= totalPages) {
+            setCurrentPage(value);
+            localStorage.setItem('monitoring-drpp-pagination', value.toString());
+        }
     }
 
     // Handle Filter Changes
@@ -67,6 +85,9 @@ export default function MonitoringDrpp(props) {
             setCariInput({ spm: "", spby: "", drpp: "", bupot: ""})
             setCariSelect({});
         }
+        // Reset pagination when filter changes
+        setCurrentPage(1);
+        localStorage.removeItem('monitoring-drpp-pagination');
         setFilterSelect({...filterSelect, [event.target.name]: event.target.value});
     }
 
@@ -89,6 +110,35 @@ export default function MonitoringDrpp(props) {
     // Handle Cari input request when onBlur
     function handleCariSearch () {
         setCariSelect(cariInput)
+    }
+
+    // Handle page input change
+    function handlePageInputChange (event) {
+        const value = event.target.value;
+        // Only allow numbers
+        if (/^\d*$/.test(value)) {
+            setPageInput(value);
+        }
+    }
+
+    // Handle go to page
+    function handleGoToPage () {
+        const pageNumber = parseInt(pageInput, 10);
+        if (pageNumber >= 1 && pageNumber <= totalPages) {
+            setCurrentPage(pageNumber);
+            localStorage.setItem('monitoring-drpp-pagination', pageNumber.toString());
+            setPageInput(""); // Clear input after successful navigation
+        } else {
+            // Reset input if invalid
+            setPageInput("");
+        }
+    }
+
+    // Handle Enter key press in page input
+    function handlePageInputKeyDown (event) {
+        if (event.key === 'Enter') {
+            handleGoToPage();
+        }
     }
 
 
@@ -147,7 +197,47 @@ export default function MonitoringDrpp(props) {
                 </div>
                 }
                 <div className="lihat-antri-pagination" >
-                    <Pagination className="pagination" size="medium" count={totalPages} onChange={handlePaginationChange} />
+                    <Pagination 
+                        className="pagination" 
+                        size="medium" 
+                        count={totalPages} 
+                        page={currentPage} 
+                        onChange={handlePaginationChange}
+                        showFirstButton={true}
+                        showLastButton={true}
+                        siblingCount={1}
+                        boundaryCount={1}
+                    />
+                    <div className="goto-page" style={{marginLeft: '20px', marginRight: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <span>Go to page:</span>
+                        <input 
+                            type="text" 
+                            value={pageInput}
+                            onChange={handlePageInputChange}
+                            onKeyDown={handlePageInputKeyDown}
+                            placeholder={`1-${totalPages}`}
+                            style={{
+                                width: '60px',
+                                padding: '4px 8px',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                                textAlign: 'center'
+                            }}
+                        />
+                        <button 
+                            onClick={handleGoToPage}
+                            disabled={!pageInput || totalPages === 0}
+                            style={{
+                                padding: '4px 12px',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                                backgroundColor: '#f5f5f5',
+                                cursor: pageInput && totalPages > 0 ? 'pointer' : 'not-allowed'
+                            }}
+                        >
+                            Go
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

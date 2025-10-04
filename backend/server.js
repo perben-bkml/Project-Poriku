@@ -1631,13 +1631,16 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             const getMonitoringResponse = await withBackoff(async () => {
                 return await sheets.spreadsheets.values.get({
                     spreadsheetId,
-                    range: "'Monitoring DRPP'!B:G"
+                    range: "'Monitoring DRPP'!B:I"
                 });
             });
 
             const monitoringRows = getMonitoringResponse.data.values || [];
             let existingStartRow = null;
             let existingRowCount = 0;
+            let existingColumnCData = [];
+            let existingColumnHData = [];
+            let existingColumnIData = [];
 
             // Find if `trans_id` already exists
             for (let i = 0; i < monitoringRows.length; i++) {
@@ -1646,6 +1649,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                         existingStartRow = i + 1; // Convert to 1-based index (first occurrence)
                     }
                     existingRowCount++; // Count all rows belonging to the same trans_id
+                    // Store existing column C data (index 1)
+                    existingColumnCData.push(monitoringRows[i][1] || "");
+                    // Store existing column H data (index 6)
+                    existingColumnHData.push(monitoringRows[i][6] || "");
+                    // Store existing column I data (index 7)
+                    existingColumnIData.push(monitoringRows[i][7] || "");
                 } else if (existingStartRow) {
                     break; // Stop counting when a new `trans_id` appears
                 }
@@ -1656,15 +1665,33 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             // Prepare the new rows
             let rowsToWrite = [];
             for (let i = 0; i < newRowCount; i++) {
+                // Determine column C value: use existing data if available and not empty, otherwise use fullDateFormat
+                let columnCValue = fullDateFormat;
+                if (existingStartRow && i < existingColumnCData.length && existingColumnCData[i] && existingColumnCData[i].trim() !== "") {
+                    columnCValue = existingColumnCData[i]; // Keep existing column C data
+                }
+                
+                // Determine column H value: only write "Belum" if existing value is "Belum", otherwise preserve existing
+                let columnHValue = "Belum";
+                if (existingStartRow && i < existingColumnHData.length && existingColumnHData[i] && existingColumnHData[i].trim() !== "Belum") {
+                    columnHValue = existingColumnHData[i]; // Keep existing column H data if not "Belum"
+                }
+                
+                // Determine column I value: only write "Belum" if existing value is "Belum", otherwise preserve existing
+                let columnIValue = "Belum";
+                if (existingStartRow && i < existingColumnIData.length && existingColumnIData[i] && existingColumnIData[i].trim() !== "Belum") {
+                    columnIValue = existingColumnIData[i]; // Keep existing column I data if not "Belum"
+                }
+                
                 rowsToWrite.push([
                     trans_id, // Trans ID is written on all rows
-                    fullDateFormat, // Column C
+                    columnCValue, // Column C - conditional based on existing data
                     satker, // Column D
                     drppArray[i], // Column E
                     spmDrppArray[i], // Column F
                     nominalArray[i], // Column G
-                    "Belum", // Column H
-                    "Belum", // Column I
+                    columnHValue, // Column H - conditional based on existing data
+                    columnIValue, // Column I - conditional based on existing data
                     jenis.toUpperCase(), // Column J
                 ]);
             }

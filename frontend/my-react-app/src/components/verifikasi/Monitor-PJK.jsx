@@ -22,9 +22,15 @@ export default function MonitorPJK() {
     const [isAlert, setIsAlert] = useState(false);
     const [dashboardData, setDashboardData] = useState([]);
     const [tableData, setTableData] = useState([]);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(() => {
+        const savedPage = localStorage.getItem('monitor-pjk-pagination');
+        const pageNumber = savedPage ? parseInt(savedPage, 10) : 1;
+        // Ensure page number is valid (will be validated against totalPages in useEffect)
+        return pageNumber > 0 ? pageNumber : 1;
+    });
     const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("");
+    const [pageInput, setPageInput] = useState("");
 
 
     //Titles for card
@@ -64,16 +70,60 @@ export default function MonitorPJK() {
         fetchData(currentPage, filterSelect);
     }, [currentPage, filterSelect]);
 
+    // Validate currentPage against totalPages
+    useEffect(() => {
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(1);
+            localStorage.setItem('monitor-pjk-pagination', '1');
+        }
+    }, [totalPages, currentPage]);
+
 
     //Pagination
     function handlePaginationChange(event, value) {
-        setCurrentPage(value);
+        // Validate page number is within bounds
+        if (value >= 1 && value <= totalPages) {
+            setCurrentPage(value);
+            localStorage.setItem('monitor-pjk-pagination', value.toString());
+        }
     }
 
     //Filter Change
     function handleFilterChange(event) {
         const option = event.target.value;
         setFilterSelect(option);
+        // Reset pagination when filter changes
+        setCurrentPage(1);
+        localStorage.removeItem('monitor-pjk-pagination');
+    }
+
+    // Handle page input change
+    function handlePageInputChange (event) {
+        const value = event.target.value;
+        // Only allow numbers
+        if (/^\d*$/.test(value)) {
+            setPageInput(value);
+        }
+    }
+
+    // Handle go to page
+    function handleGoToPage () {
+        const pageNumber = parseInt(pageInput, 10);
+        if (pageNumber >= 1 && pageNumber <= totalPages) {
+            setCurrentPage(pageNumber);
+            localStorage.setItem('monitor-pjk-pagination', pageNumber.toString());
+            setPageInput(""); // Clear input after successful navigation
+        } else {
+            // Reset input if invalid
+            setPageInput("");
+        }
+    }
+
+    // Handle Enter key press in page input
+    function handlePageInputKeyDown (event) {
+        if (event.key === 'Enter') {
+            handleGoToPage();
+        }
     }
 
     return (
@@ -101,7 +151,49 @@ export default function MonitorPJK() {
                 {isLoading ? <LoadingAnimate /> :
                     <TableInfoPJK header={tableHead} body={tableData} />
                 }
-                <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />
+                <div style={{marginRight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap'}}>
+                    <Pagination 
+                        className="pagination" 
+                        size="medium" 
+                        count={totalPages} 
+                        page={currentPage} 
+                        onChange={handlePaginationChange}
+                        showFirstButton={true}
+                        showLastButton={true}
+                        siblingCount={1}
+                        boundaryCount={1}
+                    />
+                    <div className="goto-page" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <span>Go to page:</span>
+                        <input 
+                            type="text" 
+                            value={pageInput}
+                            onChange={handlePageInputChange}
+                            onKeyDown={handlePageInputKeyDown}
+                            placeholder={`1-${totalPages}`}
+                            style={{
+                                width: '60px',
+                                padding: '4px 8px',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                                textAlign: 'center'
+                            }}
+                        />
+                        <button 
+                            onClick={handleGoToPage}
+                            disabled={!pageInput || totalPages === 0}
+                            style={{
+                                padding: '4px 12px',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                                backgroundColor: '#f5f5f5',
+                                cursor: pageInput && totalPages > 0 ? 'pointer' : 'not-allowed'
+                            }}
+                        >
+                            Go
+                        </button>
+                    </div>
+                </div>
             </div>
             {isAlert && <PopupAlert isAlert={isAlert} message="Data tidak ditemukan." severity="error" />}
         </div>

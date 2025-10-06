@@ -86,6 +86,22 @@ const satkerNames = [
     {title: "Zona Maritim Timur", value: "ZONA TIMUR"},
 ]
 
+const monthNames = [
+    {title: "", value: ""},
+    {title: "Januari", value: "01"},
+    {title: "Februari", value: "02"},
+    {title: "Maret", value: "03"},
+    {title: "April", value: "04"},
+    {title: "Mei", value: "05"},
+    {title: "Juni", value: "06"},
+    {title: "Juli", value: "07"},
+    {title: "Agustus", value: "08"},
+    {title: "September", value: "09"},
+    {title: "Oktober", value: "10"},
+    {title: "November", value: "11"},
+    {title: "Desember", value: "12"},
+]
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames };
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames };
 

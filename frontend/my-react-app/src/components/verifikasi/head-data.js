@@ -47,4 +47,20 @@ const userSatkerNames = [
     {title: "Zona Maritim Timur", value: "Zona Timur"},
 ]
 
-export { satkerNames, tableHead, userSatkerNames }
+const monthNames = [
+    {title: "", value: ""},
+    {title: "Januari", value: "01"},
+    {title: "Februari", value: "02"},
+    {title: "Maret", value: "03"},
+    {title: "April", value: "04"},
+    {title: "Mei", value: "05"},
+    {title: "Juni", value: "06"},
+    {title: "Juli", value: "07"},
+    {title: "Agustus", value: "08"},
+    {title: "September", value: "09"},
+    {title: "Oktober", value: "10"},
+    {title: "November", value: "11"},
+    {title: "Desember", value: "12"},
+]
+
+export { satkerNames, tableHead, userSatkerNames, monthNames }

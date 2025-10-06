@@ -8,7 +8,7 @@ import { AuthContext } from "../../lib/AuthContext.jsx";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
 import {TableInfoPJK} from "../../ui/tables.jsx";
-import {tableHead, userSatkerNames} from "./head-data.js";
+import {tableHead, userSatkerNames, monthNames} from "./head-data.js";
 import Pagination from "@mui/material/Pagination";
 import { PopupAlert } from "../../ui/Popup.jsx";
 
@@ -29,7 +29,14 @@ export default function MonitorPJK() {
         return pageNumber > 0 ? pageNumber : 1;
     });
     const [totalPages, setTotalPages] = useState(0);
-    const [filterSelect, setFilterSelect] = useState("");
+    const [filterSelect, setFilterSelect] = useState(() => {
+        const savedFilter = localStorage.getItem('monitor-pjk-filter-select');
+        return savedFilter ? JSON.parse(savedFilter) : "";
+    });
+    const [monthFilter, setMonthFilter] = useState(() => {
+        const savedMonth = localStorage.getItem('monitor-pjk-month-filter');
+        return savedMonth ? JSON.parse(savedMonth) : "";
+    });
     const [pageInput, setPageInput] = useState("");
 
 
@@ -43,12 +50,12 @@ export default function MonitorPJK() {
     ]
 
     //Fetch data based on user
-    async function fetchData(page, status) {
+    async function fetchData(page, status, month) {
         const rowsPerPage = 10;
         let satkerPrefix = userSatkerNames.find(item => item.title === user.name).value || "";
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage }});
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, monthKeyword: month }});
             if (response.status === 200){
                 const { data: rowData, totalPages, countData, message } = response.data;
                 setDashboardData(countData);
@@ -67,8 +74,8 @@ export default function MonitorPJK() {
     }
 
     useEffect(() => {
-        fetchData(currentPage, filterSelect);
-    }, [currentPage, filterSelect]);
+        fetchData(currentPage, filterSelect, monthFilter);
+    }, [currentPage, filterSelect, monthFilter]);
 
     // Validate currentPage against totalPages
     useEffect(() => {
@@ -92,6 +99,19 @@ export default function MonitorPJK() {
     function handleFilterChange(event) {
         const option = event.target.value;
         setFilterSelect(option);
+        localStorage.setItem('monitor-pjk-filter-select', JSON.stringify(option));
+        if (option === "") {
+            localStorage.removeItem('monitor-pjk-filter-select');
+        }
+        // Reset pagination when filter changes
+        setCurrentPage(1);
+        localStorage.removeItem('monitor-pjk-pagination');
+    }
+
+    function handleMonthFilterChange(event) {
+        const option = event.target.value;
+        setMonthFilter(option);
+        localStorage.setItem('monitor-pjk-month-filter', JSON.stringify(option));
         // Reset pagination when filter changes
         setCurrentPage(1);
         localStorage.removeItem('monitor-pjk-pagination');
@@ -143,6 +163,14 @@ export default function MonitorPJK() {
                             <option value="Ditolak">Ditolak</option>
                             <option value="Lengkap dengan catatan">Lengkap (Catatan)</option>
                             <option value="Lengkap">Lengkap</option>
+                        </select>
+                    </div>
+                    <label className="filter-label2">Bulan: </label>
+                    <div className="filter-select filter-select2">
+                        <select value={monthFilter} onChange={handleMonthFilterChange}>
+                            {monthNames.map((month, index) => (
+                                <option key={index} value={month.value}>{month.title}</option>
+                            ))}
                         </select>
                     </div>
                 </form>

@@ -4,7 +4,7 @@ import axios from "axios";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
 import { userSatkerNames } from "../verifikasi/head-data.js";
-import { placeholderTable, cardTitles, pajakStatus } from "./head-data.js";
+import { placeholderTable, cardTitles, pajakStatus, monthNames } from "./head-data.js";
 //Import Table
 import {TableKelola} from "../../ui/tables.jsx";
 //Import Pagination
@@ -25,10 +25,14 @@ export default function MonitoringDrpp(props) {
     });
     const [totalPages, setTotalPages] = useState(0);
     const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
-    const [filterSelect, setFilterSelect] = useState({
-        satker: "",
-        pungutan: "",
-        setoran: ""
+    const [filterSelect, setFilterSelect] = useState(() => {
+        const savedFilter = localStorage.getItem('monitoring-drpp-filter');
+        return savedFilter ? JSON.parse(savedFilter) : {
+            satker: "",
+            pungutan: "",
+            setoran: "",
+            month: ""
+        };
     });
     const [cariInput, setCariInput] = useState({
         spm: "",
@@ -88,7 +92,9 @@ export default function MonitoringDrpp(props) {
         // Reset pagination when filter changes
         setCurrentPage(1);
         localStorage.removeItem('monitoring-drpp-pagination');
-        setFilterSelect({...filterSelect, [event.target.name]: event.target.value});
+        const newFilter = {...filterSelect, [event.target.name]: event.target.value};
+        setFilterSelect(newFilter);
+        localStorage.setItem('monitoring-drpp-filter', JSON.stringify(newFilter));
     }
 
     // Handle Cari Input Changes
@@ -172,6 +178,15 @@ export default function MonitoringDrpp(props) {
                         <select value={filterSelect.setoran} name={"setoran"} onChange={event => handleFilterChange(event)}>
                             {pajakStatus.map((pajak, index) => (
                                 <option key={index} value={pajak}>{pajak}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <br /><br /><br />
+                    <label className="filter-label2">Bulan: </label>
+                    <div className="filter-select filter-select2">
+                        <select value={filterSelect.month} name={"month"} onChange={event => handleFilterChange(event)}>
+                            {monthNames.map((month, index) => (
+                                <option key={index} value={month.value}>{month.title}</option>
                             ))}
                         </select>
                     </div>

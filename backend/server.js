@@ -1870,6 +1870,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             satker: row[3] || "",
             pungut: row[7] || "",
             setor: row[8] || "",
+            date: row[2] || "",
             rowIndex: index + 1,
         }));
 
@@ -1882,6 +1883,17 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         }
         if (filterKeyword.setoran !== "") {
             allRows = allRows.filter(row => row.setor.startsWith(filterKeyword.setoran));
+        }
+        if (filterKeyword.month !== "") {
+            allRows = allRows.filter(row => {
+                // Extract month from date string (format: yyyy-mm-dd)
+                const dateParts = row.date.split('-');
+                if (dateParts.length >= 2) {
+                    const month = dateParts[1];
+                    return month === filterKeyword.month;
+                }
+                return false;
+            });
         }
 
         //Get Total count of pajak status
@@ -2414,7 +2426,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
 //Kelola-PJK Page
 app.get("/verifikasi/data-pjk", async (req, res) => {
     try {
-        const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10, searchKeyword = "" } = req.query;
+        const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10, searchKeyword = "", monthKeyword = "" } = req.query;
 
         //Get all data from range A
         const response = await withBackoff(async () => {
@@ -2429,6 +2441,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         allRows = allRows.map((row, index) => ({
             satker: row[0] || "",           // Column A
             nomorSpm: row[1] || "",         // Column B
+            date: row[2] || "",             // Column C
             status: row[7] || "",           // Column H
             rowIndex: index + 1
         }));
@@ -2438,10 +2451,29 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
             allRows = allRows.filter(row => row.satker.startsWith(satkerPrefix));
         }
         if (filterKeyword !== "") {
-            allRows = allRows.filter(row => row.status.includes(filterKeyword));
+        allRows = allRows.filter(row => row.status.includes(filterKeyword));
         }
         if (searchKeyword !== "") {
             allRows = allRows.filter(row => row.nomorSpm.includes(searchKeyword));
+        }
+        if (monthKeyword !== "") {
+            // Map numeric month to Indonesian abbreviation
+            const monthMap = {
+                "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+                "05": "Mei", "06": "Jun", "07": "Jul", "08": "Agu",
+                "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des"
+            };
+            const monthAbbr = monthMap[monthKeyword];
+
+            allRows = allRows.filter(row => {
+                // Extract month from date string (format: dd-mmm-yyyy)
+                const dateParts = row.date.split('-');
+                if (dateParts.length >= 3) {
+                    const month = dateParts[1]; // Middle part is the month abbreviation
+                    return month === monthAbbr;
+                }
+                return false;
+            });
         }
 
 
@@ -2462,7 +2494,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
                 };
                 
                 const numA = getNumericPart(a.nomorSpm);
-                const numB = getNumericPart(b.nomorSpm);
+            const numB = getNumericPart(b.nomorSpm);
                 
                 // Sort from highest to lowest
                 return numB - numA;
@@ -2498,7 +2530,32 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 
         //Fetch PJK Count data
         let countData = null;
+
+        // Map numeric month to Indonesian abbreviation if monthKeyword exists
+        let monthAbbr = "";
+        if (monthKeyword !== "") {
+            const monthMap = {
+                "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
+                "05": "Mei", "06": "Jun", "07": "Jul", "08": "Agu",
+                "09": "Sep", "10": "Okt", "11": "Nov", "12": "Des"
+            };
+            monthAbbr = monthMap[monthKeyword] || "";
+        }
+
         if (satkerPrefix === "") {
+            // Write month to G4 if monthKeyword exists, or reset to empty if not
+            const monthValue = (monthKeyword !== "" && monthAbbr !== "") ? monthAbbr : "";
+            await withBackoff(async () => {
+                return await sheets2.spreadsheets.values.update({
+                    spreadsheetId: spreadsheetIdVerif,
+                    range: `'Sheet Coding'!G4`,
+                    valueInputOption: 'RAW',
+                    resource: {
+                        values: [[monthValue]]
+                    }
+                });
+            });
+
             const countResponse = await withBackoff(async () => {
                 return await sheets2.spreadsheets.values.get({
                     spreadsheetId: spreadsheetIdVerif,
@@ -2524,6 +2581,20 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
                 }
             }
             if (foundRow) {
+                // Write month to G cell (2 rows below foundRow) if monthKeyword exists, or reset to empty if not
+                const monthCellRow = foundRow;
+                const monthValue = (monthKeyword !== "" && monthAbbr !== "") ? monthAbbr : "";
+                await withBackoff(async () => {
+                    return await sheets2.spreadsheets.values.update({
+                        spreadsheetId: spreadsheetIdVerif,
+                        range: `'Sheet Coding'!G${monthCellRow}`,
+                        valueInputOption: 'RAW',
+                        resource: {
+                            values: [[monthValue]]
+                        }
+                    });
+                });
+
                 const countResponse = await withBackoff(async () => {
                     return await sheets2.spreadsheets.values.get({
                         spreadsheetId: spreadsheetIdVerif,

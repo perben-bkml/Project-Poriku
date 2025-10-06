@@ -7,15 +7,28 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import Pagination from "@mui/material/Pagination";
 import { PopupAlert } from "../../ui/Popup.jsx";
 //Other Data
-import { satkerNames, tableHead } from "./head-data.js";
+import { satkerNames, tableHead, monthNames } from "./head-data.js";
 
 export default function KelolaPJK() {
     //State
     const [isLoading, setIsLoading] = useState(false);
     const [isAlert, setIsAlert] = useState(false);
-    const [filterSelect, setFilterSelect] = useState("");
-    const [filterData, setFilterData] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
+    const [filterSelect, setFilterSelect] = useState(() => {
+        const savedFilterSelect = localStorage.getItem('kelola-pjk-filter-select');
+        return savedFilterSelect ? JSON.parse(savedFilterSelect) : "";
+    });
+    const [filterData, setFilterData] = useState(() => {
+        const savedFilter = localStorage.getItem('kelola-pjk-filter');
+        return savedFilter ? JSON.parse(savedFilter) : "";
+    });
+    const [statusFilter, setStatusFilter] = useState(() => {
+        const savedStatus = localStorage.getItem('kelola-pjk-status-filter');
+        return savedStatus ? JSON.parse(savedStatus) : "";
+    });
+    const [monthFilter, setMonthFilter] = useState(() => {
+        const savedMonth = localStorage.getItem('kelola-pjk-month-filter');
+        return savedMonth ? JSON.parse(savedMonth) : "";
+    });
     const [dashboardData, setDashboardData] = useState([]);
     const [tableData, setTableData] = useState([]);
     const [currentPage, setCurrentPage] = useState(() => {
@@ -31,12 +44,12 @@ export default function KelolaPJK() {
 
 
     //Fetch data with filter
-    async function fetchData(data, page, status, cari) {
+    async function fetchData(data, page, status, cari, month) {
         const rowsPerPage = 10;
         let satkerPrefix = data;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, searchKeyword: cari }});
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, searchKeyword: cari, monthKeyword: month }});
             if (response.status === 200){
                 const { data: rowData, totalPages, countData, message } = response.data;
                 setDashboardData(countData);
@@ -55,8 +68,8 @@ export default function KelolaPJK() {
     }
 
     useEffect(() => {
-        fetchData(filterData, currentPage, statusFilter, cariSpm);
-    }, [filterData, currentPage, statusFilter, cariSpm]);
+        fetchData(filterData, currentPage, statusFilter, cariSpm, monthFilter);
+    }, [filterData, currentPage, statusFilter, cariSpm, monthFilter]);
 
     // Validate currentPage against totalPages
     useEffect(() => {
@@ -81,16 +94,22 @@ export default function KelolaPJK() {
     function handleFilterChange(event) {
         const option = event.target.value;
         setFilterSelect(option);
+        localStorage.setItem('kelola-pjk-filter-select', JSON.stringify(option));
         if (option === "") {
             setStatusFilter("")
             setFilterData("");
+            localStorage.removeItem('kelola-pjk-filter');
+            localStorage.removeItem('kelola-pjk-status-filter');
+            localStorage.removeItem('kelola-pjk-filter-select');
         }
     }
     function handleFilterSelectChange(event) {
         const option = event.target.value;
         setFilterData(option);
+        localStorage.setItem('kelola-pjk-filter', JSON.stringify(option));
         if (option === "") {
             setStatusFilter("");
+            localStorage.removeItem('kelola-pjk-status-filter');
         }
         // Reset pagination when filter changes
         setCurrentPage(1);
@@ -99,6 +118,15 @@ export default function KelolaPJK() {
     function handleStatusSelectChange(event) {
         const option = event.target.value;
         setStatusFilter(option);
+        localStorage.setItem('kelola-pjk-status-filter', JSON.stringify(option));
+        // Reset pagination when filter changes
+        setCurrentPage(1);
+        localStorage.removeItem('kelola-pjk-pagination');
+    }
+    function handleMonthFilterChange(event) {
+        const option = event.target.value;
+        setMonthFilter(option);
+        localStorage.setItem('kelola-pjk-month-filter', JSON.stringify(option));
         // Reset pagination when filter changes
         setCurrentPage(1);
         localStorage.removeItem('kelola-pjk-pagination');
@@ -167,7 +195,7 @@ export default function KelolaPJK() {
                 <form className="filter-form">
                     <label className="filter-label1">Filter dengan:</label>
                     <div className="filter-select">
-                        <select onChange={handleFilterChange}>
+                        <select value={filterSelect} onChange={handleFilterChange}>
                             <option value=""/>
                             <option value="text">Satker</option>
                             <option value="allFilter">Satker dan Status</option>
@@ -189,6 +217,15 @@ export default function KelolaPJK() {
                             <option value="Ditolak">Ditolak</option>
                             <option value="Lengkap dengan catatan">Lengkap (Catatan)</option>
                             <option value="Lengkap">Lengkap</option>
+                        </select>
+                    </div>
+                    <br /><br /><br />
+                    <label className="filter-label1">Bulan: </label>
+                    <div className="filter-select filter-select2">
+                        <select value={monthFilter} onChange={handleMonthFilterChange}>
+                            {monthNames.map((month, index) => (
+                                <option key={index} value={month.value}>{month.title}</option>
+                            ))}
                         </select>
                     </div>
 

@@ -37,13 +37,12 @@ const getFormattedDate = () => {
     const fullDateTimeVerifFormat = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
     return {
         fullDateFormat,
-        fullDateTimeFormat,
+    fullDateTimeFormat,
         fullDateTimeVerifFormat,
         MonthDateFormat,
         PrevMonthDate,
     }
 }
-const { fullDateFormat, fullDateTimeFormat, fullDateTimeVerifFormat, MonthDateFormat, PrevMonthDate } = getFormattedDate();
 
 //Exponential Backoff for GSheet API Limits
 async function withBackoff(apiCallFn, options = {}) {
@@ -477,14 +476,14 @@ app.post("/login-auth", async (req, res) => {
             // Set cookie with the token
         // console.log("=== COOKIE SETTING DEBUG ===");
         // console.log("Setting auth cookie for user:", userData[0].name);
-        // console.log("Environment:", process.env.NODE_ENV);
-        // console.log("Frontend Origin:", process.env.FRONTEND_ORIGIN);
-        // console.log("Hostname Domain:", process.env.HOSTNAME_DOMAIN);
+        // console.log("Environment:", process...env.NODE_ENV);
+        // console.log("Frontend Origin:", process...env.FRONTEND_ORIGIN);
+        // console.log("Hostname Domain:", process...env.HOSTNAME_DOMAIN);
         // console.log("Cookie config:", {
         //     httpOnly: true,
-        //     secure: process.env.NODE_ENV === "production",
-        //     sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-        //     domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+        //     secure: process...env.NODE_ENV === "production",
+        //     sameSite: process...env.NODE_ENV === "production" ? 'none' : 'lax',
+        //     domain: process...env.NODE_ENV === "production" ? process...env.HOSTNAME_DOMAIN : undefined,
         //     path: '/',
         //     maxAge: 5 * 60 * 60 * 1000
         // });
@@ -824,7 +823,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
             const lastFilledRows = responseAntrian.length || 0;
             const lastTableRows = responseTable.length || [];
             // Add date to beginning of textdata array
-            textdata.unshift(fullDateTimeFormat);
+            textdata.unshift(getFormattedDate().fullDateTimeFormat);
             // Add counter increment and unshift to textdata
             const newIdCounter = parseInt(responseId) + 1;
             textdata.unshift(newIdCounter)
@@ -1132,7 +1131,7 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
         }
 
         // Setting antrian data range
-        textdata.unshift(fullDateTimeFormat);
+        textdata.unshift(getFormattedDate().fullDateTimeFormat);
 
         // Apply backoff strategy for getting antrian data
         const antriResponse = await withBackoff(async () => {
@@ -1491,6 +1490,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
 
 //Kelola-Pengajuan handlers
 app.get("/bendahara/kelola-ajuan", async (req, res) => {
+    const { MonthDateFormat, PrevMonthDate } = getFormattedDate();
     const datePrefixes = [MonthDateFormat, PrevMonthDate];
       try {
         // Fetch entire column B from Google Sheets with backoff
@@ -1585,7 +1585,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             return res.status(400).json({ error: "Keyword not found in column A" });
         }
 
-        const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? fullDateFormat : "";
+        const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
 
         // Update multiple columns in a single request. If tgl_verifikasi exist then don't update tgl mulai verif.
         const updateData = [
@@ -1666,7 +1666,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             let rowsToWrite = [];
             for (let i = 0; i < newRowCount; i++) {
                 // Determine column C value: use existing data if available and not empty, otherwise use fullDateFormat
-                let columnCValue = fullDateFormat;
+                let columnCValue = getFormattedDate().fullDateFormat;
                 if (existingStartRow && i < existingColumnCData.length && existingColumnCData[i] && existingColumnCData[i].trim() !== "") {
                     columnCValue = existingColumnCData[i]; // Keep existing column C data
                 }
@@ -2621,7 +2621,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
     try {
         const { data, type, rowPosition } = req.body;
 
-        data.push(fullDateTimeVerifFormat);
+        data.push(getFormattedDate().fullDateTimeVerifFormat);
 
         //Function to generate pdf from Google Docs template
         async function generatePdf(dataArray) {

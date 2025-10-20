@@ -577,6 +577,83 @@
     width: 50%;
 }
 
+/* Buku Tamu Page */
+.buku-tamu-page-title {
+    text-align: center;
+    font-size: 1.8rem;
+}
+
+.buku-tamu-description {
+    text-align: justify;
+    margin-top: 20px;
+    margin-left: 30px;
+    margin-right: 30px;
+}
+
+.buku-tamu-form {
+    margin-top: 30px;
+}
+
+.buku-tamu-form .pengajuan-form-textdata {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    margin-left: 30px;
+    margin-right: 30px;
+    gap: 0px;
+}
+
+.buku-tamu-form .pengajuan-form-textdata label {
+    display: block;
+    padding-left: 0px;
+    margin-bottom: 8px;
+    margin-top: 15px;
+}
+
+.buku-tamu-form .pengajuan-form-textdata input,
+.buku-tamu-form .pengajuan-form-textdata select {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 0px;
+    height: 35px;
+    padding-left: 10px;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 8px;
+    font-family: "Outfit", serif;
+    font-size: 1rem;
+}
+
+.buku-tamu-form-input {
+    width: 100%;
+    max-width: 100%;
+}
+
+.buku-tamu-section-title {
+    margin-bottom: 0px;
+    margin-top: 30px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #1a284b;
+}
+
+.buku-tamu-required {
+    color: red;
+}
+
+.buku-tamu-file {
+    display: flex;
+    align-content: center;
+}
+
+.buku-tamu-submit {
+    margin-top: 40px;
+    margin-bottom: 20px;
+}
+
+.buku-tamu-submit-disabled {
+    cursor: not-allowed;
+}
+
 
   /* Adding Media Queries */
 @media screen and (max-width: 1400px) {
@@ -849,6 +926,26 @@
         justify-content: center;
         margin-top: 15px;
     }
+
+    /* Buku Tamu Page Responsive */
+    .buku-tamu-page-title {
+        font-size: 1.5rem;
+    }
+
+    .buku-tamu-description {
+        margin-left: 15px;
+        margin-right: 15px;
+        font-size: 1.3rem;
+    }
+
+    .buku-tamu-form-input {
+        max-width: 100%;
+    }
+
+    .buku-tamu-section-title {
+        font-size: 1.3rem;
+        margin-top: 25px;
+    }
 }
 
 /* Extra small devices (phones, 576px and down) */
@@ -1058,5 +1155,46 @@
 
     .pagination {
         transform: scale(0.9);
+    }
+
+    /* Buku Tamu Page Responsive */
+    .buku-tamu-page-title {
+        font-size: 1.3rem;
+    }
+
+    .buku-tamu-description {
+        margin-left: 10px;
+        margin-right: 10px;
+        font-size: 1.1rem;
+    }
+
+    .buku-tamu-form-input {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .buku-tamu-section-title {
+        font-size: 1.2rem;
+        margin-top: 20px;
+    }
+
+    .pengajuan-form-textdata {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        margin-left: 10px;
+        margin-right: 10px;
+        font-size: 1rem;
+    }
+
+    .pengajuan-form-textdata label {
+        margin-bottom: 5px;
+        padding-left: 0px;
+    }
+
+    .pengajuan-form-textdata input,
+    .pengajuan-form-textdata select {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: 15px;
     }
 }

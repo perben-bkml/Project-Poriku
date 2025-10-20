@@ -106,7 +106,10 @@ export default function Gaji() {
                     <h3>Selamat datang di</h3>
                     <h1>Pelayanan Gaji Bakamla</h1>
                     <br/>
-                    <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke Halaman Awal</p></NavLink>
+                    <div style={{display: 'flex', gap: '30px', alignItems: 'center'}}>
+                        <NavLink to='/buku-tamu' style={{textDecoration: 'none', color: 'inherit'}}><button className='page-button'>Isi Buku Tamu</button></NavLink>
+                        <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke Halaman Awal</p></NavLink>
+                    </div>
                 </div>
             <div className='gaji-content' >
                 <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>

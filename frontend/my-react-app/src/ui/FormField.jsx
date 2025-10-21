@@ -16,17 +16,17 @@ import React from 'react';
  * @param {string} className - Additional CSS class names
  */
 export default function FormField({
-    label,
-    name,
-    type = 'text',
-    value,
-    onChange,
-    required = false,
-    options = [],
-    placeholder = '',
-    accept = '',
-    className = ''
-}) {
+                                      label,
+                                      name,
+                                      type = 'text',
+                                      value,
+                                      onChange,
+                                      required = false,
+                                      options = [],
+                                      placeholder = '',
+                                      accept = '',
+                                      className = ''
+                                  }) {
     const renderInput = () => {
         switch (type) {
             case 'select':

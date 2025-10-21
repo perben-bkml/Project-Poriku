@@ -173,6 +173,7 @@ const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
 // Gdrive API Setup (will be initialized with OAuth2 tokens)
 let drive = null;
 const driveFolderId = process.env.DRIVE_FOLDER_ID_AJUAN;
+const driveFolderIdGaji = process.env.DRIVE_FOLDER_ID_GAJI;
 
 // Gdrive and Gdocs API for Verifikasi
 let driveVerif = null;
@@ -2875,6 +2876,254 @@ app.post("/verifikasi/generate-pdf", async (req, res) => {
     }
 })
 
+// Buku Tamu Handler
+app.post("/buku-tamu", upload.fields([
+    { name: 'uploadKTP', maxCount: 1 },
+    { name: 'uploadKK', maxCount: 1 },
+    { name: 'uploadSKKEP', maxCount: 1 },
+    { name: 'uploadSKPP', maxCount: 1 },
+    { name: 'uploadSKKEPKeluar', maxCount: 1 }
+]), async (req, res) => {
+    try {
+        const {
+            namaLengkap,
+            golonganPangkat,
+            nrp,
+            matra,
+            nomorHandphone,
+            jenisRonda,
+            satkerAsal,
+            petugasGajiSatkerAsal,
+            satkerTujuan,
+            jabatanUnitKerja,
+            tunjanganJabatanTerakhir
+        } = req.body;
+
+        // Get service account Drive client (for Buku Tamu)
+        const serviceDrive = await getServiceDriveClient();
+
+        const { fullDateTimeFormat } = getFormattedDate();
+        let idCounter, idPrefix, startColumn, rangeToCheck;
+
+        // Determine which table to use based on jenisRonda
+        if (jenisRonda === 'Ronda Masuk') {
+            // For Ronda Masuk: use columns A-M
+            idPrefix = 'PM';
+            startColumn = 'A';
+            rangeToCheck = "'Buku Tamu'!A:A";
+        } else if (jenisRonda === 'Ronda Keluar') {
+            // For Ronda Keluar: use columns O-Y
+            idPrefix = 'PK';
+            startColumn = 'O';
+            rangeToCheck = "'Buku Tamu'!O:O";
+        } else {
+            return res.status(400).json({ error: "Invalid jenisRonda value" });
+        }
+
+        // Get ID counter and find first empty row
+        const counterCell = jenisRonda === 'Ronda Masuk' ? "'Buku Tamu'!D1" : "'Buku Tamu'!R1";
+
+        const [counterResponse, columnData] = await Promise.all([
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: counterCell
+                });
+            }),
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: rangeToCheck
+                });
+            })
+        ]);
+
+        // Get current counter value and increment
+        const currentCounter = counterResponse.data.values?.[0]?.[0] || 0;
+        idCounter = parseInt(currentCounter) + 1;
+        const recordId = `${idPrefix}:${idCounter}`;
+
+        // Find first empty row
+        const existingRows = columnData.data.values || [];
+        const firstEmptyRow = existingRows.length + 1;
+
+        // Upload files to Google Drive
+        const uploadedFiles = {};
+        const files = req.files || {};
+
+        // Helper function to upload file to Drive (using service account)
+        const uploadFileToDrive = async (file, fileName) => {
+            const bufferStream = new stream.PassThrough();
+            bufferStream.end(file.buffer);
+
+            const fileMetadata = {
+                name: fileName,
+                parents: [driveFolderIdGaji]
+            };
+
+            const media = {
+                mimeType: file.mimetype,
+                body: bufferStream
+            };
+
+            const driveResponse = await serviceDrive.files.create({
+                requestBody: fileMetadata,
+                media: media,
+                fields: 'id,webViewLink',
+                supportsAllDrives: true,
+                supportsTeamDrives: true
+            });
+
+            // Make file publicly readable
+            await serviceDrive.permissions.create({
+                fileId: driveResponse.data.id,
+                requestBody: {
+                    role: 'reader',
+                    type: 'anyone'
+                },
+                supportsAllDrives: true
+            });
+
+            // Get direct download link
+            return `https://drive.google.com/uc?export=download&id=${driveResponse.data.id}`;
+        };
+
+        // Upload files based on jenisRonda
+        if (jenisRonda === 'Ronda Masuk') {
+            // Upload KTP, KK, SK/KEP, SKPP
+            if (files.uploadKTP) {
+                uploadedFiles.ktp = await uploadFileToDrive(
+                    files.uploadKTP[0],
+                    `KTP_${recordId}.${files.uploadKTP[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadKK) {
+                uploadedFiles.kk = await uploadFileToDrive(
+                    files.uploadKK[0],
+                    `KK_${recordId}.${files.uploadKK[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadSKKEP) {
+                uploadedFiles.skkep = await uploadFileToDrive(
+                    files.uploadSKKEP[0],
+                    `SKKEP_${recordId}.${files.uploadSKKEP[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadSKPP) {
+                uploadedFiles.skpp = await uploadFileToDrive(
+                    files.uploadSKPP[0],
+                    `SKPP_${recordId}.${files.uploadSKPP[0].originalname.split('.').pop()}`
+                );
+            }
+        } else if (jenisRonda === 'Ronda Keluar') {
+            // Upload KTP, KK, SK/KEP, SK/KEP Keluar
+            if (files.uploadKTP) {
+                uploadedFiles.ktp = await uploadFileToDrive(
+                    files.uploadKTP[0],
+                    `KTP_${recordId}.${files.uploadKTP[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadKK) {
+                uploadedFiles.kk = await uploadFileToDrive(
+                    files.uploadKK[0],
+                    `KK_${recordId}.${files.uploadKK[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadSKKEP) {
+                uploadedFiles.skkep = await uploadFileToDrive(
+                    files.uploadSKKEP[0],
+                    `SKKEP_${recordId}.${files.uploadSKKEP[0].originalname.split('.').pop()}`
+                );
+            }
+            if (files.uploadSKKEPKeluar) {
+                uploadedFiles.skkepKeluar = await uploadFileToDrive(
+                    files.uploadSKKEPKeluar[0],
+                    `SKKEP_Keluar_${recordId}.${files.uploadSKKEPKeluar[0].originalname.split('.').pop()}`
+                );
+            }
+        }
+
+        // Prepare data for spreadsheet
+        let rowData;
+        let endColumn;
+
+        if (jenisRonda === 'Ronda Masuk') {
+            // Columns A-M for Ronda Masuk
+            endColumn = 'M';
+            rowData = [
+                recordId,                          // A: ID
+                fullDateTimeFormat,                // B: Timestamp
+                namaLengkap,                       // C: Nama Lengkap dan Gelar
+                golonganPangkat,                   // D: Golongan/Pangkat
+                nrp,                               // E: NRP
+                matra,                             // F: Matra
+                nomorHandphone,                    // G: Nomor Handphone
+                satkerAsal,                        // H: Satker Asal
+                petugasGajiSatkerAsal,            // I: Petugas Gaji Asal
+                uploadedFiles.ktp || '',           // J: KTP
+                uploadedFiles.kk || '',            // K: KK
+                uploadedFiles.skkep || '',         // L: SK/KEP
+                uploadedFiles.skpp || ''           // M: SKPP Satker Asal
+            ];
+        } else {
+            // Columns O-Y for Ronda Keluar
+            endColumn = 'Y';
+            rowData = [
+                recordId,                          // O: ID
+                fullDateTimeFormat,                // P: Timestamp
+                namaLengkap,                       // Q: Nama Lengkap dan Gelar
+                golonganPangkat,                   // R: Golongan/Pangkat
+                nrp,                               // S: NRP
+                matra,                             // T: Matra
+                nomorHandphone,                    // U: Nomor Handphone
+                satkerTujuan,                      // V: Satker Tujuan
+                jabatanUnitKerja,                  // W: Jabatan/Unit Kerja
+                tunjanganJabatanTerakhir,         // X: Tunj. Jabatan Terakhir
+                uploadedFiles.skkepKeluar || ''    // Y: SK/KEP Keluar
+            ];
+        }
+
+        // Write data to spreadsheet
+        const dataRange = `'Buku Tamu'!${startColumn}${firstEmptyRow}:${endColumn}${firstEmptyRow}`;
+
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId: spreadsheetId,
+                requestBody: {
+                    valueInputOption: 'USER_ENTERED',
+                    data: [
+                        {
+                            range: dataRange,
+                            values: [rowData]
+                        }
+                    ]
+                }
+            });
+        });
+
+        // Update counter in D1 or R1
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId: spreadsheetId,
+                range: counterCell,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: {
+                    values: [[idCounter]]
+                }
+            });
+        });
+
+        res.status(200).json({
+            message: "Data berhasil disimpan",
+            recordId: recordId,
+            uploadedFiles: uploadedFiles
+        });
+
+    } catch (error) {
+        console.error("Error in /buku-tamu:", error);
+        res.status(500).json({ error: "Failed to save data", details: error.message });
+    }
+});
 
 // Ports
 app.listen(3000, () => {

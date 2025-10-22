@@ -745,7 +745,8 @@ function BuatPengajuan(props) {
             const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/buat-ajuan` , formData, {
                 headers:{
                     'Content-Type': 'multipart/form-data',
-                }
+                },
+                withCredentials: true  // Ensure JWT auth cookie is sent
             })
             if (response.status === 200){
                 props.alertMessage("Data berhasil dibuat.")
@@ -757,13 +758,30 @@ function BuatPengajuan(props) {
             if (err.response && err.response.status === 401) {
                 const errorData = err.response.data;
                 if (errorData.redirectToAuth) {
+                    setIsLoading(false);
+
+                    // Show user-friendly message
+                    const shouldAuth = window.confirm(
+                        'Autentikasi Google Drive diperlukan untuk mengunggah file.\n\n' +
+                        'Klik OK untuk melanjutkan autentikasi.'
+                    );
+
+                    if (!shouldAuth) {
+                        return;
+                    }
+
                     // Open Google auth in a new popup window
                     const authWindow = window.open(
                         errorData.authUrl,
                         'googleAuth',
                         'width=500,height=600,scrollbars=yes,resizable=yes'
                     );
-                    
+
+                    if (!authWindow) {
+                        alert('Popup diblokir oleh browser. Silakan izinkan popup untuk situs ini.');
+                        return;
+                    }
+
                     // Listen for auth completion
                     const checkAuthComplete = setInterval(() => {
                         try {
@@ -771,34 +789,35 @@ function BuatPengajuan(props) {
                             if (authWindow.closed) {
                                 clearInterval(checkAuthComplete);
                                 // Wait a moment then retry the original request
-                                setTimeout(() => {
-                                    handleSubmit(event);
-                                }, 500);
-                                return;
+                                alert('Autentikasi berhasil! Silakan submit formulir lagi.');
                             }
                         } catch (error) {
                             // Cross-origin error, ignore
                         }
                     }, 1000);
-                    
+
                     // Also listen for window message (better method)
-                    const messageListener = (event) => {
-                        if (event.data === 'oauth-success') {
+                    const messageListener = (msgEvent) => {
+                        if (msgEvent.data === 'oauth-success') {
                             clearInterval(checkAuthComplete);
                             window.removeEventListener('message', messageListener);
                             authWindow.close();
-                            setTimeout(() => {
-                                handleSubmit(event);
-                            }, 500);
+                            alert('Autentikasi berhasil! Silakan submit formulir lagi.');
                         }
                     };
                     window.addEventListener('message', messageListener);
-                    
+
                     return;
+                } else {
+                    // JWT authentication error
+                    alert('Sesi Anda telah berakhir. Silakan login kembali.');
+                    setIsLoading(false);
                 }
+            } else {
+                console.log("Failed to send data.", err)
+                alert("Gagal mengirim data. Silakan coba lagi.");
+                setIsLoading(false);
             }
-            console.log("Failed to send data.", err)
-            setIsLoading(false);
         }
     }
 

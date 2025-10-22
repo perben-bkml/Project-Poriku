@@ -11,6 +11,7 @@ import 'dotenv/config'
 import dateFormat from "dateformat";
 import multer from 'multer';
 import stream from 'stream';
+import crypto from 'crypto';
 
 
 // Initialize tools
@@ -180,31 +181,107 @@ let driveVerif = null;
 let docsVerif = null;
 const driveFolderIdVerif = process.env.DRIVE_FOLDER_ID_VERIF;
 
-// OAuth Token Management Functions
-async function saveOAuthTokens(tokens) {
+// Encryption utilities for OAuth state parameter
+function encryptState(data) {
     try {
-        // Delete existing tokens first
-        await sql`DELETE FROM oauth_tokens WHERE id = 1`;
-        
-        // Insert new tokens
-        await sql`
-            INSERT INTO oauth_tokens (id, access_token, refresh_token, expiry_date, created_at)
-            VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
-                expiry_date = EXCLUDED.expiry_date,
-                updated_at = NOW()
-        `;
-        console.log('OAuth tokens saved to database');
+        // Create a key from JWT_SECRET (use first 32 bytes for AES-256)
+        const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
+
+        // Generate a random initialization vector
+        const iv = crypto.randomBytes(16);
+
+        // Create cipher
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+        // Encrypt the data
+        const jsonData = JSON.stringify(data);
+        let encrypted = cipher.update(jsonData, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+
+        // Get auth tag
+        const authTag = cipher.getAuthTag();
+
+        // Combine iv + authTag + encrypted data
+        const result = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+
+        // Base64 encode for URL safety
+        return Buffer.from(result).toString('base64');
     } catch (error) {
-        console.error('Failed to save OAuth tokens:', error);
+        console.error('Error encrypting state:', error);
+        throw error;
     }
 }
 
-async function loadOAuthTokens() {
+function decryptState(encryptedState) {
     try {
-        const result = await sql`SELECT * FROM oauth_tokens WHERE id = 1 LIMIT 1`;
+        // Base64 decode
+        const decoded = Buffer.from(encryptedState, 'base64').toString('utf8');
+
+        // Split components
+        const parts = decoded.split(':');
+        if (parts.length !== 3) {
+            throw new Error('Invalid state format');
+        }
+
+        const iv = Buffer.from(parts[0], 'hex');
+        const authTag = Buffer.from(parts[1], 'hex');
+        const encrypted = parts[2];
+
+        // Create key from JWT_SECRET
+        const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
+
+        // Create decipher
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+
+        // Decrypt
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        // Parse JSON
+        return JSON.parse(decrypted);
+    } catch (error) {
+        console.error('Error decrypting state:', error);
+        throw error;
+    }
+}
+
+// OAuth Token Management Functions
+async function saveOAuthTokens(tokens, userId, accountType) {
+    try {
+        // Check if token already exists for this user
+        const existingToken = await sql`
+            SELECT id FROM oauth_tokens WHERE user_id = ${userId} LIMIT 1
+        `;
+
+        if (existingToken.length > 0) {
+            // Update existing token
+            await sql`
+                UPDATE oauth_tokens
+                SET access_token = ${tokens.access_token},
+                    refresh_token = ${tokens.refresh_token || null},
+                    expiry_date = ${tokens.expiry_date || null},
+                    updated_at = NOW()
+                WHERE user_id = ${userId}
+            `;
+            console.log(`OAuth tokens updated for user ID ${userId}`);
+        } else {
+            // Insert new token
+            await sql`
+                INSERT INTO oauth_tokens (access_token, refresh_token, expiry_date, created_at, updated_at, user_id, account_type)
+                VALUES (${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW(), NOW(), ${userId}, ${accountType})
+            `;
+            console.log(`OAuth tokens created for user ID ${userId}`);
+        }
+    } catch (error) {
+        console.error('Failed to save OAuth tokens:', error);
+        throw error;
+    }
+}
+
+async function loadOAuthTokens(userId) {
+    try {
+        const result = await sql`SELECT * FROM oauth_tokens WHERE user_id = ${userId} LIMIT 1`;
         if (result.length > 0) {
             const tokenData = result[0];
             const tokens = {
@@ -212,12 +289,13 @@ async function loadOAuthTokens() {
                 refresh_token: tokenData.refresh_token,
                 expiry_date: tokenData.expiry_date
             };
-            
+
             oauth2Client.setCredentials(tokens);
-        drive = google.drive({ version: "v3", auth: oauth2Client });
-            console.log('OAuth tokens loaded from database');
+            drive = google.drive({ version: "v3", auth: oauth2Client });
+            console.log(`OAuth tokens loaded for user ID ${userId}`);
             return true;
         }
+        console.log(`No OAuth tokens found for user ID ${userId}`);
         return false;
     } catch (error) {
         console.error('Failed to load OAuth tokens:', error);
@@ -269,12 +347,41 @@ async function loadVerifOAuthTokens() {
     }
 }
 
+// Authentication middleware to extract user info from JWT
+function authenticateUser(req, res, next) {
+    const token = req.cookies.auth_token;
+
+    if (!token) {
+        return res.status(401).json({
+            error: "Authentication required",
+            message: "Please log in first"
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = {
+            id: decoded.id,
+            username: decoded.username,
+            name: decoded.name,
+            role: decoded.role
+        };
+        next();
+    } catch (error) {
+        console.error('JWT verification failed:', error);
+        return res.status(401).json({
+            error: "Invalid authentication token",
+            message: "Please log in again"
+        });
+    }
+}
+
 // Function to initialize Verifikasi APIs with OAuth tokens
 async function initializeVerifAPIs() {
     try {
         // Load verification tokens first
         await loadVerifOAuthTokens();
-        
+
         // Check if oauth2ClientVerif has credentials
         if (oauth2ClientVerif.credentials && Object.keys(oauth2ClientVerif.credentials).length > 0) {
             driveVerif = google.drive({ version: 'v3', auth: oauth2ClientVerif });
@@ -294,36 +401,146 @@ initializeVerifAPIs();
 
 //Endpoints
 // Google OAuth2 Authentication
-app.get("/auth/google", (req, res) => {
-    const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: [
-            'https://www.googleapis.com/auth/drive.file',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        prompt: 'consent'
-    });
-    res.redirect(authUrl);
+app.get("/auth/google", authenticateUser, (req, res) => {
+    try {
+        // Encrypt user info into state parameter
+        const stateData = {
+            userId: req.user.id,
+            userRole: req.user.role,
+            timestamp: Date.now() // For expiration check
+        };
+        const encryptedState = encryptState(stateData);
+
+        const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: [
+                'https://www.googleapis.com/auth/drive.file',
+                'https://www.googleapis.com/auth/userinfo.profile'
+            ],
+            prompt: 'consent',
+            state: encryptedState
+        });
+
+        res.redirect(authUrl);
+    } catch (error) {
+        console.error('Error generating auth URL:', error);
+        res.status(500).send('Failed to initiate authentication');
+    }
 });
 
 // Google OAuth2 Callback
 app.get("/auth/google/callback", async (req, res) => {
-    const { code } = req.query;
-    
+    const { code, state } = req.query;
+
     try {
+        // Validate state parameter exists
+        if (!state) {
+            console.error('OAuth callback: Missing state parameter');
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Failed</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>Missing state parameter. Please try again.</p>
+                    <script>
+                        setTimeout(() => { if (window.opener) window.close(); }, 3000);
+                    </script>
+                </body>
+                </html>
+            `);
+        }
+
+        // Decrypt state to get user info
+        let stateData;
+        try {
+            stateData = decryptState(state);
+        } catch (decryptError) {
+            console.error('OAuth callback: State decryption failed:', decryptError);
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Failed</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>Invalid state parameter. Please try again.</p>
+                    <script>
+                        setTimeout(() => { if (window.opener) window.close(); }, 3000);
+                    </script>
+                </body>
+                </html>
+            `);
+        }
+
+        const { userId, userRole, timestamp } = stateData;
+
+        // Check if state is expired (30 minutes)
+        const STATE_EXPIRY = 30 * 60 * 1000;
+        if (Date.now() - timestamp > STATE_EXPIRY) {
+            console.error('OAuth callback: State expired');
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Failed</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Timeout</h2>
+                    <p>The authentication session has expired. Please try again.</p>
+                    <script>
+                        setTimeout(() => { if (window.opener) window.close(); }, 3000);
+                    </script>
+                </body>
+                </html>
+            `);
+        }
+
+        // Validate code parameter
+        if (!code) {
+            console.error('OAuth callback: Missing authorization code');
+            return res.status(400).send(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Failed</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>❌ Authentication Failed</h2>
+                    <p>Missing authorization code. Please try again.</p>
+                    <script>
+                        setTimeout(() => { if (window.opener) window.close(); }, 3000);
+                    </script>
+                </body>
+                </html>
+            `);
+        }
+
+        // Exchange code for tokens
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
-        
+
         // Initialize Google Drive with OAuth2 tokens
         drive = google.drive({ version: "v3", auth: oauth2Client });
-        
-        // Save tokens to database for persistence across server restarts
-        await saveOAuthTokens(tokens);
-        
+
+        // Save tokens to database with user info
+        await saveOAuthTokens(tokens, userId, userRole);
+
+        console.log(`✅ OAuth tokens saved successfully for user ID ${userId}`);
+
         res.redirect('/auth/success');
     } catch (error) {
         console.error('OAuth2 callback error:', error);
-        res.status(500).json({ error: 'Authentication failed' });
+        const errorMessage = error.message || 'Unknown error';
+        res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Authentication Failed</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                <h2>❌ Authentication Failed</h2>
+                <p>Error: ${errorMessage}</p>
+                <p>Please close this window and try again.</p>
+                <script>
+                    setTimeout(() => { if (window.opener) window.close(); }, 5000);
+                </script>
+            </body>
+            </html>
+        `);
     }
 });
 
@@ -364,25 +581,43 @@ app.get("/auth/google/verif/callback", async (req, res) => {
 });
 
 // Check authentication status
-app.get("/auth/status", (req, res) => {
-    const isAuthenticated = drive !== null && oauth2Client.credentials.access_token;
-    res.json({ authenticated: isAuthenticated });
+app.get("/auth/status", authenticateUser, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // Check if user has OAuth tokens in database
+        const result = await sql`SELECT * FROM oauth_tokens WHERE user_id = ${userId} LIMIT 1`;
+
+        if (result.length > 0) {
+            res.json({ authenticated: true });
+        } else {
+            res.json({ authenticated: false });
+        }
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        res.json({ authenticated: false });
+    }
 });
 
 // Logout/Remove OAuth2 account
-app.post("/auth/logout", (req, res) => {
+app.post("/auth/logout", authenticateUser, async (req, res) => {
     try {
+        const userId = req.user.id;
+
+        // Delete user's OAuth tokens from database
+        await sql`DELETE FROM oauth_tokens WHERE user_id = ${userId}`;
+
         // Clear OAuth2 credentials
         oauth2Client.setCredentials({});
-        
+
         // Clear drive instance
         drive = null;
-        
+
         // Clear session if exists
         if (req.session) {
             req.session.tokens = null;
         }
-        
+
         res.json({ message: "Successfully logged out from Google Drive" });
     } catch (error) {
         console.error('Logout error:', error);
@@ -729,7 +964,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
 
 // Write data from table on sheet
-app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
+app.post("/bendahara/buat-ajuan", authenticateUser, upload.single('file'), async (req, res) => {
     //Extracting each part from formData
     const textdata = JSON.parse(req.body.textdata);
     const tabledata = JSON.parse(req.body.tabledata);
@@ -742,33 +977,35 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
 
             //Check if req.file from formData exist
             if (req.file) {
-                // Check if OAuth2 is authenticated, try to load from database if not
-                if (!drive || !oauth2Client.credentials.access_token) {
-                    console.log('No OAuth tokens in memory, attempting to load from database...');
-                    const tokensLoaded = await loadOAuthTokens();
-                    
-                    if (!tokensLoaded) {
-                        return res.status(401).json({ 
-                            error: "Google Drive authentication required. Please authenticate first.",
-                            authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
-                            redirectToAuth: true
-                        });
-                    }
+                // Load OAuth tokens for the current user
+                const userId = req.user.id;
+                const userRole = req.user.role;
+
+                console.log(`Loading OAuth tokens for user ID ${userId}...`);
+                const tokensLoaded = await loadOAuthTokens(userId);
+
+                if (!tokensLoaded) {
+                    return res.status(401).json({
+                        error: "Google Drive authentication required. Please authenticate first.",
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                        redirectToAuth: true
+                    });
                 }
 
                 // Check if token is expired and refresh if needed
                 try {
                     if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
                         console.log('Token expired, refreshing...');
-                        await oauth2Client.refreshAccessToken();
+                        const refreshResponse = await oauth2Client.refreshAccessToken();
+                        oauth2Client.setCredentials(refreshResponse.credentials);
                         drive = google.drive({ version: "v3", auth: oauth2Client });
-                        
+
                         // Save refreshed tokens to database
-                        await saveOAuthTokens(oauth2Client.credentials);
+                        await saveOAuthTokens(refreshResponse.credentials, userId, userRole);
                     }
                 } catch (refreshError) {
                     console.error('Token refresh failed:', refreshError);
-                    return res.status(401).json({ 
+                    return res.status(401).json({
                         error: "Authentication expired. Please re-authenticate.",
                         authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
                         redirectToAuth: true

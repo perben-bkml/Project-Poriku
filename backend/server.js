@@ -3136,8 +3136,58 @@ app.post("/buku-tamu", upload.fields([
             tunjanganJabatanTerakhir
         } = req.body;
 
-        // Get service account Drive client (for Buku Tamu)
-        const serviceDrive = await getServiceDriveClient();
+        // Load OAuth tokens from ID 3 in oauth_tokens table (for Buku Tamu)
+        console.log('Loading OAuth tokens for Buku Tamu (ID 3)...');
+        const result = await sql`SELECT * FROM oauth_tokens WHERE id = 3 LIMIT 1`;
+
+        if (result.length === 0) {
+            return res.status(401).json({
+                error: "Buku Tamu Google Drive authentication not configured. Please contact administrator."
+            });
+        }
+
+        const tokenData = result[0];
+        const tokens = {
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+            expiry_date: tokenData.expiry_date
+        };
+
+        // Create OAuth2 client for Buku Tamu
+        const bukuTamuOAuth = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            process.env.GOOGLE_REDIRECT_URI
+        );
+
+        bukuTamuOAuth.setCredentials(tokens);
+
+        // Check if token is expired and refresh if needed
+        if (bukuTamuOAuth.credentials.expiry_date && bukuTamuOAuth.credentials.expiry_date < Date.now()) {
+            console.log('Buku Tamu token expired, refreshing...');
+            try {
+                const refreshResponse = await bukuTamuOAuth.refreshAccessToken();
+                bukuTamuOAuth.setCredentials(refreshResponse.credentials);
+
+                // Save refreshed tokens back to database
+                await sql`
+                    UPDATE oauth_tokens
+                    SET access_token = ${refreshResponse.credentials.access_token},
+                        refresh_token = ${refreshResponse.credentials.refresh_token || tokenData.refresh_token},
+                        expiry_date = ${refreshResponse.credentials.expiry_date}
+                    WHERE id = 3
+                `;
+                console.log('Buku Tamu tokens refreshed and saved');
+            } catch (refreshError) {
+                console.error('Token refresh failed for Buku Tamu:', refreshError);
+                return res.status(401).json({
+                    error: "Authentication expired for Buku Tamu. Please contact administrator to re-authenticate."
+                });
+            }
+        }
+
+        // Create Drive client with OAuth credentials
+        const bukuTamuDrive = google.drive({ version: "v3", auth: bukuTamuOAuth });
 
         const { fullDateTimeFormat } = getFormattedDate();
         let idCounter, idPrefix, startColumn, rangeToCheck;
@@ -3188,7 +3238,7 @@ app.post("/buku-tamu", upload.fields([
         const uploadedFiles = {};
         const files = req.files || {};
 
-        // Helper function to upload file to Drive (using service account)
+        // Helper function to upload file to Drive (using OAuth credentials from ID 3)
         const uploadFileToDrive = async (file, fileName) => {
             const bufferStream = new stream.PassThrough();
             bufferStream.end(file.buffer);
@@ -3203,7 +3253,7 @@ app.post("/buku-tamu", upload.fields([
                 body: bufferStream
             };
 
-            const driveResponse = await serviceDrive.files.create({
+            const driveResponse = await bukuTamuDrive.files.create({
                 requestBody: fileMetadata,
                 media: media,
                 fields: 'id,webViewLink',
@@ -3212,7 +3262,7 @@ app.post("/buku-tamu", upload.fields([
             });
 
             // Make file publicly readable
-            await serviceDrive.permissions.create({
+            await bukuTamuDrive.permissions.create({
                 fileId: driveResponse.data.id,
                 requestBody: {
                     role: 'reader',

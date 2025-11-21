@@ -73,33 +73,40 @@ function Login () {
 
     return (
         <div className="login-home">
-            <div className="login-bg slide-down">
-                <div className="login-logo-container">
-                    <img src="/assets/bakamla_logo.svg" alt="Bakamla Logo" className="login-logo"></img>
+            <div className="login-left">
+                <div className="login-head">
+                    <h3 className={'landing-h1'} style={{fontSize:'3.8rem'}}>
+                        PO
+                        {<h3 className={'landing-h1 h1-unique'} style={{fontSize:'3.8rem'}}>RI</h3>}
+                        KU</h3>
+                    <p className={'landing-p'} style={{fontSize:'1.18rem'}}>Portal Informasi Keuangan</p>
                 </div>
-
-                <div className="login-title">
-                    <h2 className="title-1">Portal Informasi Keuangan</h2>
-                    <h2 className="title-2">Bakamla RI</h2>
-                    <h3>Login</h3>
+                <div className="login-bg slide-down">
+                    <div className="login-title">
+                        <p className={"login-title-1"}>Permintaan izin akses sebagai</p>
+                        <p className={"login-title-2"}>Pengelola Keuangan</p>
+                    </div>
+                    <div className="login-content">
+                        <form className="login-form" onSubmit={handleSubmit}>
+                            <input type="text" value={credentials.username} placeholder="Username" name="username" onChange={handleInputChange} />
+                            <input type="password" value={credentials.password} placeholder="Password" name="password" onChange={handleInputChange} />
+                            <input type="submit" value='Login'/>
+                        </form>
+                    </div>
+                    <div className="login-gaji">
+                        <p className="login-gaji-p1"><NavLink to="/" style={{ textDecoration: "none", color:"inherit"}}>Kembali Ke <b> Halaman Awal </b></NavLink></p>
+                    </div>
                 </div>
-                <div className="login-content">
-                    <form className="login-form" onSubmit={handleSubmit}>
-                        <input type="text" value={credentials.username} placeholder="Username" name="username" onChange={handleInputChange} />
-                        <input type="password" value={credentials.password} placeholder="Password" name="password" onChange={handleInputChange} />
-                        <input type="submit" value='Masuk'/>
-                    </form>
-                </div>
-                <div className="login-gaji">
-                    <p className="login-gaji-p1"><NavLink to="/" style={{ textDecoration: "none", color:"inherit"}}>Kembali Ke Halaman Awal</NavLink></p>
-                </div>
+                {isScreenLoading && <LoadingScreen />}
+                <PopupAlert
+                    isAlert={showErrorPopup}
+                    severity="error"
+                    message={errorMessage}
+                />
             </div>
-            {isScreenLoading && <LoadingScreen />}
-            <PopupAlert 
-                isAlert={showErrorPopup}
-                severity="error"
-                message={errorMessage}
-            />
+            <div className="login-right">
+
+            </div>
         </div>
     )
 }

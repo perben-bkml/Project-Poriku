@@ -162,68 +162,56 @@
 .login-home {
     min-height: 100vh;
     width: 100%;
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr 1.3fr;
     align-items: center;
-    background-image: url("../assets/BG_Bendahara.jpg");
+    background-image: url("../assets/Login Page/BG.png");
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;
     background-position: center;
-
 }
 
-.login-bg {
-    width: 600px;
-    background-color: #fdfdfd;
-    border-radius: 15px;
+.login-left {
+    margin: auto;
 }
 
-.login-logo-container {
-    display: flex;
-    justify-content: center;
-    padding-top: 30px;
+.login-head {
+    padding-top: 0px;
     padding-bottom: 0px;
     width: 100%;
 }
 
-.login-logo {
-    height: 100px;
-    width: 100px;
+.login-bg {
+    margin-top: 47px;
+    padding-bottom: 15px;
+    width: 480px;
+    background-color: #fdfdfd;
+    border-radius: 55px;
+    box-shadow: 0px 8px 30px rgba(0, 0, 0, 0.15);
 }
 
 .login-title {
+    padding-top: 50px;
+    padding-bottom: 15px;
     display: grid;
-    grid-template-rows: 110px 60px 1fr;
-    color: #1a284b;
+    grid-template-rows: repeat(2, 1fr);
+    justify-items: center;
+    color: #00449C;
 }
 
-.title-1, .title-2 {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 0px;
-    margin-bottom: 0px;
-    font-size: 2.3rem;
-    font-weight: 600;
-}
-
-.title-1 {
-    height: 100px;
-}
-
-.title-2 {
-    height: 5px;
-    margin-top: 0px;
-}
-
-.login-title h3 {
-    display: flex;
-    justify-content: center;
-    font-size: 1.8rem;
+.login-title-1 {
     margin: 0px;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 100;
 }
+
+.login-title-2 {
+    margin: 0px;
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
 
 .login-content {
     display: flex;
@@ -233,8 +221,8 @@
 
 .login-form {
     display: grid;
-    grid-template-rows: repeat(3, 60px);
-    margin-bottom: 70px;
+    grid-template-rows: repeat(3, 1fr);
+    margin-bottom: 20px;
 }
 
 .login-form a {
@@ -243,19 +231,25 @@
 
 .login-form input {
     margin: auto;
-    height: 35px;
-    width: 350px;
-    border: 1px solid rgb(214, 214, 214);
-    border-radius: 10px;
-    padding-left: 10px;
+    margin-bottom: 20px;
+    height: 60px;
+    width: 340px;
+    border: none;
+    border-radius: 18px;
+    padding-left: 25px;
+    background-color: rgb(236, 235, 235);
+    font-size: 1.1rem;
+    font-weight: 200;
 }
 
 .login-form input[type="submit"] {
-    letter-spacing: 1px;
-    background-color: #1a284b;
+    width: 368px;
+    padding-left: 0px;
+    letter-spacing: 0.5px;
+    background: linear-gradient(to right, #BD1404, #670f05);
     color: white;
     font-weight: 600;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
 }
@@ -263,18 +257,13 @@
     transform: scale(1.1, 1.1);
 }
 
-.login-gaji {
-    margin: auto;
-    margin-bottom: 60px;
-    width: 50%;
-    font-size: 1.1rem;
-}
-
 .login-gaji-p1 {
     display: flex;
     justify-content: center;
     margin-top: 0px;
     transition: all 0.2s ease-in-out;
+    font-size: 1.3rem;
+    color: #00449C;
 }
 
 .login-gaji-p1:hover {

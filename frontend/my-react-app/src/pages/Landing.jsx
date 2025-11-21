@@ -20,7 +20,6 @@ export default function Landing() {
                 <div className={'landing-page-tulip'}>
                     <img className='landing-page-tulip-logo' src={"/assets/Main Menu/Logo tulip biru.svg"} alt="Tulip Bakamla" />
                 </div>
-
                 <h1 className={'landing-h1'}>PO{<h1 className={'landing-h1 h1-unique'}>RI</h1>}KU</h1>
                 <p className={'landing-p'}>Portal Informasi Keuangan</p>
                 <div className="landing-buttons slide-down">

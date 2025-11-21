@@ -2,49 +2,75 @@
 .landing-page {
     min-height: 100vh;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-image: url("../assets/BG_Landing.jpg");
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    background-image: url("../assets/Main Menu/BG.svg");
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;
     background-position: center;
 }
 
+.landing-page-bakamla {
+    position: fixed;
+    left: 75px;
+    bottom: -45px;
+}
+
+.landing-page-ship-img {
+    width: 1100px;
+    height: auto;
+    display: block;
+    position: fixed;
+    bottom: -25px;
+    left: -160px;
+    z-index: 1;
+}
+
+.landing-page-tulip {
+    margin-top:50px;
+    display: flex;
+    justify-content: center;
+}
+
+.landing-page-tulip-logo {
+    width: 190px;
+    height: auto;
+}
+
 .landing-title {
     color: white;
+    margin: auto;
 }
 
 
-.landing-title h1 {
+.landing-h1 {
     font-size: 4.5rem;
     font-weight: 800;
-    letter-spacing: 1.5px;
+    letter-spacing: -1px;
     display: flex;
     justify-content: center;
     margin-top: 15px;
     margin-bottom: 0px;
+    color: #00449C;
 }
 
-.landing-title h2 {
-    font-size: 4rem;
-    font-weight: 500;
-    letter-spacing: 1.5px;
+.h1-unique {
     display: flex;
     justify-content: center;
-    margin-top: 15px;
-    margin-bottom: 0px;
-}
-
-.landing-title h4 {
-    font-weight: 400;
-    font-size: 2.5rem;
-    display: flex;
-    justify-content: center;
-    margin-bottom: 0px;
+    color: #BD1404;
     margin-top: 0px;
+}
+
+.landing-p {
+    display: flex;
+    justify-content: center;
+    margin: 0px;
+    font-size: 1.38rem;
+    word-spacing: -0.5px;
+    letter-spacing: -0.5px;
+    color: #00449C;
+    font-weight: 500;
 }
 
 .slide-down {
@@ -57,6 +83,11 @@
     opacity: 0;
     transform: translateY(50px);
     animation: slideFadeUp 0.8s ease-out forwards;
+}
+
+.slide-right {
+    transform: translateX(-500px);
+    animation: slideFadeRight 5s ease-out forwards;
 }
 
 @keyframes slideFadeIn {
@@ -81,12 +112,50 @@
     }
 }
 
+@keyframes slideFadeRight {
+    0% {
+        opacity: 1;
+        transform: translateX(-500px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 .landing-buttons {
-    margin-top: 70px;
-    width: 50%;
+    margin-top: 40px;
     display: flex;
     justify-content: space-evenly;
     align-items: center;
+    gap: 10px;
+}
+
+.page-button-landing {
+    height: 55px;
+    width: 220px;
+    border: none;
+    border-radius: 35px;
+    background-color: #BD1404;
+    color: white;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.5px;
+    font-weight: 600;
+    font-size: 1.3rem;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.landing-page-decoration {
+    display: flex;
+    justify-content: center;
+}
+
+.landing-page-hut-ri {
+    margin-top: 40px;
+    width: 240px;
+    height: auto;
 }
 
 /* Login Page */
@@ -684,6 +753,10 @@
 /* Media Queries for Landing Page - Mobile Compatibility */
 @media screen and (max-width: 768px) {
     /* Landing Page */
+    .landing-page-ship-img {
+        width: 250px;
+    }
+
     .landing-title h1 {
         font-size: 2.5rem;
         text-align: center;
@@ -854,6 +927,10 @@
 /* Extra small devices (phones, 576px and down) */
 @media screen and (max-width: 576px) {
     /* Landing Page */
+    .landing-page-ship-img {
+        width: 180px;
+    }
+
     .landing-title h1 {
         font-size: 2rem;
     }

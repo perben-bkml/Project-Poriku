@@ -21,7 +21,6 @@ import AddCircleOutlinedIcon from '@mui/icons-material/AddCircleOutlined';
 import Avatar from "@mui/material/Avatar";
 import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import LogoutIcon from '@mui/icons-material/Logout';
 import MonitorIcon from '@mui/icons-material/Monitor';
 
 function BendaharaPage(props) {
@@ -55,6 +54,14 @@ function BendaharaPage(props) {
         }
     }, [])
 
+    // Enable scrolling for this page
+    useEffect(() => {
+        document.body.classList.add('scrollable-page');
+
+        return () => {
+            document.body.classList.remove('scrollable-page');
+        };
+    }, []);
 
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
@@ -122,7 +129,7 @@ function BendaharaPage(props) {
         }
     }
     return (
-        <div>
+        <div className="main-page">
             <div className={"main-page-navbar"}>
                 <NavLink to="/home"><div className={"main-page-logo"}>
                     <img style={{width: "60px", height:"60px"}} src={"/assets/Main Page/tulip putih.svg"} alt="Tulip Bakamla" />
@@ -134,7 +141,6 @@ function BendaharaPage(props) {
                 <div style={{display:"flex", justifyContent:"flex-end", marginRight:"40px", marginTop:"5px"}}>
                     <NewNavbar />
                 </div>
-
             </div>
             <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
                 <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
@@ -158,7 +164,6 @@ function BendaharaPage(props) {
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
-                        <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />

@@ -6,14 +6,14 @@ import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
-import Navbar from '../ui/Navbar'
+import {NewNavbar} from '../ui/Navbar'
 import Footer from '../ui/Footer'
 // Material UI icons
 import Avatar from "@mui/material/Avatar";
-import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
+import {NavLink} from "react-router-dom";
 
 function VerifikasiPage(props) {
     const whatMenu = props.menu;
@@ -41,6 +41,14 @@ function VerifikasiPage(props) {
         }
     }, [])
 
+    // Enable scrolling for this page
+    useEffect(() => {
+        document.body.classList.add('scrollable-page');
+
+        return () => {
+            document.body.classList.remove('scrollable-page');
+        };
+    }, []);
 
     // Dash button add and remove class to make it selected
     function handleButtonClick(event) {
@@ -77,8 +85,19 @@ function VerifikasiPage(props) {
         }
     }
     return (
-        <div>
-            <Navbar />
+        <div className="main-page">
+            <div className={"main-page-navbar"}>
+                <NavLink to="/home"><div className={"main-page-logo"}>
+                    <img style={{width: "60px", height:"60px"}} src={"/assets/Main Page/tulip putih.svg"} alt="Tulip Bakamla" />
+                    <div>
+                        <h1 className={'main-navbar-h1'}>PORIKU</h1>
+                        <p className={'main-navbar-p'}>Portal Informasi Keuangan</p>
+                    </div>
+                </div></NavLink>
+                <div style={{display:"flex", justifyContent:"flex-end", marginRight:"40px", marginTop:"5px"}}>
+                    <NewNavbar />
+                </div>
+            </div>
             <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
                 <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
                     <div className="dash-title">
@@ -100,7 +119,6 @@ function VerifikasiPage(props) {
                         { user.role === "user" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "monitor-PJK" ? "btn-selected" : "hidden"}`} name="monitor-PJK" onClick={(e)=> handleButtonClick(e.target)}><ScreenSearchDesktopIcon fontSize="small"/><span className="padd-span-bend"/>Monitor PJK</button>
                         : null}
-                        <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />

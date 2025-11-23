@@ -35,7 +35,7 @@ function Home() {
 
     async function fetchData() {
         const rowsPerPage = 10;
-        let satkerPrefix = userSatkerNames.find(item => item.title === user.name).value || "";
+        let satkerPrefix = userSatkerNames.find(item => item.title === user.name)?.value || "";
         try {
             setIsLoading(true);
             const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: "", page: 1, limit: rowsPerPage, monthKeyword: "" }});

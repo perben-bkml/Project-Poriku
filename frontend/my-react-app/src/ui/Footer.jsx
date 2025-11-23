@@ -5,7 +5,7 @@ function Footer() {
 
     return (
         <footer className="footer">
-            <p className="footer-copy">&copy; Copyright Bakamla Keuangan {year} <span style={{paddingLeft: "50px"}}/> By JRH</p>
+            <p className="footer-copy">&copy; Copyright Bakamla Keuangan {year} </p>
         </footer>
     )
 }

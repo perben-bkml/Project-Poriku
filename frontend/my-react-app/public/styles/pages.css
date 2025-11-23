@@ -294,7 +294,7 @@
 .home-navbar-content {
     height: 40px;
     width: 1020px;
-    background-color: #ececec;
+    background-color: white;
     border: none;
     border-radius: 35px;
 }
@@ -305,17 +305,42 @@
     border: none;
     border-radius: 35px;
     color: #00449C;
+    background-color: transparent;
     align-items: center;
     justify-content: center;
     letter-spacing: -0.5px;
     font-weight: 600;
     font-size: 1.05rem;
-    transition: all 0.2s ease-in-out;
+    transform: scale(1);
+    box-shadow: 0px 0px 0px rgba(255, 207, 95, 0);
+    transition: all 0.3s ease-in-out;
     cursor: pointer;
+}
+
+.home-button:hover {
+    background-color: #e3e3e3;
+    box-shadow: 0px 3px 12px #808080;
 }
 
 .home-button-clicked {
     background-color: #FFCF5F;
+    box-shadow: 0px 3px 12px rgba(255, 207, 95, 0.5);
+}
+
+.home-button-clicked:hover {
+    background-color: #fabd1f;
+}
+
+.home-button-external:hover {
+    background-color: #0B69DE;
+    color: white;
+    box-shadow: 0px 3px 12px #074591;
+}
+
+.home-button-logout:hover {
+    background-color: #BD1404;
+    box-shadow: 0px 3px 12px #5c0d01;
+    color: white;
 }
 
 .welcome-title {
@@ -416,12 +441,19 @@
 
 /* Main Page */
 
+.main-page {
+    height: 100vh;
+}
+
 .main-page-navbar {
     height: 95px;
     width: 100%;
     display: grid;
     grid-template-columns: 1fr 2fr;
     background-image: url("../assets/Main Page/Ribbon Menu.svg");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
     align-items: center;
 
 }
@@ -481,11 +513,11 @@
 }
 
 .dash-title {
-    background-color: #f5f6fa;
+    background-color: white;
     display: flex;
     padding-left: 31px;
     font-size: 1.1rem;
-    color: #0a0f1b;
+    color: #00449C;
     border: 1px solid rgb(214, 214, 214);
 }
 
@@ -498,7 +530,7 @@
 }
 
 .content-title {
-    color: #0a0f1b;
+    color: #00449C;
     padding: 25px 51px 20px 51px;
     margin: 0px;
     font-size: 2.5rem;
@@ -509,7 +541,7 @@
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: #f5f6fa;
+    background-color: white;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
 }
@@ -531,32 +563,33 @@
     padding-top: 10px;
     padding-bottom: 10px;
     font-size: 1rem;
-    background-color: #f5f6fa;
-    color: #0a0f1b;
+    background-color: white;
+    color: #00204A;
     /*The button that got clicked will have this bg color: background-color: #e8ebf1; will add with On Click*/
     border: none;
-    border-radius: 15px;
+    border-radius: 25px;
 }
 
 .dash-button:hover {
-    background-color: #edeff4;
+    background-color: #e5e7ec;
 }
 
 .btn-selected {
-    background-color: #d1d5d8;
+    background-color: #00449C;
+    color: white;
 }
 
 .btn-selected:hover {
-    background-color: #b9bcbe;
+    background-color: #00204A;
 }
 
 .dash-user {
-    background-color: #f5f6fa;
+    background-color: white;
     display: flex;
     align-items: center;
     padding-left: 26px;
     font-size: 1.3rem;
-    color: #0a0f1b;
+    color: #00449C;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
     font-weight: 500;
@@ -583,7 +616,7 @@
     z-index: 100;
     padding: auto;
     margin: auto;
-    background-color: #0a0f1b;
+    background-color: #00449C;
     color: white;
     border: none;
     cursor: pointer;
@@ -591,7 +624,7 @@
 }
 
 .toggle-sidebar-btn.inside-sidebar:hover {
-    background-color: #1a2433;
+    background-color: #00204A;
 }
 
 /* Button outside when sidebar is hidden (top-left corner) */
@@ -602,7 +635,7 @@
     width: 35px;
     height: 35px;
     padding: auto;
-    background-color: #0a0f1b;
+    background-color: #00449C;
     color: white;
     border: none;
     cursor: pointer;

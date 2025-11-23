@@ -3,6 +3,17 @@ html {
     overflow: hidden;
 }
 
+body.scrollable-page {
+    overflow-y: auto;
+    height: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+body.scrollable-page::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
 body, button, input, select {
     margin: 0px;
     font-family: "Rubik", sans-serif;

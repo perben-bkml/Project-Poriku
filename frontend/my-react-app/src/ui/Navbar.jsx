@@ -1,8 +1,9 @@
-import React from "react"
+import React, {useContext} from "react"
 import { NavLink } from "react-router-dom"
+import {AuthContext} from "../lib/AuthContext.jsx";
 
 
-function Navbar(){
+export default function Navbar(){
     return(
         <div className="Nav-bar">
             <div className="poriku-1">
@@ -21,4 +22,22 @@ function Navbar(){
     )
 }
 
-export default Navbar;
+export function NewNavbar(){
+    // Auth Context
+    const { logout } = useContext(AuthContext);
+
+    return(
+        <div className={"home-navbar-content"}>
+            <NavLink to="/home"><button className='home-button home-button-clicked'>Home Page</button></NavLink>
+            <NavLink to="/menu-bendahara"><button className='home-button'>Menu Bendahara</button></NavLink>
+            <NavLink to="/menu-verifikasi"><button className='home-button'>Menu Verifikasi</button></NavLink>
+            <a href={`${import.meta.env.VITE_LOGIN_SIPKU_URL}`} target="_blank" rel="noopener noreferrer">
+                <button className="home-button">Login SIPKU</button>
+            </a>
+            <a href={`${import.meta.env.VITE_UNGGAH_SIPKU_URL}`} target="_blank" rel="noopener noreferrer">
+                <button className="home-button">Unggah PJK</button>
+            </a>
+            <button className='home-button' onClick={logout}>Log Out</button>
+        </div>
+    )
+}

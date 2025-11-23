@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
+import { NavLink } from "react-router-dom"
 // Import Components
 import DaftarPengajuan from "../components/bendahara/Daftar-Pengajuan.jsx";
 import BuatPengajuan from "../components/bendahara/Buat-Pengajuan.jsx";
@@ -11,7 +12,7 @@ import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
-import Navbar from '../ui/Navbar'
+import {NewNavbar} from '../ui/Navbar'
 import Footer from '../ui/Footer'
 // Material UI icons
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -122,7 +123,19 @@ function BendaharaPage(props) {
     }
     return (
         <div>
-            <Navbar />
+            <div className={"main-page-navbar"}>
+                <NavLink to="/home"><div className={"main-page-logo"}>
+                    <img style={{width: "60px", height:"60px"}} src={"/assets/Main Page/tulip putih.svg"} alt="Tulip Bakamla" />
+                    <div>
+                        <h1 className={'main-navbar-h1'}>PORIKU</h1>
+                        <p className={'main-navbar-p'}>Portal Informasi Keuangan</p>
+                    </div>
+                </div></NavLink>
+                <div style={{display:"flex", justifyContent:"flex-end", marginRight:"40px", marginTop:"5px"}}>
+                    <NewNavbar />
+                </div>
+
+            </div>
             <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
                 <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
                     <div className="dash-title">

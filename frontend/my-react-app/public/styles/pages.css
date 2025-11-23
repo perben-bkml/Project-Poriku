@@ -292,7 +292,8 @@
 }
 
 .home-navbar-content {
-    min-width: 1020px;
+    height: 40px;
+    width: 1020px;
     background-color: #ececec;
     border: none;
     border-radius: 35px;
@@ -414,6 +415,48 @@
   }
 
 /* Main Page */
+
+.main-page-navbar {
+    height: 95px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    background-image: url("../assets/Main Page/Ribbon Menu.svg");
+    align-items: center;
+
+}
+
+.main-page-navbar a {
+    text-decoration: none;
+}
+
+.main-page-logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: 30px;
+    text-decoration: none;
+}
+
+.main-navbar-h1 {
+    display: flex;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0px;
+    color: white;
+}
+
+.main-navbar-p {
+    display: flex;
+    justify-content: center;
+    margin: 0px;
+    font-size: 0.85rem;
+    word-spacing: -0.5px;
+    letter-spacing: -0.5px;
+    color: white;
+    font-weight: 400;
+}
 
 .bendahara-home {
     min-height: 70vh;

@@ -1,13 +1,13 @@
 import React, {useContext, useEffect, useState} from "react"
-import { NavLink } from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
 import {userSatkerNames} from "../components/verifikasi/head-data.js";
 import axios from "axios";
 import LoadingAnimate from "../ui/loading.jsx"
+import { NewNavbar } from "../ui/Navbar.jsx"
 
 function Home() {
     //Auth Context
-    const { user, logout } = useContext(AuthContext);
+    const { user } = useContext(AuthContext);
     const satkerName = user.name;
     const userRole = user.role;
 
@@ -62,18 +62,7 @@ function Home() {
     return (
         <div className="home-content">
             <div className={"home-navbar"}>
-                <div className={"home-navbar-content"}>
-                    <NavLink to="/home"><button className='home-button home-button-clicked'>Home Page</button></NavLink>
-                    <NavLink to="/menu-bendahara"><button className='home-button'>Menu Bendahara</button></NavLink>
-                    <NavLink to="/menu-verifikasi"><button className='home-button'>Menu Verifikasi</button></NavLink>
-                    <a href={`${import.meta.env.VITE_LOGIN_SIPKU_URL}`} target="_blank" rel="noopener noreferrer">
-                        <button className="home-button">Login SIPKU</button>
-                    </a>
-                    <a href={`${import.meta.env.VITE_UNGGAH_SIPKU_URL}`} target="_blank" rel="noopener noreferrer">
-                        <button className="home-button">Unggah PJK</button>
-                    </a>
-                    <button className='home-button' onClick={logout}>Log Out</button>
-                </div>
+                <NewNavbar />
             </div>
             <div className="welcome-title slide-up">
                 <h1 className={"welcome-title-text"} style={{fontSize: "2.5rem", fontWeight:"100"}}>Selamat datang di Poriku </h1>

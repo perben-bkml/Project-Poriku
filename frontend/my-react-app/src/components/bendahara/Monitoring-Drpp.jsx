@@ -211,7 +211,13 @@ export default function MonitoringDrpp(props) {
                     <TableKelola type="monitor" header={placeholderTable} content={monitoringData} fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
                 </div>
                 }
-                <div className="lihat-antri-pagination" >
+                <div className="lihat-antri-pagination" style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    padding: '20px 0'
+                }}>
+                    <div></div>
                     <Pagination 
                         className="pagination" 
                         size="medium" 
@@ -223,7 +229,13 @@ export default function MonitoringDrpp(props) {
                         siblingCount={1}
                         boundaryCount={1}
                     />
-                    <div className="goto-page" style={{marginLeft: '20px', marginRight: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <div className="goto-page" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        justifySelf: 'end',
+                        paddingRight: '20px'
+                    }}>
                         <span>Go to page:</span>
                         <input 
                             type="text" 

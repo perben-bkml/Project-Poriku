@@ -38,7 +38,7 @@ export function TableSpmBendahara(props) {
             <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"20px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
                 <Table>
                     <TableHead>
-                        <TableRow sx={{ backgroundColor: "#1a284b" }}>
+                        <TableRow sx={{ backgroundColor: "#00449C" }}>
                             {props.tableData.length > 0 && props.tableData[0].map((col, colIndex) => (
                                 <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white", border: "none"}} align="center">{col}</TableCell>
                             ))}
@@ -388,15 +388,15 @@ export function TableKelola(props) {
             onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
-                    <TableRow sx={{backgroundColor: "#1a284b"}}>
-                    {tableType === "kelola" || tableType === "monitor"?  <TableCell sx={{width: "30px", backgroundColor: "#1a284b"}}></TableCell> : null}
+                    <TableRow sx={{backgroundColor: "#00449C"}}>
+                    {tableType === "kelola" || tableType === "monitor"?  <TableCell sx={{width: "30px", backgroundColor: "#00449C"}}></TableCell> : null}
                     {props.header.map((data, index) => (
                         <TableCell key={index} sx={{
                             ...( tableType === "kelola" || tableType === "monitor"?
-                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}
+                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}
                             :
-                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b", minWidth: data.minWidth}),
-                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: "#1a284b" } )
+                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C", minWidth: data.minWidth}),
+                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: "#00449C" } )
 
                             }}>
                             {tableType === "kelola" || tableType === "monitor"?  data : data.label}</TableCell>
@@ -488,10 +488,10 @@ export function TableInfoAntri(props) {
         <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{width: "30px", backgroundColor: "#1a284b"}}>
+                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index}
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
                                 >{data}</TableCell>
                         ))}
                     </TableRow>
@@ -513,10 +513,10 @@ export function TableInfoPJK(props) {
         <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{width: "30px", backgroundColor: "#1a284b"}}>
+                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index}
-                                       sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#1a284b"}}
+                                       sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
                             >{data}</TableCell>
                         ))}
                     </TableRow>

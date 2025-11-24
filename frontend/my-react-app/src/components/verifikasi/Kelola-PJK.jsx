@@ -247,22 +247,34 @@ export default function KelolaPJK() {
                 {isLoading ? <LoadingAnimate /> :
                     <TableInfoPJK header={tableHead} body={tableData} />
                 }
-                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap'}}>
-                    <Pagination 
-                        className="pagination" 
-                        size="medium" 
-                        count={totalPages} 
-                        page={currentPage} 
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    padding: '20px 0'
+                }}>
+                    <div></div>
+                    <Pagination
+                        className="pagination"
+                        size="medium"
+                        count={totalPages}
+                        page={currentPage}
                         onChange={handlePaginationChange}
                         showFirstButton={true}
                         showLastButton={true}
                         siblingCount={1}
                         boundaryCount={1}
                     />
-                    <div className="goto-page" style={{marginRight: '20px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <div className="goto-page" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        justifySelf: 'end',
+                        paddingRight: '20px'
+                    }}>
                         <span>Go to page:</span>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             value={pageInput}
                             onChange={handlePageInputChange}
                             onKeyDown={handlePageInputKeyDown}
@@ -275,7 +287,7 @@ export default function KelolaPJK() {
                                 textAlign: 'center'
                             }}
                         />
-                        <button 
+                        <button
                             onClick={handleGoToPage}
                             disabled={!pageInput || totalPages === 0}
                             style={{

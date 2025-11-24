@@ -25,7 +25,7 @@ function Pengajuan(props) {
             <div className="info nomor">
                 <p>No. Pengajuan</p>
                 <div className="info-avatar">
-                    <Avatar className="info-avatar" sx={{ bgcolor: "#0a0f1b", width: 36, height: 36, fontSize:"0.8rem", marginTop: "4px"}}>{props.numbers}</Avatar>
+                    <Avatar className="info-avatar" sx={{ bgcolor: "#00449C", width: 36, height: 36, fontSize:"0.8rem", marginTop: "4px"}}>{props.numbers}</Avatar>
                 </div>
             </div>
             <div className="info jenis">
@@ -53,11 +53,11 @@ function Pengajuan(props) {
                 <p className="info data">{props.drpp}</p>
             </div>
             <div className="info-ubah">
-                <RemoveRedEyeIcon sx={{fontSize: 30}}  onClick={props.invisible("detail-pengajuan", passData)}/>
+                <RemoveRedEyeIcon sx={{fontSize: 30, color:"#00204A"}}  onClick={props.invisible("detail-pengajuan", passData)}/>
                 { props.drpp === "" ?
-                <EditIcon sx={{fontSize: 30}} onClick={props.invisible("edit-pengajuan", passData)}/> : null}
+                <EditIcon sx={{fontSize: 30, color:"#edbd4d"}} onClick={props.invisible("edit-pengajuan", passData)}/> : null}
                 { props.drpp === "" ?
-                <DeleteForeverIcon sx={{fontSize: 30}} onClick={() => props.handleDelPopup(passData)} /> : null}
+                <DeleteForeverIcon sx={{fontSize: 30, color:"#BD1404"}} onClick={() => props.handleDelPopup(passData)} /> : null}
 
             </div>
         </div>

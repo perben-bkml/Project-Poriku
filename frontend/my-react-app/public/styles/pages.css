@@ -517,7 +517,7 @@
     display: flex;
     padding-left: 31px;
     font-size: 1.1rem;
-    color: #00449C;
+    color: #00204A;
     border: 1px solid rgb(214, 214, 214);
 }
 
@@ -530,7 +530,7 @@
 }
 
 .content-title {
-    color: #00449C;
+    color: #00204A;
     padding: 25px 51px 20px 51px;
     margin: 0px;
     font-size: 2.5rem;
@@ -589,7 +589,7 @@
     align-items: center;
     padding-left: 26px;
     font-size: 1.3rem;
-    color: #00449C;
+    color: #00204A;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
     font-weight: 500;
@@ -616,7 +616,7 @@
     z-index: 100;
     padding: auto;
     margin: auto;
-    background-color: #00449C;
+    background-color: #00204A;
     color: white;
     border: none;
     cursor: pointer;
@@ -624,7 +624,7 @@
 }
 
 .toggle-sidebar-btn.inside-sidebar:hover {
-    background-color: #00204A;
+    background-color: #00449C;
 }
 
 /* Button outside when sidebar is hidden (top-left corner) */
@@ -635,7 +635,7 @@
     width: 35px;
     height: 35px;
     padding: auto;
-    background-color: #00449C;
+    background-color: #00204A;
     color: white;
     border: none;
     cursor: pointer;
@@ -647,7 +647,7 @@
 }
 
 .toggle-sidebar-btn.outside-sidebar:hover {
-    background-color: #1a2433;
+    background-color: #00449C;
 }
 
 /* Pelayanan Gaji Page */
@@ -758,7 +758,6 @@
 
 .lihat-antri-table {
     width: 100%;
-    overflow-x: auto;
 }
 
 .table-cell {
@@ -793,13 +792,35 @@
 
 
   /* Adding Media Queries */
+@media screen and (width >= 1900px) {
+    .landing-page-ship-img {
+        width: 1450px;
+    }
 
-@media screen and (width >= 1720px) {
+    .home-content {
+        background-position: center top -200px;
+    }
+}
+
+@media screen and (width >= 3000px) {
+    .landing-page-ship-img {
+        width: 2050px;
+    }
+
+    .home-content {
+        background-position: center top -320px;
+    }
+}
+
+@media screen and (min-width: 1720px) and (max-width: 1899px) {
     .home-content {
         background-position: center top -180px;
     }
     .welcome-title {
         margin-top: 45px;
+    }
+    .landing-page-ship-img {
+        width: 1300px;
     }
 }
 

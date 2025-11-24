@@ -3,6 +3,7 @@ import axios from 'axios';
 import { NavLink, useNavigate } from "react-router-dom";
 import FormField from '../ui/FormField';
 import { PopupAlert } from '../ui/Popup';
+import { LoadingScreen } from '../ui/loading.jsx';
 
 export default function BukuTamu() {
     // Navigation hook
@@ -355,6 +356,7 @@ export default function BukuTamu() {
                     </form>
                 </div>
             </div>
+            {isLoading && <LoadingScreen />}
         </div>
     );
 }

@@ -8,6 +8,7 @@ import KelolaPengajuan from "../components/bendahara/Kelola-Pengajuan.jsx";
 import AksiPengajuan from "../components/bendahara/Aksi-Pengajuan.jsx";
 import MonitoringDrpp from "../components/bendahara/Monitoring-Drpp.jsx";
 import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
+import DaftarTamu from "../components/bendahara/Daftar-Tamu.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -22,6 +23,7 @@ import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MonitorIcon from '@mui/icons-material/Monitor';
+import BookIcon from '@mui/icons-material/Book';
 
 function BendaharaPage(props) {
     const whatMenu = props.menu;
@@ -116,6 +118,8 @@ function BendaharaPage(props) {
                 return <LihatAntrian />
             case "SPM-bendahara":
                 return <InfoSPMBendahara />
+            case "daftar-tamu":
+                return <DaftarTamu />
             default:
                 return null;
         }
@@ -145,6 +149,9 @@ function BendaharaPage(props) {
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
+                        { user.role === "admin" || user.role === "master admin" ?
+                            <button className={`dash-button ${buttonSelect === "daftar-tamu" ? "btn-selected" : "hidden"}`} name="daftar-tamu" onClick={(e)=> handleButtonClick(e.target)}><BookIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Tamu</button>
+                            : null}
                         <button className={`dash-button dash-bottom ${buttonSelect === "logout-option" ? "btn-selected" : ""}`} name="logout-option" onClick={logout}><LogoutIcon fontSize="small"/><span className="padd-span-bend"/>Log out</button>
                     </div>
                     <div className="dash-user">

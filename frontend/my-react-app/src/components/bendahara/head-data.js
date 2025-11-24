@@ -102,6 +102,15 @@ const monthNames = [
     {title: "Desember", value: "12"},
 ]
 
+const daftarMasuk = [
+    "ID", "Timestamp", "Nama Lengkap dan Gelar", "Gol./Pangkat", "NRP", "Matra", "No. Handphone", "Satker Asal", "Petugas Gaji Asal", "KTP", "KK", "SK/KEP Masuk", "SKPP Satker Asal"
+]
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames };
+const daftarKeluar = [
+    "ID", "Timestamp", "Nama Lengkap dan Gelar", "Gol./Pangkat", "NRP", "Matra", "No. Handphone", "Satker Tujuan", "Jabatan/Unit Kerja", "Tunj. Jabatan Terakhir", "SK/KEP Keluar"
+]
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames,
+    daftarMasuk, daftarKeluar
+};
 

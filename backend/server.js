@@ -3412,6 +3412,92 @@ app.post("/buku-tamu", upload.fields([
     }
 });
 
+//Daftar Tamu handler
+app.get("/bendahara/daftar-tamu", async (req, res) => {
+    try {
+        const { masukPage = 1, keluarPage = 1, limit = 10 } = req.query;
+        const limitNum = parseInt(limit);
+        const masukPageNum = parseInt(masukPage);
+        const keluarPageNum = parseInt(keluarPage);
+
+        // Get count of rows from range A and O (to determine total pages)
+        const [responseMasukCount, responseKeluarCount] = await Promise.all([
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: "'Buku Tamu'!A3:A"
+                });
+            }),
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: "'Buku Tamu'!O3:O"
+                });
+            })
+        ]);
+
+        // Get total row counts
+        const masukRows = responseMasukCount.data.values || [];
+        const masukRowCount = masukRows.length;
+        const keluarRows = responseKeluarCount.data.values || [];
+        const keluarRowCount = keluarRows.length;
+
+        // Calculate total pages
+        const masukTotalPages = Math.ceil(masukRowCount / limitNum);
+        const keluarTotalPages = Math.ceil(keluarRowCount / limitNum);
+
+        // Calculate row ranges for pagination (from latest row first)
+        // For Masuk: we want to reverse, so calculate from the end
+        const masukStartRow = Math.max(3, masukRowCount + 3 - (masukPageNum * limitNum));
+        const masukEndRow = Math.max(2, masukRowCount + 3 - ((masukPageNum - 1) * limitNum) - 1);
+
+        // For Keluar: we want to reverse, so calculate from the end
+        const keluarStartRow = Math.max(3, keluarRowCount + 3 - (keluarPageNum * limitNum));
+        const keluarEndRow = Math.max(2, keluarRowCount + 3 - ((keluarPageNum - 1) * limitNum) - 1);
+
+        // Fetch data from both tables
+        const [responseMasukData, responseKeluarData] = await Promise.all([
+            masukRowCount > 0 ? withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: `'Buku Tamu'!A${masukStartRow}:M${masukEndRow}`
+                });
+            }) : Promise.resolve({ data: { values: [] } }),
+            keluarRowCount > 0 ? withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: `'Buku Tamu'!O${keluarStartRow}:Y${keluarEndRow}`
+                });
+            }) : Promise.resolve({ data: { values: [] } })
+        ]);
+
+        // Get the data and reverse to show latest first
+        const masukData = (responseMasukData.data.values || []).reverse();
+        const keluarData = (responseKeluarData.data.values || []).reverse();
+
+        // Return the response
+        res.status(200).json({
+            masuk: {
+                data: masukData,
+                currentPage: masukPageNum,
+                totalPages: masukTotalPages,
+                totalRows: masukRowCount
+            },
+            keluar: {
+                data: keluarData,
+                currentPage: keluarPageNum,
+                totalPages: keluarTotalPages,
+                totalRows: keluarRowCount
+            }
+        });
+
+    } catch (error) {
+        console.error("Error in /bendahara/daftar-tamu:", error);
+        res.status(500).json({ error: "Failed to fetch data", details: error.message });
+    }
+});
+
+
 // Ports
 app.listen(3000, () => {
     console.log("Server is live on port 3000!")

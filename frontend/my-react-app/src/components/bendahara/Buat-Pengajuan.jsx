@@ -914,7 +914,7 @@ function BuatPengajuan(props) {
                         <TableHead className="table-head">
                             <TableRow className="table-row"> 
                                 {columns.map((cols) => (
-                                    <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#1a284b", color: "white", border: "none"}} align="center">{cols.label}</TableCell>                                            
+                                    <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#00449C", color: "white", border: "none"}} align="center">{cols.label}</TableCell>
                                 ))}
                             </TableRow>
                         </TableHead>

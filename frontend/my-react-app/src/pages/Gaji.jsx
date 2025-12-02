@@ -27,6 +27,9 @@ export default function Gaji() {
     //Page State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPage, setTotalPage] = useState(0);
+    //Scroll State
+    const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+    const [lastScrollY, setLastScrollY] = useState(0);
 
     //Download link
 
@@ -52,6 +55,38 @@ export default function Gaji() {
         getTableData(currentPage);
     }, [currentPage])
 
+    // Enable scrolling for this page
+    useEffect(() => {
+        document.body.classList.add('scrollable-page');
+
+        return () => {
+            document.body.classList.remove('scrollable-page');
+        };
+    }, []);
+
+    // Handle scroll to hide/show header
+    useEffect(() => {
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+
+            if (currentScrollY > 100) {
+                // Scrolled down past 100px - hide header
+                setIsHeaderHidden(true);
+            } else {
+                // At the top of the page - show header
+                setIsHeaderHidden(false);
+            }
+
+            setLastScrollY(currentScrollY);
+        };
+
+        window.addEventListener('scroll', handleScroll);
+
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+        };
+    }, [lastScrollY]);
+
     const descList = () => {
         return (
             <ol className='gaji-desc-body'>
@@ -74,7 +109,7 @@ export default function Gaji() {
                         <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
                             <Table>
                                 <TableHead>
-                                    <TableRow sx={{ backgroundColor: "#1a284b" }}>
+                                    <TableRow sx={{ backgroundColor: "#00449C" }}>
                                         {headData.map((column, index) => (
                                             <TableCell className="table-cell head-data" key={index} sx={{fontWeight: 550, fontSize:"1.1rem", color:"white", border:"none"}} align="center">{column}</TableCell>
                                         ))}
@@ -102,11 +137,11 @@ export default function Gaji() {
 
     return (
         <div className="gaji-page">
-                <div className='gaji-title'>
+                <div className={`gaji-title ${isHeaderHidden ? 'hidden' : ''}`}>
                     <h3>Selamat datang di</h3>
                     <h1>Pelayanan Gaji Bakamla</h1>
                     <br/>
-                    <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke Halaman Awal</p></NavLink>
+                    <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke <b>Halaman Awal</b></p></NavLink>
                 </div>
             <div className='gaji-content' >
                 <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>

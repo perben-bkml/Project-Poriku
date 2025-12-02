@@ -1,69 +1,3 @@
-/* Global tag styling */
-/* removing date placeholder */
-
-
-
-/* Navbar Component Style */
-.Nav-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    height: 85px;
-    background-color: #1a284b;
-    width: 100%;
-}
-
-.poriku-1 {
-    margin-left: 30px;
-}
-
-.Nav-link {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    max-width: 100%;
-    margin-top: 0px;
-}
-
-.Nav-link a {
-    text-decoration: none;
-    color: white;
-}
-
-.Nav-link p {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 1.5rem;
-    letter-spacing: 1px;
-    transition: all 0.2s ease-in-out;
-}
-
-.Nav-link p:hover {
-    text-shadow: 0px 0px 25px  white;
-}
-
-.Nav-SIPKU {
-    display: flex;
-    height: 40px;
-    width: 180px;
-    border: none;
-    border-radius: 20px;
-    background-color: rgb(8, 13, 20);
-    color: white;
-    align-items: center;
-    justify-content: center;
-    font-family: "Outfit", serif;
-    font-weight: 800;
-    font-size: 1.2rem;
-    letter-spacing: 1.5px;
-    transition: all 0.2s ease-in-out;
-    cursor: pointer;
-}
-
-.Nav-SIPKU:hover {
-    transform: scale(1.1, 1.1);
-    box-shadow: 0px 0px 20px  white;
-}
 
 
 /* Footer Component Style */
@@ -71,7 +5,7 @@
     display: inline-block;
     height: 80px;
     width: 100%;
-    background-color: #1a284b;
+    background-color: #00449C;
     color: white;
     font-size: 1.2rem;
     font-weight: 400;
@@ -94,6 +28,7 @@
     border: 1px solid rgb(214, 214, 214);
     border-radius: 20px;
     padding-bottom: 10px;
+    color: #00204A;
 }
 
 .pengajuan {
@@ -230,14 +165,17 @@
     font-size: 1rem;
     font-weight: 500;
     letter-spacing: 1px;
-    border: 1px solid white;
-    background-color: #1a284b;
+    border: none;
+    background-color: #00204A;
+    box-shadow: 0px 1px 8px #00204A;
     border-radius: 20px;
     transition: all 0.2s ease-in-out;
 }
 
 .pengajuan-desc button:hover {
     transform: scale(1.1, 1.1);
+    background-color: #00449C;
+    box-shadow: 0px 1px 8px #00449C;
 }
 
 .pengajuan-form-textdata {
@@ -351,13 +289,14 @@
     justify-content: flex-start;
     margin-top: 13px;
     margin-left: 35px;
+    margin-bottom: 22px;
 }
 
 .form-submit input {
     height: 30px;
     width: 220px;
     margin-right: 60px;
-    background-color: #1a284b;
+    background-color: #00204A;
     color: white;
     font-size: 1rem;
     font-weight: 500;
@@ -365,10 +304,17 @@
     border: none;
     border-radius: 15px;
     transition: all 0.2s ease-in-out;
+    box-shadow: 0px 1px 12px #00204A;
 }
 
 .form-submit input:hover {
+    background-color: #016FFC;
     transform: scale(1.1, 1.1);
+}
+
+.button-reject:hover {
+    background-color: #BD1404 !important;
+    box-shadow: 0px 1px 12px #800f03 !important;
 }
 
 /* Pop up component style */
@@ -481,11 +427,8 @@
     justify-content: center;
     align-items: center;
     margin: auto;
-    margin-top: 20px;
-    margin-bottom: 20px;
     width: 98%;
     height: 200px;
-    background: rgba(0, 0, 0, 0.247);
     border-radius: 20px;
     z-index: 99;
 }
@@ -536,12 +479,15 @@ input[type="number"]::-webkit-inner-spin-button {
     font-weight: 500;
     height: 25px;
     width: 80px;
-    border: 1px solid white;
-    background-color: #1a284b;
+    background-color: #00449C;
     border-radius: 20px;
+    transition: all 0.2s ease-in-out;
+    border: none;
+    box-shadow: 0px 1px 8px #00449C;
 }
 
 .spm-button:hover {
+    background-color: #0B69DE;
     transform: scale(1.1, 1.1);
 }
 
@@ -662,10 +608,11 @@ input[type="number"]::-webkit-inner-spin-button {
     font-weight: 500;
     height: 30px;
     width: 85px;
-    border: 1px solid white;
-    background-color: #1a284b;
+    background-color: #00449C;
     border-radius: 20px;
     transition: all 0.2s ease-in-out;
+    border: none;
+    box-shadow: 0px 1px 8px #00449C;
 }
 
 .btn-aksi:hover {
@@ -687,8 +634,9 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .aksi-submit {
+    display: inline;
     margin-top: 45px;
-    margin-left: 110px;
+    margin-left: 30px;
     transform: scale(1.1, 1.1);
 }
 
@@ -840,17 +788,26 @@ input[type="number"]::-webkit-inner-spin-button {
 .verif-btn {
     width: 180px;
     height: 32px;
-    background-color: #1a284b;
     border-radius: 15px;
     border: none;
     color: white;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
+    background-color: #00204A;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0px 1px 8px #00204A;
+    margin-bottom: 10px
+}
+
+.verif-btn:hover {
+    transform: scale(1.1, 1.1);
+    background-color: #016FFC;
+    box-shadow: 0px 1px 8px #016FFC;
 }
 
 .verif-btn-pressed {
-    background-color: #0a0f1b;
+    background-color: #016FFC;
 }
 
 .verif-submit-buttons {

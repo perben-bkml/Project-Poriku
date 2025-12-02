@@ -1,6 +1,7 @@
 // Package imports
 import React from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 //Page Imports
 import Landing from './pages/Landing'
 import Home from './pages/Home'
@@ -17,6 +18,7 @@ function App() {
 
   return (
     <div>
+      <Analytics />
       <AuthProvider>
         <BrowserRouter>
           <Routes>

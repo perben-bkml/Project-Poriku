@@ -2,49 +2,74 @@
 .landing-page {
     min-height: 100vh;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background-image: url("../assets/BG_Landing.jpg");
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    background-image: url("../assets/Main Menu/BG.svg");
     background-repeat: no-repeat;
     background-size: cover;
-    background-attachment: fixed;
     background-position: center;
+}
+
+.landing-page-bakamla {
+    position: fixed;
+    left: 75px;
+    bottom: -45px;
+}
+
+.landing-page-ship-img {
+    width: 1090px;
+    height: auto;
+    display: block;
+    position: fixed;
+    bottom: -25px;
+    left: -160px;
+    z-index: 1;
+}
+
+.landing-page-tulip {
+    margin-top:50px;
+    display: flex;
+    justify-content: center;
+}
+
+.landing-page-tulip-logo {
+    width: 190px;
+    height: auto;
 }
 
 .landing-title {
     color: white;
+    margin: auto;
 }
 
 
-.landing-title h1 {
+.landing-h1 {
     font-size: 4.5rem;
     font-weight: 800;
-    letter-spacing: 1.5px;
+    letter-spacing: -1px;
     display: flex;
     justify-content: center;
     margin-top: 15px;
     margin-bottom: 0px;
+    color: #00449C;
 }
 
-.landing-title h2 {
-    font-size: 4rem;
-    font-weight: 500;
-    letter-spacing: 1.5px;
+.h1-unique {
     display: flex;
     justify-content: center;
-    margin-top: 15px;
-    margin-bottom: 0px;
-}
-
-.landing-title h4 {
-    font-weight: 400;
-    font-size: 2.5rem;
-    display: flex;
-    justify-content: center;
-    margin-bottom: 0px;
+    color: #BD1404;
     margin-top: 0px;
+}
+
+.landing-p {
+    display: flex;
+    justify-content: center;
+    margin: 0px;
+    font-size: 1.38rem;
+    word-spacing: -0.5px;
+    letter-spacing: -0.5px;
+    color: #00449C;
+    font-weight: 500;
 }
 
 .slide-down {
@@ -57,6 +82,11 @@
     opacity: 0;
     transform: translateY(50px);
     animation: slideFadeUp 0.8s ease-out forwards;
+}
+
+.slide-right {
+    transform: translateX(-500px);
+    animation: slideFadeRight 5s ease-out forwards;
 }
 
 @keyframes slideFadeIn {
@@ -81,80 +111,110 @@
     }
 }
 
+@keyframes slideFadeRight {
+    0% {
+        opacity: 1;
+        transform: translateX(-500px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 .landing-buttons {
-    margin-top: 70px;
-    width: 50%;
+    margin-top: 40px;
     display: flex;
     justify-content: space-evenly;
     align-items: center;
+    gap: 20px;
+}
+
+.page-button-landing {
+    height: 55px;
+    width: 220px;
+    border: none;
+    border-radius: 35px;
+    background-color: #BD1404;
+    color: white;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.5px;
+    font-weight: 600;
+    font-size: 1.3rem;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.page-button-landing:hover {
+    transform: scale(1.1, 1.1);
+}
+
+.landing-page-decoration {
+    display: flex;
+    justify-content: center;
+}
+
+.landing-page-hut-ri {
+    margin-top: 40px;
+    width: 240px;
+    height: auto;
 }
 
 /* Login Page */
 .login-home {
     min-height: 100vh;
     width: 100%;
-    display: flex;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 1fr 1.3fr;
     align-items: center;
-    background-image: url("../assets/BG_Bendahara.jpg");
+    background-image: url("../assets/Login Page/BG.png");
     background-repeat: no-repeat;
     background-size: cover;
     background-attachment: fixed;
     background-position: center;
-
 }
 
-.login-bg {
-    width: 600px;
-    background-color: #fdfdfd;
-    border-radius: 15px;
+.login-left {
+    margin: auto;
 }
 
-.login-logo-container {
-    display: flex;
-    justify-content: center;
-    padding-top: 30px;
+.login-head {
+    padding-top: 0px;
     padding-bottom: 0px;
     width: 100%;
 }
 
-.login-logo {
-    height: 100px;
-    width: 100px;
+.login-bg {
+    margin-top: 47px;
+    padding-bottom: 15px;
+    width: 480px;
+    background-color: #fdfdfd;
+    border-radius: 55px;
+    box-shadow: 0px 8px 30px rgba(0, 0, 0, 0.15);
 }
 
 .login-title {
+    padding-top: 50px;
+    padding-bottom: 15px;
     display: grid;
-    grid-template-rows: 110px 60px 1fr;
-    color: #1a284b;
+    grid-template-rows: repeat(2, 1fr);
+    justify-items: center;
+    color: #00449C;
 }
 
-.title-1, .title-2 {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 0px;
-    margin-bottom: 0px;
-    font-size: 2.3rem;
-    font-weight: 600;
-}
-
-.title-1 {
-    height: 100px;
-}
-
-.title-2 {
-    height: 5px;
-    margin-top: 0px;
-}
-
-.login-title h3 {
-    display: flex;
-    justify-content: center;
-    font-size: 1.8rem;
+.login-title-1 {
     margin: 0px;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 100;
 }
+
+.login-title-2 {
+    margin: 0px;
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
 
 .login-content {
     display: flex;
@@ -164,8 +224,8 @@
 
 .login-form {
     display: grid;
-    grid-template-rows: repeat(3, 60px);
-    margin-bottom: 70px;
+    grid-template-rows: repeat(3, 1fr);
+    margin-bottom: 20px;
 }
 
 .login-form a {
@@ -174,19 +234,25 @@
 
 .login-form input {
     margin: auto;
-    height: 35px;
-    width: 350px;
-    border: 1px solid rgb(214, 214, 214);
-    border-radius: 10px;
-    padding-left: 10px;
+    margin-bottom: 20px;
+    height: 60px;
+    width: 340px;
+    border: none;
+    border-radius: 18px;
+    padding-left: 25px;
+    background-color: rgb(236, 235, 235);
+    font-size: 1.1rem;
+    font-weight: 200;
 }
 
 .login-form input[type="submit"] {
-    letter-spacing: 1px;
-    background-color: #1a284b;
+    width: 368px;
+    padding-left: 0px;
+    letter-spacing: 0.5px;
+    background: linear-gradient(to right, #BD1404, #670f05);
     color: white;
     font-weight: 600;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
 }
@@ -194,18 +260,13 @@
     transform: scale(1.1, 1.1);
 }
 
-.login-gaji {
-    margin: auto;
-    margin-bottom: 60px;
-    width: 50%;
-    font-size: 1.1rem;
-}
-
 .login-gaji-p1 {
     display: flex;
     justify-content: center;
     margin-top: 0px;
     transition: all 0.2s ease-in-out;
+    font-size: 1.3rem;
+    color: #00449C;
 }
 
 .login-gaji-p1:hover {
@@ -217,39 +278,144 @@
     min-height: 100vh;
     width: 100%;
     display: grid;
-    grid-template-rows: repeat(2, 1fr);
-    background-image: url("../assets/BG_Home.jpg");
-    background-position: center;
+    grid-template-rows: 100px 0.98fr 2fr;
+    background-image: url("../assets/Home Page/Upper Ribbon.svg");
+    background-position: center top -100px;
     background-repeat: no-repeat;
-    background-size: cover;
+    background-attachment: fixed;
+}
+
+.home-navbar {
+    display: inline-block;
+    margin: auto 40px;
+    justify-self: flex-end;
+}
+
+.home-navbar-content {
+    height: 40px;
+    width: 1020px;
+    background-color: white;
+    border: none;
+    border-radius: 35px;
+}
+
+.home-button {
+    height: 40px;
+    width: 170px;
+    border: none;
+    border-radius: 35px;
+    color: #00449C;
+    background-color: transparent;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.5px;
+    font-weight: 600;
+    font-size: 1.05rem;
+    transform: scale(1);
+    box-shadow: 0px 0px 0px rgba(255, 207, 95, 0);
+    transition: all 0.3s ease-in-out;
+    cursor: pointer;
+}
+
+.home-button:hover {
+    background-color: #e3e3e3;
+    box-shadow: 0px 3px 12px #808080;
+}
+
+.home-button-clicked {
+    background-color: #FFCF5F;
+    box-shadow: 0px 3px 12px rgba(255, 207, 95, 0.5);
+}
+
+.home-button-clicked:hover {
+    background-color: #fabd1f;
+}
+
+.home-button-external:hover {
+    background-color: #0B69DE;
+    color: white;
+    box-shadow: 0px 3px 12px #074591;
+}
+
+.home-button-logout:hover {
+    background-color: #BD1404;
+    box-shadow: 0px 3px 12px #5c0d01;
+    color: white;
 }
 
 .welcome-title {
-    margin-top: auto;
-}
-
-.welcome-title h1 {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    height: 100%;
+    margin-top: 20px;
     color: white;
-    font-size: 4.5rem;
-    margin-bottom: 10px;
-    min-width: 1280px;
+}
+
+.welcome-title-text {
+    margin: 0px 0px 0px 80px;
+}
+
+.home-dashboard {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    justify-items: center;
+}
+
+.dashboard-title {
+    font-size: 2rem;
+    font-weight: 500;
+    color: #00449C;
+}
+
+.home-dashboard-left, .home-dashboard-right {
     width: 100%;
-}
-
-.welcome-buttons {
+    height: 100%;
     display: flex;
-    justify-content: center;
-    column-gap: 4%;
-    row-gap: 100px;
-    margin-top: 5%;
-    margin-bottom: auto;
-    margin-right: 5%;
-    margin-left: 5%;
+    flex-direction: column;
+    align-items: center;
 }
 
+.home-dashboard-right {
+    width: 100%;
+    height: 100%;
+}
+
+.dashboard-status-pjk {
+    width: 80%;
+    height: 70%;
+    border: 1px solid black;
+    border-radius: 15px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+
+.dashboard-pjk-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.dashboard-pjk-card-icon {
+    width: 65px;
+    height: 65px;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+}
+
+.dashboard-pjk-card-text {
+    font-size: 1.1rem;
+    letter-spacing: -0.3px;
+    font-weight: 600;
+    color: #00449C;
+    text-align: center;
+}
 
 .page-button {
     height: 60px;
@@ -277,6 +443,55 @@
 
 /* Main Page */
 
+.main-page {
+    height: 100vh;
+}
+
+.main-page-navbar {
+    height: 95px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    background-image: url("../assets/Main Page/Ribbon Menu.svg");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    align-items: center;
+
+}
+
+.main-page-navbar a {
+    text-decoration: none;
+}
+
+.main-page-logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: 30px;
+    text-decoration: none;
+}
+
+.main-navbar-h1 {
+    display: flex;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin: 0px;
+    color: white;
+}
+
+.main-navbar-p {
+    display: flex;
+    justify-content: center;
+    margin: 0px;
+    font-size: 0.85rem;
+    word-spacing: -0.5px;
+    letter-spacing: -0.5px;
+    color: white;
+    font-weight: 400;
+}
+
 .bendahara-home {
     min-height: 70vh;
     max-width: 100%;
@@ -300,11 +515,11 @@
 }
 
 .dash-title {
-    background-color: #f5f6fa;
+    background-color: white;
     display: flex;
     padding-left: 31px;
     font-size: 1.1rem;
-    color: #0a0f1b;
+    color: #00204A;
     border: 1px solid rgb(214, 214, 214);
 }
 
@@ -317,7 +532,7 @@
 }
 
 .content-title {
-    color: #0a0f1b;
+    color: #00204A;
     padding: 25px 51px 20px 51px;
     margin: 0px;
     font-size: 2.5rem;
@@ -328,7 +543,7 @@
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: #f5f6fa;
+    background-color: white;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
 }
@@ -350,32 +565,33 @@
     padding-top: 10px;
     padding-bottom: 10px;
     font-size: 1rem;
-    background-color: #f5f6fa;
-    color: #0a0f1b;
+    background-color: white;
+    color: #00204A;
     /*The button that got clicked will have this bg color: background-color: #e8ebf1; will add with On Click*/
     border: none;
-    border-radius: 15px;
+    border-radius: 25px;
 }
 
 .dash-button:hover {
-    background-color: #edeff4;
+    background-color: #e5e7ec;
 }
 
 .btn-selected {
-    background-color: #d1d5d8;
+    background-color: #00449C;
+    color: white;
 }
 
 .btn-selected:hover {
-    background-color: #b9bcbe;
+    background-color: #00204A;
 }
 
 .dash-user {
-    background-color: #f5f6fa;
+    background-color: white;
     display: flex;
     align-items: center;
     padding-left: 26px;
     font-size: 1.3rem;
-    color: #0a0f1b;
+    color: #00204A;
     border: 1px solid rgb(214, 214, 214);
     border-top: 0px;
     font-weight: 500;
@@ -402,7 +618,7 @@
     z-index: 100;
     padding: auto;
     margin: auto;
-    background-color: #0a0f1b;
+    background-color: #00204A;
     color: white;
     border: none;
     cursor: pointer;
@@ -410,7 +626,7 @@
 }
 
 .toggle-sidebar-btn.inside-sidebar:hover {
-    background-color: #1a2433;
+    background-color: #00449C;
 }
 
 /* Button outside when sidebar is hidden (top-left corner) */
@@ -421,7 +637,7 @@
     width: 35px;
     height: 35px;
     padding: auto;
-    background-color: #0a0f1b;
+    background-color: #00204A;
     color: white;
     border: none;
     cursor: pointer;
@@ -433,7 +649,7 @@
 }
 
 .toggle-sidebar-btn.outside-sidebar:hover {
-    background-color: #1a2433;
+    background-color: #00449C;
 }
 
 /* Pelayanan Gaji Page */
@@ -451,15 +667,22 @@
 .gaji-title {
     width: 90%;
     height: 210px;
-    background-image: url("../assets/BG_Home.jpg");
+    background-image: url("../assets/Main Page/Ribbon Menu.svg");
     background-repeat: no-repeat;
     background-size: cover;
-    background-attachment: fixed;
     background-position: center;
     margin: auto;
     padding: 5%;
     color: white;
     font-size: 2.1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    transition: transform 0.3s ease-in-out;
+}
+
+.gaji-title.hidden {
+    transform: translateY(-100%);
 }
 
 .gaji-title h1, .gaji-title h3 {
@@ -473,9 +696,15 @@
     display: flex;
     align-items: center;
     align-self: center;
-    background-color: #1a2433;
+    background-color: #00204A;
+    box-shadow: 0px 1px 10px #00204A;
     cursor: pointer;
     font-size: 1.5rem;
+}
+
+.gaji-button:hover {
+    background-color: #016FFC;
+    box-shadow: 0px 1px 20px #016FFC;
 }
 
 .gaji-buttonList {
@@ -488,7 +717,7 @@
 .gaji-title-desc {
     display: inline-block;
     margin-bottom: 15px;
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     cursor: pointer;
     transition: all 0.2s ease-in-out;
 }
@@ -501,11 +730,11 @@
     width: 90%;
     min-height: 200px;
     height: auto;
-    margin-top: 0px;
+    margin-top: 50px;
     padding-left: 5%;
     padding-right: 5%;
     font-size: 2rem;
-    color: #1a284b;
+    color: #00204A;
 }
 
 .gaji-content h2 {
@@ -544,7 +773,6 @@
 
 .lihat-antri-table {
     width: 100%;
-    overflow-x: auto;
 }
 
 .table-cell {
@@ -579,6 +807,49 @@
 
 
   /* Adding Media Queries */
+@media screen and (min-width: 1900px) {
+    .landing-page-ship-img {
+        width: 1450px;
+    }
+
+    .home-content {
+        background-position: center top -200px;
+    }
+}
+
+@media screen and (min-width: 2000px) {
+    .landing-page-ship-img {
+        width: 1800px;
+    }
+
+    .home-content {
+        background-position: center top -260px;
+    }
+}
+
+
+@media screen and (min-width: 3000px) {
+    .landing-page-ship-img {
+        width: 2050px;
+    }
+
+    .home-content {
+        background-position: center top -320px;
+    }
+}
+
+@media screen and (min-width: 1720px) and (max-width: 1899px) {
+    .home-content {
+        background-position: center top -180px;
+    }
+    .welcome-title {
+        margin-top: 45px;
+    }
+    .landing-page-ship-img {
+        width: 1300px;
+    }
+}
+
 @media screen and (max-width: 1400px) {
     /* Sizing Landing Page*/
 
@@ -684,6 +955,10 @@
 /* Media Queries for Landing Page - Mobile Compatibility */
 @media screen and (max-width: 768px) {
     /* Landing Page */
+    .landing-page-ship-img {
+        width: 250px;
+    }
+
     .landing-title h1 {
         font-size: 2.5rem;
         text-align: center;
@@ -854,6 +1129,10 @@
 /* Extra small devices (phones, 576px and down) */
 @media screen and (max-width: 576px) {
     /* Landing Page */
+    .landing-page-ship-img {
+        width: 180px;
+    }
+
     .landing-title h1 {
         font-size: 2rem;
     }

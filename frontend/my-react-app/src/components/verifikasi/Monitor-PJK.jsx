@@ -159,7 +159,7 @@ export default function MonitorPJK() {
                     <div className="filter-select filter-select2">
                         <select value={filterSelect} onChange={handleFilterChange}>
                             <option value=""/>
-                            <option value="Belum Dikumpulkan">Belum Dikumpulkan</option>
+                            <option value="PJK Belum Diverifikasi">Belum Dikumpulkan</option>
                             <option value="Ditolak">Ditolak</option>
                             <option value="Lengkap dengan catatan">Lengkap (Catatan)</option>
                             <option value="Lengkap">Lengkap</option>
@@ -179,7 +179,13 @@ export default function MonitorPJK() {
                 {isLoading ? <LoadingAnimate /> :
                     <TableInfoPJK header={tableHead} body={tableData} />
                 }
-                <div style={{marginRight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap'}}>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto 1fr',
+                    alignItems: 'center',
+                    padding: '20px 0'
+                }}>
+                    <div></div>
                     <Pagination 
                         className="pagination" 
                         size="medium" 
@@ -191,7 +197,13 @@ export default function MonitorPJK() {
                         siblingCount={1}
                         boundaryCount={1}
                     />
-                    <div className="goto-page" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <div className="goto-page" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        justifySelf: 'end',
+                        paddingRight: '20px'
+                    }}>
                         <span>Go to page:</span>
                         <input 
                             type="text" 

@@ -322,7 +322,7 @@ function AksiPengajuan(props) {
                 </div>
                 }
                 <div className="form-submit aksi-submit">
-                    <input type="button" value="Kembali" onClick={() => props.changeComponent("kelola-pengajuan")}/>
+                    <input className={"button-reject"} type="button" value="Kembali" onClick={() => props.changeComponent("kelola-pengajuan")}/>
                     <input type="button" value="Simpan" onClick={handlePopup} />
                 </div>
                 </form>

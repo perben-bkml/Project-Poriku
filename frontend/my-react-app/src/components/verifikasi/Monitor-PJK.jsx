@@ -159,7 +159,7 @@ export default function MonitorPJK() {
                     <div className="filter-select filter-select2">
                         <select value={filterSelect} onChange={handleFilterChange}>
                             <option value=""/>
-                            <option value="Belum Dikumpulkan">Belum Dikumpulkan</option>
+                            <option value="PJK Belum Diverifikasi">Belum Dikumpulkan</option>
                             <option value="Ditolak">Ditolak</option>
                             <option value="Lengkap dengan catatan">Lengkap (Catatan)</option>
                             <option value="Lengkap">Lengkap</option>

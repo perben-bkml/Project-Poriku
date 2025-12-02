@@ -3,6 +3,7 @@ html {
     overflow: hidden;
 }
 
+/* Allow scrolling when scrollable-page class is added to body */
 body.scrollable-page {
     overflow-y: auto;
     height: auto;
@@ -12,6 +13,12 @@ body.scrollable-page {
 
 body.scrollable-page::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Opera */
+}
+
+/* Also enable scrolling on html when body has scrollable-page class */
+html:has(body.scrollable-page) {
+    overflow: visible;
+    height: auto;
 }
 
 body, button, input, select {

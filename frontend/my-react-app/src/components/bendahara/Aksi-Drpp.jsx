@@ -92,17 +92,21 @@ export default function AksiDrpp(props) {
             if (selectElement) {
                 selectOptionBackgroundColor(selectElement);
             }
-        };
+        }
         if (pajakStatus.setoran) {
             const selectElement = document.getElementById("setor");
             if (selectElement) {
                 selectOptionBackgroundColor(selectElement);
             }
-        };
-        if (tableData.length > 0) {
+        }
+    }, [pajakStatus.pungutan, pajakStatus.setoran]);
+
+
+    useEffect(() => {
+        if (tableData.length > 0 && coloredRow.length === 0) {
             setColoredRow(() => tableData.map(() => [""]));
         }
-    }, [pajakStatus.pungutan, tableData]);
+    }, [tableData.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
     //Handle Select Changes
     function handleInputChange(event){

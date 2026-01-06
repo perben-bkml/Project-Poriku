@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 //Import Components
 import { Card } from "../../ui/cards.jsx"
 import { TableInfoPJK } from "../../ui/tables.jsx";
@@ -49,7 +49,7 @@ export default function KelolaPJK() {
         let satkerPrefix = data;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/data-pjk`, { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, searchKeyword: cari, monthKeyword: month }});
+            const response = await apiClient.get('/verifikasi/data-pjk', { params:{ satkerPrefix, filterKeyword: status, page: page, limit: rowsPerPage, searchKeyword: cari, monthKeyword: month }});
             if (response.status === 200){
                 const { data: rowData, totalPages, countData, message } = response.data;
                 setDashboardData(countData);

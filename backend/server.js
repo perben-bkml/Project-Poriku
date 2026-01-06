@@ -106,7 +106,6 @@ if (process.env.NODE_ENV !== "production") {
     app.use((req, res, next) => {
         if (req.path === '/check-auth' || req.path === '/login-auth' || req.path === '/logout') {
             console.log(`[${req.method}] ${req.path} - Cookies:`, Object.keys(req.cookies));
-            console.log("Cookie header:", req.headers.cookie);
         }
         next();
     });
@@ -162,13 +161,15 @@ const oauth2ClientVerif = new google.auth.OAuth2(
 
 // Gsheet API Setup
 const sheets = google.sheets({ version: "v4", auth })
-const spreadsheetId = process.env.SPREADSHEET_ID_AJUAN;
-const spreadsheetIdCariSPM = process.env.SPREADSHEET_ID_CARISPM;
-const spreadsheetIdGaji = process.env.SPREADSHEET_ID_GAJI;
-
-// Gsheet Verif API Setup
 const sheets2 = google.sheets({ version: "v4", auth: auth2 })
-const spreadsheetIdVerif = process.env.SPREADSHEET_ID_VERIF;
+
+// Helper to get spreadsheet IDs based on year from request
+function getSpreadsheetId(req, type) {
+    const year = req.query.year || req.body.year || new Date().getFullYear().toString();
+    const envKey = `SPREADSHEET_ID_${type.toUpperCase()}_${year}`;
+    // Try year-specific first, then fall back to old format (without year suffix)
+    return process.env[envKey] || process.env[`SPREADSHEET_ID_${type.toUpperCase()}`];
+}
 
 // Gdrive API Setup (will be initialized with OAuth2 tokens)
 let drive = null;
@@ -556,6 +557,7 @@ app.get("/check-auth", (req, res) => {
 // Layanan Gaji antrian
 app.get("/bendahara/antrian-gaji", async (req, res) => {
     try {
+        const spreadsheetIdGaji = getSpreadsheetId(req, 'GAJI');
         const { page = 1, limit = 5 } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
@@ -619,6 +621,7 @@ app.get("/bendahara/antrian-gaji", async (req, res) => {
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const { page = 1, limit = 5, username } = req.query;
 
         // Fetch all data from columns A to L starting from row 3
@@ -671,6 +674,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
     }
 
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         // Fetch the entire column B from Google Sheets with backoff handling
         const response = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
@@ -736,6 +740,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
 
     if (textdata && tabledata && userdata) {
         try {
+            const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
             // File Upload Handling
             let fileLink = ""; //Link to see the uploaded file
 
@@ -993,6 +998,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
 // Find, get, and return existing data based on user input
 app.get("/bendahara/data-transaksi", async (req, res) => {
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const transaksiKeyword = req.query.tableKeyword;
         // Finding keyword range with data from X & Y columns on Write Table Sheet
         const matchRange = "'Write Table'!X:Y";
@@ -1277,6 +1283,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     const delKeyword = req.query.tableKeyword;
     const delTableKeyword = `TRANS_ID:${delKeyword}`
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         // Finding keyword range with data from X & Y columns and A column on Write Table and Write Antrian Sheet 
          const matchRange = [
             "'Write Table'!X:Y",  //Table data Range
@@ -1390,12 +1397,13 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
 // SPM Belum Bayar
 app.get("/bendahara/spm-belum-bayar", async (req, res) => {
     try {
+        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
         const range = "'MACHINE DB'!AE3:AM"
 
         // Apply backoff for getting SPM data
         const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({ 
-                spreadsheetId: spreadsheetIdCariSPM, 
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetIdCariSPM,
                 range,
             });
         });
@@ -1417,6 +1425,7 @@ app.get("/bendahara/spm-belum-bayar", async (req, res) => {
 // Find and Return Rincian SPM
 app.post("/bendahara/cari-rincian", async (req, res) => {
     try {
+        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
         const {startDate, endDate, selectJenis, selectStatus, satkerName} = req.body;
         const cariRanges = [
             "'DASHBOARD'!P17", //start date
@@ -1493,6 +1502,13 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
     const { MonthDateFormat, PrevMonthDate } = getFormattedDate();
     const datePrefixes = [MonthDateFormat, PrevMonthDate];
       try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+
+        // Check if selected year is different from current year
+        const selectedYear = req.query.year || req.body.year || new Date().getFullYear().toString();
+        const currentYear = new Date().getFullYear().toString();
+        const isHistoricalYear = selectedYear !== currentYear;
+
         // Fetch entire column B from Google Sheets with backoff
         const response = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
@@ -1504,27 +1520,46 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // Get all rows
         const allRows = response.data.values || [];
 
-        // Filter rows based on this month and previous month
-        const filteredRows = allRows
-            .map((row, index) => ({ date: row[0], rowIndex: index + 1 })) // Add row index for reference
-            .filter(row => row.date && datePrefixes.some(prefix => row.date.startsWith(prefix)));
+        // Filter rows based on year selection
+        let filteredRows;
+        if (isHistoricalYear) {
+            // If viewing historical year, show all data (no date filter)
+            filteredRows = allRows
+                .map((row, index) => ({ date: row[0], rowIndex: index + 1 }))
+                .filter(row => row.date); // Only filter out empty dates
+        } else {
+            // If current year, filter by this month and previous month
+            filteredRows = allRows
+                .map((row, index) => ({ date: row[0], rowIndex: index + 1 }))
+                .filter(row => row.date && datePrefixes.some(prefix => row.date.startsWith(prefix)));
+        }
+
         // Error handling if no keyword found
         if (filteredRows.length === 0) {
             return res.status(404).json({ error: "No matching rows found." });
         }
         // Sort rows in reverse order (latest dates first)
         const reversedRows = filteredRows.reverse();
-        // Fetch full row data for the selected month with backoff
-        const rowRanges = reversedRows.map(row => `'Write Antrian'!A${row.rowIndex}:T${row.rowIndex}`); // Adjust range if needed
+
+        // Fetch full row data using continuous range to avoid URL length issues
+        const rowIndices = reversedRows.map(row => row.rowIndex);
+        const minRow = Math.min(...rowIndices);
+        const maxRow = Math.max(...rowIndices);
 
         const batchGetResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
+            return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                ranges: rowRanges,
+                range: `'Write Antrian'!A${minRow}:T${maxRow}`,
             });
         });
 
-        let rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
+        const allRowsData = batchGetResponse.data.values || [];
+
+        // Extract only the rows we need based on rowIndex
+        let rowData = reversedRows.map(row => {
+            const dataIndex = row.rowIndex - minRow;
+            return allRowsData[dataIndex] || [];
+        });
         const num_Columns = 20;
         rowData = rowData.map(row => {
             while (row.length < num_Columns) {
@@ -1555,6 +1590,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 //Aksi-Pengajuan Handler
 app.post("/bendahara/aksi-ajuan", async (req, res) => {
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const {updatedAntriData, monitoringDrppData, documentData} = req.body
         if (!updatedAntriData) {
             return res.status(400).json({ message: "Invalid or missing data." });
@@ -1792,6 +1828,7 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
     }
 
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         // Fetch the relevant columns with backoff
         const range = "Monitoring DRPP!B2:G";
         const sheetResponse = await withBackoff(async () => {
@@ -1843,6 +1880,7 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
 //Monitoring DRPP component handlers
 app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const { page = 1, limit = 10, filterKeyword, cariNomor } = req.query;
         
         // Parse cariNomor if it exists
@@ -2283,24 +2321,38 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         const endIndex = startIndex + limit;
         const paginatedRows = sortedRows.slice(startIndex, endIndex)
 
-        const fetchRowRange= paginatedRows.map(row => `'Monitoring DRPP'!A${row.rowIndex}:K${row.rowIndex}` );
-        // Fetch Paginated Data with backoff
-        const getDRPPResponses = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: fetchRowRange,
-            });
-        });
+        // Check if paginatedRows is empty to avoid Infinity error
+        let paginatedDRPP = [];
+        if (paginatedRows.length === 0) {
+            // Return empty data if no rows to paginate
+            paginatedDRPP = [];
+        } else {
+            // Instead of fetching each row individually, fetch a continuous range
+            // Find min and max row indices
+            const rowIndices = paginatedRows.map(row => row.rowIndex);
+            const minRow = Math.min(...rowIndices);
+            const maxRow = Math.max(...rowIndices);
 
-        //Capture data values
-        const paginatedDRPP = getDRPPResponses.data.valueRanges ?
-            getDRPPResponses.data.valueRanges.map(row => {
-                const values = row.values?.[0] || [];
+            // Fetch continuous range with backoff
+            const getDRPPResponses = await withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: `'Monitoring DRPP'!A${minRow}:K${maxRow}`,
+                });
+            });
+
+            const allRowsData = getDRPPResponses.data.values || [];
+
+            // Extract only the rows we need based on rowIndex
+            paginatedDRPP = paginatedRows.map(row => {
+                const dataIndex = row.rowIndex - minRow;
+                const values = allRowsData[dataIndex] || [];
                 while (values.length < 11) {
                     values.push("");
                 }
                 return values;
-            }) : [];
+            });
+        }
 
         const paginatedSlicedDRPP = paginatedDRPP.map(row => row.slice(0, -1))
 
@@ -2316,6 +2368,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 //Aksi DRPP handler
 app.get("/bendahara/cek-drpp", async (req, res) => {
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const tablePos  = req.query;
         const colorStartRow = parseInt(tablePos.startRow) + 1;
         const range = `'Write Table'!W${colorStartRow}:W${tablePos.endRow}`;
@@ -2350,19 +2403,22 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
 app.post("/bendahara/aksi-drpp", async (req, res) => {
     const {numbers, pajakStatus, colorData} = req.body;
     try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         // Apply backoff for batch get
         const getDrppRows = await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
                 ranges: [
                     "'Monitoring DRPP'!A3:A",   // Range to update DRPP status
-                    "'Write Table'!X:X"       // Range to update colored row status
+                    "'Write Table'!X:X",        // Range to update colored row status
+                    "'Monitoring DRPP'!F3:F"    // Range to get SPM numbers
                 ],
             });
         });
 
         const totalRows = getDrppRows.data.valueRanges[0].values || [];
         const colorRows = getDrppRows.data.valueRanges[1].values || [];
+        const spmRows = getDrppRows.data.valueRanges[2].values || [];
 
         // totalRows/DRPP status handler (find DRPP status number order on sheet)
         let trackedRowNum = null;
@@ -2375,6 +2431,17 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
 
         if (!trackedRowNum) {
             return res.status(404).json({ message: "Nomor urut DRPP tidak ditemukan." });
+        }
+
+        // Find all rows with matching SPM number
+        const matchingSpmRows = [];
+        const spmNumber = numbers.spm?.toString().trim();
+        if (spmNumber) {
+            for (let i = 0; i < spmRows.length; i++) {
+                if (spmRows[i][0]?.toString().trim() === spmNumber) {
+                    matchingSpmRows.push(i + 3); // F3 = index 0 => row number = i + 3
+                }
+            }
         }
 
         // colorRows/colored row status handler
@@ -2390,26 +2457,41 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             console.log(`Keyword "${colorData}" tidak ditemukan.`);
         }
 
-        // Apply backoff for batch update - Combine the two API calls into one batchUpdate for efficiency
+        // Prepare batch update data
+        const updateData = [
+            {
+                range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
+                values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
+            },
+            {
+                range: `'Monitoring DRPP'!K${trackedRowNum}:K${trackedRowNum}`,
+                values: [[pajakStatus.catatan || ""]],
+            },
+            {
+                range: `'Write Table'!W${foundRow}`,
+                values: colorData.data,
+            }
+        ];
+
+        // Add catatan updates for all rows with matching SPM (excluding the current row to avoid duplicate)
+        if (matchingSpmRows.length > 0) {
+            matchingSpmRows.forEach(rowNum => {
+                if (rowNum !== trackedRowNum) {
+                    updateData.push({
+                        range: `'Monitoring DRPP'!K${rowNum}:K${rowNum}`,
+                        values: [[pajakStatus.catatan || ""]],
+                    });
+                }
+            });
+        }
+
+        // Apply backoff for batch update
         await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchUpdate({
                 spreadsheetId,
                 requestBody: {
                     valueInputOption: "RAW",
-                    data: [
-                        {
-                            range: `'Monitoring DRPP'!H${trackedRowNum}:I${trackedRowNum}`,
-                            values: [[pajakStatus.pungutan || "", pajakStatus.setoran || ""]],
-                        },
-                        {
-                          range: `'Monitoring DRPP'!K${trackedRowNum}:K${trackedRowNum}`,
-                            values: [[pajakStatus.catatan || ""]],
-                        },
-                        {
-                            range: `'Write Table'!W${foundRow}`,
-                            values: colorData.data, 
-                        }
-                    ]
+                    data: updateData
                 }
             });
         });
@@ -2426,6 +2508,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
 //Kelola-PJK Page
 app.get("/verifikasi/data-pjk", async (req, res) => {
     try {
+        const spreadsheetIdVerif = getSpreadsheetId(req, 'VERIF');
         const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10, searchKeyword = "", monthKeyword = "" } = req.query;
 
         //Get all data from range A
@@ -2619,6 +2702,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 //Form-Verifikasi.jsx
 app.post("/verifikasi/verifikasi-form", async (req, res) => {
     try {
+        const spreadsheetIdVerif = getSpreadsheetId(req, 'VERIF');
         const { data, type, rowPosition } = req.body;
 
         data.push(getFormattedDate().fullDateTimeVerifFormat);
@@ -2823,6 +2907,7 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 app.get("/verifikasi/cari-spm", async (req,res) => {
     const { searchValue } = req.query;
     try {
+        const spreadsheetIdVerif = getSpreadsheetId(req, 'VERIF');
         const response = await withBackoff(async () => {
             return await sheets2.spreadsheets.values.get({
                 spreadsheetId: spreadsheetIdVerif,

@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 
 //Import UI
 import { VerifButton } from "../../ui/buttons.jsx"
@@ -98,7 +98,7 @@ export default function FormVerifikasi(props) {
         if (searchValue !== "") {
             try {
                 setLoadingScreen(true);
-                const response = await axios.get(`${import.meta.env.VITE_API_URL}/verifikasi/cari-spm`, { params: { searchValue }});
+                const response = await apiClient.get('/verifikasi/cari-spm', { params: { searchValue }});
                 if (response.status === 200) {
                     const { data, rowNumber } = response.data;
                     setSearchedData(data);
@@ -175,7 +175,7 @@ export default function FormVerifikasi(props) {
 
         try {
             setLoadingScreen(true);
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/verifikasi/verifikasi-form`, { data: dataArray, type: type, rowPosition: savedRow })
+            const response = await apiClient.post('/verifikasi/verifikasi-form', { data: dataArray, type: type, rowPosition: savedRow })
             if (response.status === 200) {
                 setPopupType("Buat/Edit")
                 setIsAlert(true);

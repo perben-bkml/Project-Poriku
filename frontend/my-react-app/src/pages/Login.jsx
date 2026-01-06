@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "../lib/apiClient";
 import { useNavigate, NavLink } from "react-router-dom";
 import { AuthContext } from "../lib/AuthContext";
 import { LoadingScreen } from "../ui/loading.jsx";
@@ -47,7 +47,7 @@ function Login () {
         event.preventDefault();
         try {
             setScreenLoading(true)
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/login-auth`, credentials, {
+            const response = await apiClient.post('/login-auth', credentials, {
                 withCredentials: true, //Ensure cookies are sent
             })
             if (response.status === 200) {
@@ -58,7 +58,7 @@ function Login () {
                     role: response.data.data[1],
                 })
                 navigate("/home")
-            } 
+            }
         } catch (error) {
             if (error.status === 401) {
                 setErrorMessage("Username atau Password Salah.")

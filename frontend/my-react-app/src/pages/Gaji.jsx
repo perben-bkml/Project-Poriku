@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import axios from "axios";
+import apiClient from "../lib/apiClient";
 import { NavLink } from "react-router-dom";
 //Import Material UI
 import EditNoteIcon from '@mui/icons-material/EditNote';
@@ -39,7 +39,7 @@ export default function Gaji() {
         const maxRow = 5;
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/antrian-gaji`, { params: { page, limit: maxRow } });
+            const response = await apiClient.get('/bendahara/antrian-gaji', { params: { page, limit: maxRow } });
             if (response.status === 200) {
                 setTableData(response.data.data);
                 setTotalPage(Math.ceil(response.data.rowLength/maxRow));

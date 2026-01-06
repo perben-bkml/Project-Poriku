@@ -102,6 +102,28 @@ export function TableKelola(props) {
         }
     }, [props.content, props.fullContent]);
 
+    // Reset checkboxes and sum when clicking outside the table for aksi-drpp
+    useEffect(() => {
+        if (tableType !== 'aksi-drpp' || checkedItems.size === 0) return;
+
+        const handleClickOutside = (event) => {
+            // Check if click is outside the table container
+            if (tableContainerRef.current && !tableContainerRef.current.contains(event.target)) {
+                // Reset checkboxes and sum
+                setCheckedItems(new Set());
+                setSudahVerifSum("0");
+            }
+        };
+
+        // Add event listener
+        document.addEventListener('mousedown', handleClickOutside);
+
+        // Cleanup
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [tableType, checkedItems.size]);
+
     if (isLoading) {
         return <LoadingAnimate />
     }
@@ -320,14 +342,49 @@ export function TableKelola(props) {
     function Row(props) {
         //State
         const [isOpen, setIsOpen] = useState(false);
+        const [clickCount, setClickCount] = useState(0);
+        const [clickTimer, setClickTimer] = useState(null);
         const getCheckData = props.coloredRow?.[props.rowIndex] ?? [];
+
+        // Handle multiple clicks (double and triple)
+        const handleRowClick = () => {
+            if (tableType !== 'aksi-drpp') return;
+
+            const newCount = clickCount + 1;
+            setClickCount(newCount);
+
+            // Clear existing timer
+            if (clickTimer) {
+                clearTimeout(clickTimer);
+            }
+
+            // Set new timer to detect click pattern
+            const timer = setTimeout(() => {
+                if (newCount === 2) {
+                    // Double click - set to red
+                    props.addColorData(props.rowIndex, "colored");
+                } else if (newCount >= 3) {
+                    // Triple click - set to purple
+                    props.addColorData(props.rowIndex, "color-purple");
+                }
+                setClickCount(0);
+            }, 300); // 300ms window to detect multiple clicks
+
+            setClickTimer(timer);
+        };
+
+        // Determine background color based on color status
+        const getBackgroundColor = () => {
+            if (tableType !== 'aksi-drpp') return 'inherit';
+            if (getCheckData[0] === 'colored') return '#F3B5B5'; // Light red
+            if (getCheckData[0] === 'color-purple') return '#E6D5F0'; // Light purple
+            return 'inherit';
+        };
+
         return (
             <Fragment>
-                <TableRow onDoubleClick={() => {
-                    if (tableType === 'aksi-drpp') {
-                        props.addColorData(props.rowIndex, "colored");
-                    }}}
-                    sx={tableType === 'aksi-drpp' ? {backgroundColor: getCheckData[0] === 'colored' ? "#F3B5B5" : "inherit", cursor: 'pointer'} : null}>
+                <TableRow onClick={handleRowClick}
+                    sx={tableType === 'aksi-drpp' ? {backgroundColor: getBackgroundColor(), cursor: 'pointer'} : null}>
                     {tableType === "kelola" || tableType === "monitor"?
                     <TableCell sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'} : null}>
                         <IconButton

@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useContext} from "react";
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 // Import components
 import Pengajuan from "../../ui/Pengajuan-Info.jsx";
 import Popup from "../../ui/Popup.jsx";
@@ -45,7 +45,7 @@ function DaftarPengajuan(props){
         try {
             setAntrianData([]);
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/antrian`, { params:{ page, limit: rowsPerPage, username: user.name }});
+            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: user.name }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setIsLoading(false);
@@ -83,7 +83,7 @@ function DaftarPengajuan(props){
             setAntrianData([]);
             setIsLoading(true);
             const tableKeyword = delData.keyword
-            const response = await axios.delete(`${import.meta.env.VITE_API_URL}/bendahara/delete-ajuan`, { params: { tableKeyword } })
+            const response = await apiClient.delete('/bendahara/delete-ajuan', { params: { tableKeyword } })
             if (response.status === 200){
                 fetchAntrianData(currentPage);
                 setIsAlert(true);
@@ -110,7 +110,7 @@ function DaftarPengajuan(props){
         try {
             setAntrianData([]);
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/filter-date`, { params:{ datePrefix, page: 1, limit: rowsPerPage }});
+            const response = await apiClient.get('/bendahara/filter-date', { params:{ datePrefix, page: 1, limit: rowsPerPage }});
             if (response.status === 200){
                 const { data: rowData, totalPages } = response.data;
                 setAntrianData(rowData);

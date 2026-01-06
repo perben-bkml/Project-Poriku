@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../lib/apiClient';
 //Import components
 import { Card, WideTableCard } from '../../ui/cards.jsx';
 import { headData1, headData2, headData3, headData4 } from './head-data.js';
@@ -16,7 +16,7 @@ function KelolaPengajuan(props) {
 
     async function getAjuanData(){
         try {
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/kelola-ajuan`)
+            const response = await apiClient.get('/bendahara/kelola-ajuan')
             if (response.status === 200) {
                 const ajuanData = response.data.data;
                 setFullData(ajuanData)

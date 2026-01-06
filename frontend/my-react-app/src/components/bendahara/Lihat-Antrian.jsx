@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 
 // Import components
 import { columns2 } from './head-data.js'
@@ -27,7 +27,7 @@ function LihatAntrian() {
     async function fetchAntrianData (page) {
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/antrian`, { params:{ page, limit: rowsPerPage, username: null }});
+            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: null }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setAntrianData(responseResult.map(row => row.slice(0, -4)));

@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 //Import components
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup from "../../ui/Popup.jsx";
@@ -48,12 +48,12 @@ export default function AksiDrpp(props) {
         try {
             setIsTableLoading(true)
             const tableKeyword = `TRANS_ID:${props.fulldata[1]}`
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
+            const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
                 if (response.data.keywordRowPos) {
                     const tablePos = { startRow: response.data.keywordRowPos, endRow: response.data.keywordEndRow }
-                    const result = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/cek-drpp`, { params: tablePos} )
+                    const result = await apiClient.get('/bendahara/cek-drpp', { params: tablePos} )
                     if (result.status === 200) {
                         setColoredRow(result.data.data || []);
                         setIsTableLoading(false)
@@ -128,8 +128,8 @@ export default function AksiDrpp(props) {
 
     //Handle submit button
     async function handleSubmit(){
-        let numbers = { data: props.fulldata[0] };
-        const processedColoredRow = Array.from({ length: coloredRow.length }, (_, i) => 
+        let numbers = { data: props.fulldata[0], spm: props.fulldata[5] };
+        const processedColoredRow = Array.from({ length: coloredRow.length }, (_, i) =>
             coloredRow[i] && coloredRow[i].length > 0 ? coloredRow[i] : [""]
         );
         let colorData = { data: processedColoredRow, id: `TRANS_ID:${props.fulldata[1]}` };
@@ -141,7 +141,7 @@ export default function AksiDrpp(props) {
         try {
             handlePopup()
             setIsLoading(true)
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/aksi-drpp`, sendData)
+            const response = await apiClient.post('/bendahara/aksi-drpp', sendData)
             if (response.status === 200) {
                 setIsLoading(false)
                 props.changeComponent("monitoring-drpp")

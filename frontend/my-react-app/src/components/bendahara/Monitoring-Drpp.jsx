@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 //Import Components
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
@@ -48,7 +48,7 @@ export default function MonitoringDrpp(props) {
     async function fetchMonitoringData (page, status, search) {
         try {
             setIsLoading(true);
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/monitoring-drpp`, { params:{ page, limit: rowsPerPage, filterKeyword: status, cariNomor: search }});
+            const response = await apiClient.get('/bendahara/monitoring-drpp', { params:{ page, limit: rowsPerPage, filterKeyword: status, cariNomor: search }});
             if (response.status === 200){
                 const { data: responseResult, realAllDRPPRows, countData, fullData } = response.data;
                 setMonitoringData(responseResult);

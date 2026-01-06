@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useRef, useContext, useCallback, useMemo} from "react";
 import * as math from "mathjs";
-import axios from "axios";
+import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
@@ -100,7 +100,7 @@ function BuatPengajuan(props) {
         try {
             setIsLoading2(true);
             const tableKeyword = `TRANS_ID:${props.passedData[0]}`
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/bendahara/data-transaksi`, { params: { tableKeyword } })
+            const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
                 setRowNum(response.data.data.length);
@@ -742,7 +742,7 @@ function BuatPengajuan(props) {
         setIsLoading(true);
         // Sending to backend
         try {
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/bendahara/buat-ajuan` , formData, {
+            const response = await apiClient.post('/bendahara/buat-ajuan' , formData, {
                 headers:{
                     'Content-Type': 'multipart/form-data',
                 }
@@ -846,7 +846,7 @@ function BuatPengajuan(props) {
 
         try {
             setIsLoading(true);
-            const response = await axios.patch(`${import.meta.env.VITE_API_URL}/bendahara/edit-table`, formData, {
+            const response = await apiClient.patch('/bendahara/edit-table', formData, {
                 headers:{
                     'Content-Type': 'multipart/form-data',
                 }

@@ -5,7 +5,7 @@ function Footer() {
 
     return (
         <footer className="footer">
-            <p className="footer-copy">&copy; Copyright Bakamla Keuangan {year} (Ver. 1.1.0)</p>
+            <p className="footer-copy">&copy; Copyright Bakamla Keuangan {year} (Ver. 1.1.1)</p>
         </footer>
     )
 }

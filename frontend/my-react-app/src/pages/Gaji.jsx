@@ -147,7 +147,7 @@ export default function Gaji() {
                 <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
                 { guideOpen &&
                 <div className={`gaji-guide ${guideOpen ? 'slide-down' : ''}`}>
-                    <img src="/assets/Infografis_BNI.jpg" className="gaji-img" alt='Infografis Gaji' />
+                    <img src="/assets/Infografis_Gaji.jpg" className="gaji-img" alt='Infografis Gaji' />
                 </div>
                 }
                 <br />

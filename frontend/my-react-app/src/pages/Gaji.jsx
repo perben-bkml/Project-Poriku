@@ -144,7 +144,7 @@ export default function Gaji() {
                     <NavLink to='/' style={{textDecoration: 'none', color: 'inherit'}}><p className='gaji-title-desc'>Kembali ke <b>Halaman Awal</b></p></NavLink>
                 </div>
             <div className='gaji-content' >
-                <h2 onClick={() => setGuideOpen(!guideOpen)}>Prosedur Flexi BNI {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
+                <h2 onClick={() => setGuideOpen(!guideOpen)}>Langkah-Langkah Pengajuan Kredit {guideOpen ? <ExpandMoreIcon /> : <ExpandLessIcon />}</h2>
                 { guideOpen &&
                 <div className={`gaji-guide ${guideOpen ? 'slide-down' : ''}`}>
                     <img src="/assets/Infografis_Gaji.jpg" className="gaji-img" alt='Infografis Gaji' />

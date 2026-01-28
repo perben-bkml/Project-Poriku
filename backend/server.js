@@ -1066,6 +1066,8 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
     const antriPosition = JSON.parse(req.body.antriPosition);
     const lastTableEndRow = JSON.parse(req.body.lastTableEndRow);
 
+    const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+
     if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
         return res.status(400).json({message: "Invalid Data."})  
     }

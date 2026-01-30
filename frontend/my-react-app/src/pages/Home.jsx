@@ -116,7 +116,7 @@ function Home() {
                 </div>
                 <div className="home-dashboard-right">
                     <h3 className={"dashboard-title"} style={{fontStyle: "italic", fontSize: "1.9rem", opacity:"0.3"}}>
-                        Mohon Maaf Saat Ini SIPKU tidak dapat diakses sehingga <br/>unggah PJK dan penatausahaan PJK belum dapat dilakukan sementara waktu...</h3>
+                        Nantikan dashboard terbaru...</h3>
                 </div>
             </div>
         </div>

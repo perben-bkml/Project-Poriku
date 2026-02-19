@@ -1372,12 +1372,13 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     }
 })
 
-// Handling interaction with PEMBAYARAN BP 2025 Sheet
+// Handling interaction with PEMBAYARAN BP Sheet
 // Cari SPM
 app.patch("/bendahara/cari-spm", async (req, res) => {
     try {
         const { data } = req.body;
         const cariRange = "'DASHBOARD'!D8"
+        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
 
         // Apply backoff for updating cell
         await withBackoff(async () => {

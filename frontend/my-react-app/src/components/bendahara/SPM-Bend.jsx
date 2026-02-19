@@ -13,6 +13,9 @@ function InfoSPMBendahara() {
     const { user } = useContext(AuthContext);
 
     // State
+    const selectedYear = localStorage.getItem('poriku-selected-year') || new Date().getFullYear().toString();
+    const cariSpmBaseUrl = import.meta.env[`VITE_CARI_SPM_${selectedYear}`] || import.meta.env.VITE_CARI_SPM_2025;
+    const cariRekKoranBaseUrl = import.meta.env[`VITE_REK_KORAN_${selectedYear}`] || import.meta.env.VITE_REK_KORAN_2025;
     const [sheetTimer, setSheetTimer] = useState(Date.now());
     const [notPaidSPM, setNotPaidSPM] = useState([]);
     const [rincianSearch, setRincianSearch] = useState({
@@ -75,7 +78,7 @@ function InfoSPMBendahara() {
                     <iframe 
                         className='cari-spm'
                         key={sheetTimer}
-                        src={`https://docs.google.com/spreadsheets/d/e/2PACX-1vSR6HX2hJILNVE3RJjvDNVK27mvdScy09EzM1wnwi1J42CMUi1H9eI02VwKfLcKdndCZQIUPTXqDkAJ/pub?output=html&gid=1715874875&range=C9:K10&amp;single=true&amp;widget=true&amp;headers=false&nocache=${sheetTimer}`}
+                        src={`${cariSpmBaseUrl}${sheetTimer}`}
                     ></iframe>
                 </div>
             </div>
@@ -124,7 +127,7 @@ function InfoSPMBendahara() {
                 <div className='embed-container embed2'>
                     <iframe 
                         className='cari-spm rincian-spm'
-                        src={`https://docs.google.com/spreadsheets/d/e/2PACX-1vSR6HX2hJILNVE3RJjvDNVK27mvdScy09EzM1wnwi1J42CMUi1H9eI02VwKfLcKdndCZQIUPTXqDkAJ/pub?output=html&gid=1715874875&range=B48:H70&amp;single=true&amp;widget=true&amp;headers=false`}
+                        src={`${cariRekKoranBaseUrl}`}
                     ></iframe>
                 </div>
             </div>

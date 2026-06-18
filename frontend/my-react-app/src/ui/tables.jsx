@@ -377,7 +377,7 @@ export function TableKelola(props) {
         const getBackgroundColor = () => {
             if (tableType !== 'aksi-drpp') return 'inherit';
             if (getCheckData[0] === 'colored') return '#F3B5B5'; // Light red
-            if (getCheckData[0] === 'color-purple') return '#E6D5F0'; // Light purple
+            if (getCheckData[0] === 'color-purple') return '#FFA500'; // Light orange
             return 'inherit';
         };
 

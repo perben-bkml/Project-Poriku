@@ -167,6 +167,8 @@ export default function FormVerifikasi(props) {
             verifikator = "M. Rachmat Abdul Rahman";
         } else if (user.name === "Esteria") {
             verifikator = "Esteria Sitanggang";
+        } else if (user.name === "maria") {
+            verifikator = "Maria Simbolon"
         } else {
             verifikator = user.name;
         }

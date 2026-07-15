@@ -595,3 +595,27 @@ export function TableInfoPJK(props) {
     )
 
 }
+
+export function TableNotif(props) {
+    return(
+        <TableContainer sx={{border: '1px solid #e0e0e0', boxShadow: 'none'}}>
+            <Table sx={{'& th, & td': { borderBottom: 'none' }}}>
+
+                <TableBody>
+                    {props.content.map((data, index) => (
+                        <React.Fragment key={index}>
+                            <TableRow sx={{ borderTop: index === 0 ? 'none' : '1px solid #e0e0e0', boxShadow: 'none'}}>
+                                <TableCell sx={{padding: '12px 16px 4px 16px', fontWeight: 'bold', fontSize: "15px"}}>
+                                    {data[0]}
+                                </TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell sx={{padding: '0px 16px 12px 16px', color: '#666'}}>{data[1]}</TableCell>
+                            </TableRow>
+                        </React.Fragment>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}

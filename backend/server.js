@@ -2963,6 +2963,130 @@ app.post("/verifikasi/generate-pdf", async (req, res) => {
     }
 })
 
+//Navbar.jsx - Notification Message
+app.get('/notification', async (req, res) => {
+    try{
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const { page = 1, limit = 30, name, role } = req.query;
+
+        // Filter by user role and admin division
+        let findByWhat = role === 'user' ? name : (name.includes('Annisa' || 'Ardi' || 'Anggun') ? 'Bendahara' : 'Verifikasi' )
+        if (role === 'master admin') { findByWhat = 'Bendahara'; }
+
+        // Find the correct notification column index first
+        const getTypeRowsResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: "'Notifikasi'!A:CB",
+            });
+        });
+        let typeRow = await getTypeRowsResponse.data.values || [];
+        const headerRow = typeRow.length > 0 ? typeRow[0] : [];
+        const columnIndex = headerRow.findIndex(columnName => columnName.includes(findByWhat));
+            //Handle Error
+        if (columnIndex === -1) {
+            throw new Error(`Could not find column for: ${findByWhat}`);
+        }
+
+        // Convert index to google sheet column letter
+        function getColumnLetter(index) {
+            let letter = '';
+            let tempIndex = index;
+            while (tempIndex >= 0) {
+                letter = String.fromCharCode((tempIndex % 26) + 65) + letter;
+                tempIndex = Math.floor(tempIndex / 26) - 1;
+            }
+            return letter;
+        }
+        const columnLetter = getColumnLetter(columnIndex);
+
+        // Get n column letter after columnIndex
+        function getOffsetColumnLetter(letter, step = 2) {
+            let nextLetter = '';
+
+            let carry = step;
+
+            for (let i = letter.length - 1; i >= 0; i--) {
+                if (carry > 0) {
+                    let charCode = letter.charCodeAt(i);
+                    let newCharCode = charCode + carry;
+
+                    if (newCharCode > 90) {
+
+                        nextLetter = String.fromCharCode(newCharCode - 26) + nextLetter;
+                        carry = 1;
+                    } else {
+                        nextLetter = String.fromCharCode(newCharCode) + nextLetter;
+                        carry = 0;
+                    }
+                } else {
+                    nextLetter = letter[i] + nextLetter;
+                }
+            }
+
+            if (carry > 0) {
+                nextLetter = 'A' + nextLetter;
+            }
+            return nextLetter;
+        }
+        const nextOffsetColumnLetter = getOffsetColumnLetter(columnLetter, 3);
+
+        // Get selected column data
+        const getColumnResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'Notifikasi'!${columnLetter}3:${nextOffsetColumnLetter}`,
+            });
+        });
+        let columnData = getColumnResponse.data.values || [];
+        const columnRows = columnData.length;
+
+        //Limit slice to send to FE
+        const limitToTake = 30 * page
+        columnData = columnData.slice(-limitToTake);
+        columnData = columnData.reverse()
+
+        //Separate read status
+        let statusData = columnData.map(row => row.slice(3));
+
+        // Send to FE
+        res.status(200).json({ data: columnData, rowCount: columnRows, status: statusData, statusPosition: nextOffsetColumnLetter });
+
+    } catch {
+        res.status(500).json({ error: "Failed to fetch notification data" });
+    }
+
+})
+
+//Notification - mark as read
+app.post('/notification/mark-read', async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const { notifId, statusColPosition } = req.body;
+        if (!notifId) {
+            return res.status(400).json({ message: "Invalid notification id." })
+        }
+
+        const rowNumber = Number(notifId) + 2;
+        const updateStatus = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'Notifikasi'!${statusColPosition}${rowNumber}`,
+                valueInputOption: "RAW",
+                requestBody: {
+                    values: [['yes']]
+                }
+            });
+        });
+
+        if (updateStatus.status === 200) {
+            return res.status(200).json({ message: "Notification status updated successfully." });
+        }
+
+    } catch (error) {
+        return res.status(500).json({ error: "Failed to update notification status" });
+    }
+})
 
 // Ports
 app.listen(3000, () => {

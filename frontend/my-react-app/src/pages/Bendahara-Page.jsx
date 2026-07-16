@@ -27,7 +27,7 @@ function BendaharaPage(props) {
     const whatMenu = props.menu;
 
     // Use Context
-    const { user, logout } = useContext(AuthContext)
+    const { user } = useContext(AuthContext)
     // States
     const [buttonSelect, setButtonSelect] = useState("");
     const [savedPagination, setSavedPagination] = useState(null);

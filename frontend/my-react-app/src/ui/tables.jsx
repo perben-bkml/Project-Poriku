@@ -14,6 +14,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { IconButton, TablePagination, Tooltip } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
+import CheckIcon from '@mui/icons-material/Check';
+import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
 
@@ -605,12 +607,25 @@ export function TableNotif(props) {
                     {props.content.map((data, index) => (
                         <React.Fragment key={index}>
                             <TableRow sx={{ borderTop: index === 0 ? 'none' : '1px solid #e0e0e0', boxShadow: 'none'}}>
-                                <TableCell sx={{padding: '12px 16px 4px 16px', fontWeight: 'bold', fontSize: "15px"}}>
-                                    {data[0]}
+                                <TableCell sx={{padding: '12px 16px 4px 16px', fontWeight: 'bold', fontSize: "15px", color: data[3] === 'no' ? 'black' : '#939090'}}>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span>{data[1]}</span>
+                                        {data[3] === 'no' && (
+                                            <Button
+                                                size="small"
+                                                startIcon={<CheckIcon />}
+                                                onClick={() => props.onMarkAsRead(data[0])}
+                                                sx={{ textTransform: 'none', fontSize: '12px', padding: '0px 8px' }}
+                                            >
+                                                Tandai sudah dibaca
+                                            </Button>
+                                        )}
+                                    </div>
                                 </TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell sx={{padding: '0px 16px 12px 16px', color: '#666'}}>{data[1]}</TableCell>
+                                <TableCell sx={{padding: '0px 16px 12px 16px', color: '#666'}}>{data[2]}</TableCell>
                             </TableRow>
                         </React.Fragment>
                     ))}

@@ -1479,3 +1479,87 @@
         background-position: center top -300px;
     }
 }
+
+/* Pengiriman Dokumen Perubahan Data Penghasilan Pegawai (public page) */
+.dokumen-gaji-page {
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    background-color: #F1F1F1;
+}
+
+.dokumen-gaji-card {
+    width: 100%;
+    max-width: 720px;
+    padding: 30px 35px 35px 35px;
+}
+
+.dokumen-gaji-title {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #00204A;
+    margin-bottom: 25px;
+    line-height: 1.35;
+}
+
+.dokumen-gaji-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.dokumen-gaji-form label {
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #00204A;
+}
+
+.dokumen-gaji-form .type-btn {
+    margin-bottom: 18px;
+    width: 100%;
+}
+
+.dokumen-gaji-file {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+}
+
+.dokumen-gaji-file-error {
+    margin-top: 6px;
+    color: #EB2727;
+    font-size: 0.85rem;
+}
+
+.dokumen-gaji-submit {
+    margin-left: 0;
+}
+
+.dokumen-gaji-success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 60px 35px;
+}
+
+.dokumen-gaji-success h1 {
+    font-size: 1.8rem;
+    color: #00204A;
+    margin: 18px 0 10px 0;
+}
+
+.dokumen-gaji-success p {
+    color: #666;
+}
+
+@media screen and (max-width: 600px) {
+    .dokumen-gaji-title {
+        font-size: 1.25rem;
+    }
+    .dokumen-gaji-card {
+        padding: 20px;
+    }
+}

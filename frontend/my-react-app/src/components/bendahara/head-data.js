@@ -103,5 +103,11 @@ const monthNames = [
 ]
 
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames };
+//For Kirim-Dokumen-Gaji.jsx & Monitor-Perubahan-Gaji.jsx
+const statusPegawaiOptions = ["PNS", "PPPK", "TNI/POLRI"];
+const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Surat", "Nama Tercantum", "Status Pegawai", "Keterangan Surat", "Berkas"];
+const rowsPerPageOptions = [10, 15, 20, 25];
+
+
+export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
 

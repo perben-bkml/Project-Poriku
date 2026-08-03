@@ -9,6 +9,7 @@ import KelolaPengajuan from "../components/bendahara/Kelola-Pengajuan.jsx";
 import AksiPengajuan from "../components/bendahara/Aksi-Pengajuan.jsx";
 import MonitoringDrpp from "../components/bendahara/Monitoring-Drpp.jsx";
 import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
+import MonitorPerubahanGaji from "../components/bendahara/Monitor-Perubahan-Gaji.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -22,6 +23,7 @@ import Avatar from "@mui/material/Avatar";
 import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import MonitorIcon from '@mui/icons-material/Monitor';
+import PaymentsIcon from '@mui/icons-material/Payments';
 
 function BendaharaPage(props) {
     const whatMenu = props.menu;
@@ -39,7 +41,7 @@ function BendaharaPage(props) {
 
 
     // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp"];
+    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
     const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
 
@@ -47,8 +49,7 @@ function BendaharaPage(props) {
     useEffect(() => {
         //Get locally saved storage saved button
         const storedButton = localStorage.getItem("selectedButtonBendahara");
-        // A stored menu can outlive the session that set it, so re-check it against
-        // the current role instead of trusting localStorage
+        // A stored menu can outlive the session that set it, so re-check the role
         if (storedButton && canOpen(storedButton)) {
             setButtonSelect(storedButton);
         } else {
@@ -110,8 +111,7 @@ function BendaharaPage(props) {
     }
     // Rendering Components
     function renderComponent() {
-        // Last line of defence: never render an admin menu for a role="user",
-        // however buttonSelect got its value
+        // Never render an admin menu for a role="user", however buttonSelect got set
         if (!canOpen(buttonSelect)) {
             return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
         }
@@ -136,6 +136,8 @@ function BendaharaPage(props) {
                 return <LihatAntrian />
             case "SPM-bendahara":
                 return <InfoSPMBendahara />
+            case "monitor-data-gaji":
+                return <MonitorPerubahanGaji />
             default:
                 return null;
         }
@@ -176,6 +178,9 @@ function BendaharaPage(props) {
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "monitor-data-gaji" ? "btn-selected" : ""}`} name="monitor-data-gaji" onClick={(e)=> handleButtonClick(e.target)}><PaymentsIcon fontSize="small"/><span className="padd-span-bend"/>Monitor Data Gaji</button>
+                        : null}
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />

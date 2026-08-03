@@ -172,9 +172,8 @@ function getSpreadsheetId(req, type) {
 }
 
 // --- Notifikasi writer --------------------------------------------------------
-// The 'Notifikasi' tab gives each recipient a 4 column block:
-// [id, judul, keterangan, status baca]. Row 1 holds the recipient name, row 2 is
-// a sub header, data starts on row 3.
+// Each recipient owns a 4 column block: [id, judul, keterangan, status baca].
+// Row 1 holds the recipient name, row 2 is a sub header, data starts on row 3.
 
 // Convert a 0-based column index to a sheet column letter (0 -> A, 26 -> AA)
 function getColumnLetter(index) {
@@ -199,12 +198,10 @@ function findNotificationColumnIndex(headerRow, recipientName) {
     return normalized.findIndex(columnName => columnName !== '' && columnName.includes(target));
 }
 
-// Append one notification to a recipient's block.
-// The id MUST equal (sheet row - 2) because /notification/mark-read resolves a
-// notification back to its row with `Number(notifId) + 2`. Writing any other id
-// makes a later "mark as read" click stamp 'yes' onto the wrong notification.
-// Returns {ok:false} for expected misses instead of throwing; real API failures
-// still reject, so callers must wrap this in their own try/catch.
+// Append one notification to a recipient's block. The id MUST equal (sheet row - 2)
+// because /notification/mark-read resolves a row with `Number(notifId) + 2` - any
+// other id makes a later "mark as read" stamp 'yes' onto the wrong notification.
+// Returns {ok:false} for expected misses; real API failures still reject.
 async function writeNotification(spreadsheetId, recipientName, title, description) {
     const recipient = String(recipientName || '').trim();
     if (!spreadsheetId || !recipient || !title) {
@@ -212,7 +209,6 @@ async function writeNotification(spreadsheetId, recipientName, title, descriptio
         return { ok: false, reason: "missing-args" };
     }
 
-    // Find the recipient's block on the header row
     const headerResponse = await withBackoff(async () => {
         return await sheets.spreadsheets.values.get({
             spreadsheetId,
@@ -229,10 +225,8 @@ async function writeNotification(spreadsheetId, recipientName, title, descriptio
     const idColumnLetter = getColumnLetter(columnIndex);
     const statusColumnLetter = getColumnLetter(columnIndex + 3);
 
-    // Find the next free row in this block. The Sheets API trims trailing empty
-    // rows but returns interior ones as [], so `length` is exactly the offset of
-    // the last populated row - a gap in the middle cannot shift the target.
-    // Empty block -> length 0 -> row 3, id 1.
+    // Sheets trims trailing empty rows but returns interior ones as [], so `length`
+    // is the offset of the last populated row - an interior gap cannot shift it.
     const blockResponse = await withBackoff(async () => {
         return await sheets.spreadsheets.values.get({
             spreadsheetId,
@@ -833,35 +827,13 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
 
             //Check if req.file from formData exist
             if (req.file) {
-                // Check if OAuth2 is authenticated, try to load from database if not
-                if (!drive || !oauth2Client.credentials.access_token) {
-                    console.log('No OAuth tokens in memory, attempting to load from database...');
-                    const tokensLoaded = await loadOAuthTokens();
-                    
-                    if (!tokensLoaded) {
-                        return res.status(401).json({ 
-                            error: "Google Drive authentication required. Please authenticate first.",
-                            authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
-                            redirectToAuth: true
-                        });
-                    }
-                }
-
-                // Check if token is expired and refresh if needed
-                try {
-                    if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
-                        console.log('Token expired, refreshing...');
-                        await oauth2Client.refreshAccessToken();
-                        drive = google.drive({ version: "v3", auth: oauth2Client });
-                        
-                        // Save refreshed tokens to database
-                        await saveOAuthTokens(oauth2Client.credentials);
-                    }
-                } catch (refreshError) {
-                    console.error('Token refresh failed:', refreshError);
-                    return res.status(401).json({ 
-                        error: "Authentication expired. Please re-authenticate.",
-                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                // Dedicated uploader account, not the shared /auth/google token
+                const uploaderReady = await ensureGajiDriveReady();
+                if (!uploaderReady) {
+                    console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
+                    return res.status(401).json({
+                        error: "Google Drive authentication required. Please authenticate first.",
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
                         redirectToAuth: true
                     });
                 }
@@ -873,7 +845,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
                 // This is your 'requestBody' for metadata
                 const requestBody = {
                     name: req.file.originalname,
-                    parents: [driveFolderId] // <-- The critical part the example omits
+                    parents: [driveFolderId]
                 };
 
                 // This is your 'media' for the file content
@@ -882,7 +854,7 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
                     body: bufferStream
                 };
 
-                const driveResponse = await drive.files.create({
+                const driveResponse = await driveGaji.files.create({
                     requestBody: requestBody,
                     media: media,
                     fields: 'webViewLink',
@@ -1165,35 +1137,13 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
 
         //Check if req.file from formData exist
         if (req.file) {
-            // Check if OAuth2 is authenticated, try to load from database if not
-            if (!drive || !oauth2Client.credentials.access_token) {
-                console.log('No OAuth tokens in memory, attempting to load from database...');
-                const tokensLoaded = await loadOAuthTokens();
-                
-                if (!tokensLoaded) {
-                    return res.status(401).json({
-                        error: "Google Drive authentication required. Please authenticate first.",
-                        authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
-                        redirectToAuth: true
-                    });
-                }
-            }
-
-            // Check if token is expired and refresh if needed
-            try {
-                if (oauth2Client.credentials.expiry_date && oauth2Client.credentials.expiry_date < Date.now()) {
-                    console.log('Token expired, refreshing...');
-                    await oauth2Client.refreshAccessToken();
-                    drive = google.drive({ version: "v3", auth: oauth2Client });
-                    
-                    // Save refreshed tokens to database
-                    await saveOAuthTokens(oauth2Client.credentials);
-                }
-            } catch (refreshError) {
-                console.error('Token refresh failed:', refreshError);
+            // Dedicated uploader account, not the shared /auth/google token
+            const uploaderReady = await ensureGajiDriveReady();
+            if (!uploaderReady) {
+                console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
                 return res.status(401).json({
-                    error: "Authentication expired. Please re-authenticate.",
-                    authUrl: `${req.protocol}://${req.get('host')}/auth/google`,
+                    error: "Google Drive authentication required. Please authenticate first.",
+                    authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
                     redirectToAuth: true
                 });
             }
@@ -1214,7 +1164,7 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
                 body: bufferStream
             };
 
-            const driveResponse = await drive.files.create({
+            const driveResponse = await driveGaji.files.create({
                 requestBody: requestBody,
                 media: media,
                 fields: 'webViewLink',
@@ -1904,26 +1854,23 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             }
         }
 
-        // Notify the satker when a pajak/anggaran problem is recorded.
-        // Isolated on purpose: the sheet update already succeeded, so a failed
-        // notification must never turn this into an error the admin retries.
+        // Notify the satker. Isolated: the sheet update already succeeded, so a
+        // failed notification must not turn this into an error the admin retries.
         try {
             const antrianRow = allRows[rowIndex - 1] || []; // rowIndex is 1-based
             const satker = String(antrianRow[11] || "").trim();
             const pajak = String(status_pajak || "").trim();
             const anggaran = String(sedia_anggaran || "").trim();
 
-            // Blank means "belum dicek", so it is not a problem
+            // Blank means "belum dicek", not a problem
             const hasProblem = (pajak !== "" && pajak !== "OK") ||
                                (anggaran !== "" && anggaran !== "OK");
-            // Only on an actual change, otherwise re-saving the form (e.g. to fix
-            // a catatan typo) would send the satker a duplicate every time
+            // Only on change, else re-saving the form would send a duplicate
             const changed = pajak !== String(antrianRow[12] || "").trim() ||
                             anggaran !== String(antrianRow[13] || "").trim();
 
             if (hasProblem && changed && satker) {
-                // Catatan goes on its own line, and is dropped entirely when empty
-                // so the satker never sees a dangling "Keterangan:"
+                // Keterangan line is dropped entirely when catatan is empty
                 const keterangan = String(catatan || "").trim();
                 const deskripsi = `No. Antri ${no_antri} - ${getFormattedDate().fullDateTimeVerifFormat.split(' ')[0]}` +
                                   (keterangan ? `\nKeterangan: ${keterangan}` : "");
@@ -2623,8 +2570,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             });
         });
 
-        // Notify the satker when a pungut/setor problem is recorded. Same
-        // isolation as aksi-ajuan: never fail the request over a notification.
+        // Notify the satker. Isolated, same as aksi-ajuan.
         try {
             const drppRow = totalRows[trackedRowNum - 3] || []; // trackedRowNum = i + 3
             const satker = String(drppRow[3] || "").trim();
@@ -3240,6 +3186,273 @@ app.post('/notification/mark-read', async (req, res) => {
         return res.status(500).json({ error: "Failed to update notification status" });
     }
 })
+
+// --- Dokumen Perubahan Data Penghasilan Pegawai -------------------------------
+// Public submission form + bendahara monitoring. Data lives on the 'Dokumen Gaji'
+// tab of the AJUAN spreadsheet, columns A:H starting at row 3:
+// A No | B Tanggal Terima | C Tanggal Surat | D Nomor Surat |
+// E Nama Tercantum | F Status Pegawai | G Keterangan Surat | H Link File
+
+const driveFolderIdDokumenGaji = process.env.DRIVE_FOLDER_ID_DOKUMEN_GAJI;
+
+// Dedicated uploader identity. The shared /auth/google token (oauth_tokens id=1)
+// is overwritten by whoever authorises last, so uploads using it end up owned by
+// an arbitrary account. Reuses the main OAuth app - only the redirect URI differs.
+const oauth2ClientGaji = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID_GAJI || process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET_GAJI || process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI_GAJI
+);
+let driveGaji = null;
+
+async function saveGajiOAuthTokens(tokens) {
+    try {
+        await sql`DELETE FROM oauth_tokens_gaji WHERE id = 1`;
+        await sql`
+            INSERT INTO oauth_tokens_gaji (id, access_token, refresh_token, expiry_date, created_at)
+            VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                expiry_date = EXCLUDED.expiry_date,
+                updated_at = NOW()
+        `;
+        console.log('Dokumen Gaji OAuth tokens saved to database');
+    } catch (error) {
+        console.error('Failed to save Dokumen Gaji OAuth tokens:', error);
+    }
+}
+
+async function loadGajiOAuthTokens() {
+    try {
+        const result = await sql`SELECT * FROM oauth_tokens_gaji WHERE id = 1 LIMIT 1`;
+        if (result.length > 0) {
+            oauth2ClientGaji.setCredentials({
+                access_token: result[0].access_token,
+                refresh_token: result[0].refresh_token,
+                expiry_date: result[0].expiry_date ? Number(result[0].expiry_date) : undefined,
+            });
+            driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+            console.log('Dokumen Gaji OAuth tokens loaded from database');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to load Dokumen Gaji OAuth tokens:', error);
+        return false;
+    }
+}
+
+async function ensureGajiDriveReady() {
+    if (!driveGaji || !oauth2ClientGaji.credentials.access_token) {
+        const loaded = await loadGajiOAuthTokens();
+        if (!loaded) return false;
+    }
+    if (oauth2ClientGaji.credentials.expiry_date && oauth2ClientGaji.credentials.expiry_date < Date.now()) {
+        await oauth2ClientGaji.refreshAccessToken();
+        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        await saveGajiOAuthTokens(oauth2ClientGaji.credentials);
+    }
+    return true;
+}
+
+// Authorise once, signed in as the intended account. Needs full `drive` scope:
+// `drive.file` only ever sees files this app itself created, not existing folders.
+app.get("/auth/google/gaji", (req, res) => {
+    const authUrl = oauth2ClientGaji.generateAuthUrl({
+        access_type: 'offline',
+        scope: [
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/userinfo.profile'
+        ],
+        prompt: 'consent'
+    });
+    res.redirect(authUrl);
+});
+
+app.get("/auth/google/gaji/callback", async (req, res) => {
+    const { code } = req.query;
+    try {
+        const { tokens } = await oauth2ClientGaji.getToken(code);
+        oauth2ClientGaji.setCredentials(tokens);
+        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        await saveGajiOAuthTokens(tokens);
+        res.send("Akun Google untuk Dokumen Gaji berhasil terhubung. Halaman ini boleh ditutup.");
+    } catch (error) {
+        console.error('Dokumen Gaji OAuth callback error:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+});
+
+const DOKUMEN_GAJI_SHEET = "Dokumen Gaji";
+const STATUS_PEGAWAI_OPTIONS = ["PNS", "PPPK", "TNI/POLRI"];
+
+// Separate from the shared `upload` so existing routes keep their unrestricted storage
+const uploadDokumenGaji = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype !== "application/pdf") {
+            return cb(new Error("Berkas harus berformat PDF."));
+        }
+        cb(null, true);
+    }
+});
+
+// Multer rejects by throwing into the middleware chain, which would surface as a 500
+function handleDokumenGajiUpload(req, res, next) {
+    uploadDokumenGaji.single("file")(req, res, (err) => {
+        if (err) {
+            const message = err.code === "LIMIT_FILE_SIZE"
+                ? "Ukuran berkas melebihi 10 MB."
+                : (err.message || "Berkas tidak valid.");
+            return res.status(400).json({ message });
+        }
+        next();
+    });
+}
+
+// Public form submit - intentionally no auth, reached via a private link only
+app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const tanggalSurat = String(req.body.tanggalSurat || "").trim();
+        const nomorSurat = String(req.body.nomorSurat || "").trim();
+        const namaTercantum = String(req.body.namaTercantum || "").trim();
+        const statusPegawai = String(req.body.statusPegawai || "").trim();
+        const keteranganSurat = String(req.body.keteranganSurat || "").trim();
+
+        // Every field is required on the form; re-check here since the endpoint is public
+        if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat) {
+            return res.status(400).json({ message: "Semua kolom wajib diisi." });
+        }
+        if (!STATUS_PEGAWAI_OPTIONS.includes(statusPegawai)) {
+            return res.status(400).json({ message: "Status Pegawai tidak valid." });
+        }
+        if (!req.file) {
+            return res.status(400).json({ message: "Berkas PDF wajib diunggah." });
+        }
+
+        // Fail loudly rather than dropping the file in the Drive root, where it would
+        // inherit no sharing. Read at startup, so restart the server after editing .env.
+        if (!driveFolderIdDokumenGaji) {
+            console.error("DRIVE_FOLDER_ID_DOKUMEN_GAJI belum diatur - upload dibatalkan.");
+            return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
+        }
+
+        const gajiDriveReady = await ensureGajiDriveReady();
+        if (!gajiDriveReady) {
+            console.error("Token Dokumen Gaji belum ada - buka /auth/google/gaji dengan akun yang dituju.");
+            return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
+        }
+
+        // Drive rejects "/" in names, and Status Pegawai "TNI/POLRI" can appear in Keterangan
+        const safePart = (value) => value.replace(/[\\/]/g, "-").trim();
+        const fileName = `${safePart(nomorSurat)} - ${safePart(keteranganSurat)} - ${safePart(namaTercantum)}.pdf`;
+
+        const bufferStream = new stream.Readable();
+        bufferStream.push(req.file.buffer);
+        bufferStream.push(null);
+
+        const driveResponse = await driveGaji.files.create({
+            requestBody: {
+                name: fileName,
+                parents: [driveFolderIdDokumenGaji],
+            },
+            media: { mimeType: req.file.mimetype, body: bufferStream },
+            fields: "webViewLink",
+            supportsAllDrives: true,
+        });
+        const fileLink = driveResponse.data.webViewLink || "";
+
+        // Next free row / running No. Sheets trims trailing empty rows, so the
+        // length of column A is the offset of the last populated row from row 3.
+        const existingResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${DOKUMEN_GAJI_SHEET}'!A3:A`,
+            });
+        });
+        const existingRows = existingResponse.data.values || [];
+        const targetRow = 3 + existingRows.length;
+        const nextId = existingRows.length + 1;
+
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'${DOKUMEN_GAJI_SHEET}'!A${targetRow}:H${targetRow}`,
+                valueInputOption: "USER_ENTERED",
+                requestBody: {
+                    values: [[
+                        nextId,
+                        getFormattedDate().fullDateTimeFormat,
+                        tanggalSurat,
+                        nomorSurat,
+                        namaTercantum,
+                        statusPegawai,
+                        keteranganSurat,
+                        fileLink,
+                    ]]
+                }
+            });
+        });
+
+        return res.status(200).json({ message: "Dokumen Berhasil Dikirim" });
+
+    } catch (error) {
+        console.error("Error in /dokumen-gaji/kirim:", error);
+        return res.status(500).json({ message: "Pengiriman Gagal, Coba Lagi" });
+    }
+});
+
+//Monitor Data Gaji component handler
+app.get("/bendahara/monitor-perubahan-gaji", async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const { page = 1, limit = 10, month = "", statusPegawai = "" } = req.query;
+
+        const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+        const rowsPerPage = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 25);
+
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${DOKUMEN_GAJI_SHEET}'!A3:H`,
+            });
+        });
+        const rows = response.data.values || [];
+
+        // Pad to 8 cells so the table never sees undefined
+        let data = rows
+            .filter(row => row && row.some(cell => String(cell || "").trim() !== ""))
+            .map(row => Array.from({ length: 8 }, (_, i) => row[i] || ""));
+
+        // Filter on Tanggal Terima (column B) - the date the document was received
+        if (month) {
+            data = data.filter(row => {
+                const received = String(row[1] || "");
+                // Stored as "yyyy-mm-dd hh:mm:ss"
+                return received.slice(5, 7) === month;
+            });
+        }
+        if (statusPegawai) {
+            data = data.filter(row => String(row[5] || "").trim() === statusPegawai);
+        }
+
+        // Newest first
+        data.reverse();
+
+        const totalRows = data.length;
+        const startIndex = (pageNumber - 1) * rowsPerPage;
+        const pagedData = data.slice(startIndex, startIndex + rowsPerPage);
+
+        return res.status(200).json({ data: pagedData, totalRows, rowsPerPage });
+
+    } catch (error) {
+        console.error("Error in /bendahara/monitor-perubahan-gaji:", error);
+        return res.status(500).json({ error: "Failed to fetch dokumen gaji data" });
+    }
+});
 
 // Ports
 app.listen(3000, () => {

@@ -567,6 +567,47 @@ export function TableInfoAntri(props) {
     )
 }
 
+// Monitor Data Gaji - last column renders as a Drive link instead of raw text
+export function TableDokumenGaji(props) {
+    return(
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <Table>
+                <TableHead>
+                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
+                        {props.header.map((data, index) => (
+                            <TableCell key={index}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                >{data}</TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {props.content.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={props.header.length} align="center" sx={{color: "#666"}}>
+                                Tidak ada data.
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        props.content.map((row, index) => (
+                            <TableRow key={index} hover>
+                                {row.slice(0, 7).map((cell, cellIndex) => (
+                                    <TableCell key={cellIndex}>{cell}</TableCell>
+                                ))}
+                                <TableCell>
+                                    {row[7] ? (
+                                        <a href={row[7]} target="_blank" rel="noopener noreferrer">Lihat Berkas</a>
+                                    ) : "-"}
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    )}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}
+
 export function TableInfoPJK(props) {
     return(
         <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
@@ -637,7 +678,7 @@ export function TableNotif(props) {
                                 </TableCell>
                             </TableRow>
                             <TableRow>
-                                {/* pre-line keeps the "Keterangan:" line break that the sheet stores */}
+                                {/* pre-line keeps the "Keterangan:" line break stored in the sheet */}
                                 <TableCell sx={{padding: '0px 16px 12px 16px', color: '#666', whiteSpace: 'pre-line'}}>{data[2]}</TableCell>
                             </TableRow>
                         </Fragment>

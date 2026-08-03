@@ -79,8 +79,8 @@ export default function AksiDrpp(props) {
 
     useEffect(() => {
         fetchAntrianTable();
-        // Sheets trims trailing empty cells, so these can be undefined. Default to ""
-        // or a controlled input would flip to uncontrolled and stop clearing properly.
+        // Sheets trims trailing empty cells - default to "" so the controlled
+        // inputs below never flip to uncontrolled
         setPajakStatus({
             pungutan: props.fulldata[7] || "",
             setoran: props.fulldata[8] || "",
@@ -182,8 +182,8 @@ export default function AksiDrpp(props) {
                         ))}
                     </select>
                     <label htmlFor="catatan">Catatan</label>
-                    {/* Controlled, like the selects above. With defaultValue the DOM
-                        held the value and an erased field could fall out of sync with state */}
+                    {/* Controlled: with defaultValue the DOM held the value and an
+                        erased field could fall out of sync with state */}
                     <textarea id="catatan" className="type-btn span-row" name="catatan" value={pajakStatus.catatan} onChange={e => handleInputChange(e.target)}/>
                 </div>
                 <div className='form-submit'>

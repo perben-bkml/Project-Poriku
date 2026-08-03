@@ -34,8 +34,7 @@ function VerifikasiPage(props) {
     useEffect(() => {
         //Get locally saved storage saved button
         const storedButton = localStorage.getItem("selectedButtonVerif");
-        // A stored menu can outlive the session that set it, so re-check it against
-        // the current role instead of trusting localStorage
+        // A stored menu can outlive the session that set it, so re-check the role
         if (storedButton && canOpen(storedButton)) {
             setButtonSelect(storedButton);
         } else {
@@ -80,8 +79,7 @@ function VerifikasiPage(props) {
 
     // Rendering Components
     function renderComponent() {
-        // Last line of defence: never render an admin menu for a role="user",
-        // however buttonSelect got its value
+        // Never render an admin menu for a role="user", however buttonSelect got set
         if (!canOpen(buttonSelect)) {
             return <MonitorPJK />;
         }

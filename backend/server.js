@@ -171,6 +171,93 @@ function getSpreadsheetId(req, type) {
     return process.env[envKey] || process.env[`SPREADSHEET_ID_${type.toUpperCase()}`];
 }
 
+// --- Notifikasi writer --------------------------------------------------------
+// The 'Notifikasi' tab gives each recipient a 4 column block:
+// [id, judul, keterangan, status baca]. Row 1 holds the recipient name, row 2 is
+// a sub header, data starts on row 3.
+
+// Convert a 0-based column index to a sheet column letter (0 -> A, 26 -> AA)
+function getColumnLetter(index) {
+    let letter = '';
+    let tempIndex = index;
+    while (tempIndex >= 0) {
+        letter = String.fromCharCode((tempIndex % 26) + 65) + letter;
+        tempIndex = Math.floor(tempIndex / 26) - 1;
+    }
+    return letter;
+}
+
+// Locate a recipient's block on row 1. Exact match first, then the substring
+// match GET /notification uses - guards against prefix collisions such as
+// "Biro Umum" vs "Biro Umum dan Keuangan".
+function findNotificationColumnIndex(headerRow, recipientName) {
+    const target = String(recipientName || '').trim().toLowerCase();
+    if (!target) return -1;
+    const normalized = headerRow.map(columnName => String(columnName || '').trim().toLowerCase());
+    const exact = normalized.findIndex(columnName => columnName === target);
+    if (exact !== -1) return exact;
+    return normalized.findIndex(columnName => columnName !== '' && columnName.includes(target));
+}
+
+// Append one notification to a recipient's block.
+// The id MUST equal (sheet row - 2) because /notification/mark-read resolves a
+// notification back to its row with `Number(notifId) + 2`. Writing any other id
+// makes a later "mark as read" click stamp 'yes' onto the wrong notification.
+// Returns {ok:false} for expected misses instead of throwing; real API failures
+// still reject, so callers must wrap this in their own try/catch.
+async function writeNotification(spreadsheetId, recipientName, title, description) {
+    const recipient = String(recipientName || '').trim();
+    if (!spreadsheetId || !recipient || !title) {
+        console.warn("[notifikasi] dilewati, data tidak lengkap:", { recipient, title });
+        return { ok: false, reason: "missing-args" };
+    }
+
+    // Find the recipient's block on the header row
+    const headerResponse = await withBackoff(async () => {
+        return await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: "'Notifikasi'!A1:CB1",
+        });
+    });
+    const headerRow = headerResponse.data.values?.[0] || [];
+    const columnIndex = findNotificationColumnIndex(headerRow, recipient);
+    if (columnIndex === -1) {
+        console.warn(`[notifikasi] kolom tidak ditemukan untuk: "${recipient}"`);
+        return { ok: false, reason: "recipient-not-found" };
+    }
+
+    const idColumnLetter = getColumnLetter(columnIndex);
+    const statusColumnLetter = getColumnLetter(columnIndex + 3);
+
+    // Find the next free row in this block. The Sheets API trims trailing empty
+    // rows but returns interior ones as [], so `length` is exactly the offset of
+    // the last populated row - a gap in the middle cannot shift the target.
+    // Empty block -> length 0 -> row 3, id 1.
+    const blockResponse = await withBackoff(async () => {
+        return await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `'Notifikasi'!${idColumnLetter}3:${statusColumnLetter}`,
+        });
+    });
+    const blockRows = blockResponse.data.values || [];
+    const newRow = 3 + blockRows.length;
+    const newId = newRow - 2;
+
+    await withBackoff(async () => {
+        return await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'Notifikasi'!${idColumnLetter}${newRow}:${statusColumnLetter}${newRow}`,
+            valueInputOption: "RAW",
+            requestBody: {
+                values: [[newId, title, description || "", 'no']]
+            }
+        });
+    });
+
+    console.log(`[notifikasi] "${recipient}" <- id ${newId} baris ${newRow}: ${title}`);
+    return { ok: true, id: newId, row: newRow };
+}
+
 // Gdrive API Setup (will be initialized with OAuth2 tokens)
 let drive = null;
 const driveFolderId = process.env.DRIVE_FOLDER_ID_AJUAN;
@@ -1602,10 +1689,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm, catatan} = updatedAntriData;
 
         //Handling Write Antrian Sheet update with backoff
+        // A:N so the pre-update satker (L) and pajak/anggaran status (M/N) are
+        // available for the notification check below - no extra API call.
         const getAntrianResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: "'Write Antrian'!A:A"
+                range: "'Write Antrian'!A:N"
             });
         });
 
@@ -1813,6 +1902,41 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                     });
                 });
             }
+        }
+
+        // Notify the satker when a pajak/anggaran problem is recorded.
+        // Isolated on purpose: the sheet update already succeeded, so a failed
+        // notification must never turn this into an error the admin retries.
+        try {
+            const antrianRow = allRows[rowIndex - 1] || []; // rowIndex is 1-based
+            const satker = String(antrianRow[11] || "").trim();
+            const pajak = String(status_pajak || "").trim();
+            const anggaran = String(sedia_anggaran || "").trim();
+
+            // Blank means "belum dicek", so it is not a problem
+            const hasProblem = (pajak !== "" && pajak !== "OK") ||
+                               (anggaran !== "" && anggaran !== "OK");
+            // Only on an actual change, otherwise re-saving the form (e.g. to fix
+            // a catatan typo) would send the satker a duplicate every time
+            const changed = pajak !== String(antrianRow[12] || "").trim() ||
+                            anggaran !== String(antrianRow[13] || "").trim();
+
+            if (hasProblem && changed && satker) {
+                // Catatan goes on its own line, and is dropped entirely when empty
+                // so the satker never sees a dangling "Keterangan:"
+                const keterangan = String(catatan || "").trim();
+                const deskripsi = `No. Antri ${no_antri} - ${getFormattedDate().fullDateTimeVerifFormat.split(' ')[0]}` +
+                                  (keterangan ? `\nKeterangan: ${keterangan}` : "");
+
+                await writeNotification(
+                    spreadsheetId,
+                    satker,
+                    "Ada Masalah di Pajak/Anggaran",
+                    deskripsi
+                );
+            }
+        } catch (notifError) {
+            console.error("Gagal menulis notifikasi (aksi-ajuan):", notifError);
         }
 
         res.json({ message: "Data updated successfully!" });
@@ -2412,7 +2536,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
                 ranges: [
-                    "'Monitoring DRPP'!A3:A",   // Range to update DRPP status
+                    "'Monitoring DRPP'!A3:I",   // Range to update DRPP status. A3:I so satker (D) and the pre-update pungut/setor (H/I) are available for the notification check
                     "'Write Table'!X:X",        // Range to update colored row status
                     "'Monitoring DRPP'!F3:F"    // Range to get SPM numbers
                 ],
@@ -2498,6 +2622,35 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
                 }
             });
         });
+
+        // Notify the satker when a pungut/setor problem is recorded. Same
+        // isolation as aksi-ajuan: never fail the request over a notification.
+        try {
+            const drppRow = totalRows[trackedRowNum - 3] || []; // trackedRowNum = i + 3
+            const satker = String(drppRow[3] || "").trim();
+            const pungutan = String(pajakStatus?.pungutan || "").trim();
+            const setoran = String(pajakStatus?.setoran || "").trim();
+
+            const hasProblem = pungutan === "Ada Masalah" || setoran === "Ada Masalah";
+            // Only on an actual change, to avoid duplicates on re-save
+            const changed = pungutan !== String(drppRow[7] || "").trim() ||
+                            setoran !== String(drppRow[8] || "").trim();
+
+            if (hasProblem && changed && satker) {
+                const keterangan = String(pajakStatus?.catatan || "").trim();
+                const deskripsi = `DRPP ${numbers.data} - ${getFormattedDate().fullDateTimeVerifFormat.split(' ')[0]}` +
+                                  (keterangan ? `\nKeterangan: ${keterangan}` : "");
+
+                await writeNotification(
+                    spreadsheetId,
+                    satker,
+                    "Ada Masalah di Pungut/Setor Pajak",
+                    deskripsi
+                );
+            }
+        } catch (notifError) {
+            console.error("Gagal menulis notifikasi (aksi-drpp):", notifError);
+        }
 
         res.status(200).json({ message: "Status pajak berhasil diperbarui." });
 

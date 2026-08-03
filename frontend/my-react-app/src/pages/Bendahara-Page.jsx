@@ -10,6 +10,7 @@ import AksiPengajuan from "../components/bendahara/Aksi-Pengajuan.jsx";
 import MonitoringDrpp from "../components/bendahara/Monitoring-Drpp.jsx";
 import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
 import MonitorPerubahanGaji from "../components/bendahara/Monitor-Perubahan-Gaji.jsx";
+import KirimDokumenGaji from "../components/bendahara/Kirim-Dokumen-Gaji.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -41,7 +42,7 @@ function BendaharaPage(props) {
 
 
     // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji"];
+    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji", "input-dokumen-gaji"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
     const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
 
@@ -137,7 +138,9 @@ function BendaharaPage(props) {
             case "SPM-bendahara":
                 return <InfoSPMBendahara />
             case "monitor-data-gaji":
-                return <MonitorPerubahanGaji />
+                return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} />
+            case "input-dokumen-gaji":
+                return <KirimDokumenGaji changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:
                 return null;
         }

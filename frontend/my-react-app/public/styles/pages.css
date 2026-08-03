@@ -1480,34 +1480,12 @@
     }
 }
 
-/* Pengiriman Dokumen Perubahan Data Penghasilan Pegawai (public page) */
-.dokumen-gaji-page {
-    min-height: 100vh;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 40px 20px;
-    background-color: #F1F1F1;
-}
-
-.dokumen-gaji-card {
-    width: 100%;
-    max-width: 720px;
-    padding: 30px 35px 35px 35px;
-}
-
-.dokumen-gaji-title {
-    font-size: 1.6rem;
-    font-weight: 600;
-    color: #00204A;
-    margin-bottom: 25px;
-    line-height: 1.35;
-}
-
+/* Kirim Dokumen Gaji - form sub-component inside the bendahara menu */
 .dokumen-gaji-form {
     display: flex;
     flex-direction: column;
+    max-width: 620px;
+    padding: 10px 35px;
 }
 
 .dokumen-gaji-form label {
@@ -1533,33 +1511,6 @@
     font-size: 0.85rem;
 }
 
-.dokumen-gaji-submit {
+.dokumen-gaji-form .form-submit {
     margin-left: 0;
-}
-
-.dokumen-gaji-success {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 60px 35px;
-}
-
-.dokumen-gaji-success h1 {
-    font-size: 1.8rem;
-    color: #00204A;
-    margin: 18px 0 10px 0;
-}
-
-.dokumen-gaji-success p {
-    color: #666;
-}
-
-@media screen and (max-width: 600px) {
-    .dokumen-gaji-title {
-        font-size: 1.25rem;
-    }
-    .dokumen-gaji-card {
-        padding: 20px;
-    }
 }

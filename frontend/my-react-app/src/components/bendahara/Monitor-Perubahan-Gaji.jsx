@@ -5,10 +5,12 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import {monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions} from "./head-data.js";
 //Import Table
 import {TableDokumenGaji} from "../../ui/tables.jsx";
+import {SubmitButton} from "../../ui/buttons.jsx";
+import {PopupAlert} from "../../ui/Popup.jsx";
 //Import Pagination
 import Pagination from '@mui/material/Pagination';
 
-export default function MonitorPerubahanGaji() {
+export default function MonitorPerubahanGaji(props) {
     //State
     const [tableData, setTableData] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +24,15 @@ export default function MonitorPerubahanGaji() {
         const saved = localStorage.getItem('monitor-perubahan-gaji-filter');
         return saved ? JSON.parse(saved) : {month: "", statusPegawai: ""};
     });
+    const [isAlert, setIsAlert] = useState(false);
+
+    // Success message handed over by Kirim-Dokumen-Gaji before it unmounted
+    useEffect(() => {
+        if (props.alertMessage) {
+            setIsAlert(true);
+            setTimeout(() => setIsAlert(false), 5000);
+        }
+    }, [props.alertMessage]);
 
     //Fetch Data
     async function fetchDokumenGaji(page, limit, filter) {
@@ -79,7 +90,7 @@ export default function MonitorPerubahanGaji() {
 
     return (
         <div>
-            <div className="pengajuan-filter filter-monitoring">
+            <div className="pengajuan-filter filter-monitoring" style={{marginBottom: '50px'}}>
                 <h3 className="wide-card-title">Filter</h3>
                 <label className="filter-label2">Bulan:</label>
                 <div className="filter-select filter-select2">
@@ -130,7 +141,12 @@ export default function MonitorPerubahanGaji() {
                     />
                     <div></div>
                 </div>
+                <div className='form-submit'>
+                    <SubmitButton value='Input Data' name='input-dokumen-gaji'
+                                  onClick={() => props.changeComponent('input-dokumen-gaji')}/>
+                </div>
             </div>
+            {isAlert && <PopupAlert isAlert={isAlert} severity="success" message={props.alertMessage}/>}
         </div>
     );
 }

@@ -3188,7 +3188,7 @@ app.post('/notification/mark-read', async (req, res) => {
 })
 
 // --- Dokumen Perubahan Data Penghasilan Pegawai -------------------------------
-// Public submission form + bendahara monitoring. Data lives on the 'Dokumen Gaji'
+// Submission form + monitoring, both under the bendahara menu. Data lives on the 'Dokumen Gaji'
 // tab of the AJUAN spreadsheet, columns A:H starting at row 3:
 // A No | B Tanggal Terima | C Tanggal Surat | D Nomor Surat |
 // E Nama Tercantum | F Status Pegawai | G Keterangan Surat | H Link File
@@ -3312,7 +3312,7 @@ function handleDokumenGajiUpload(req, res, next) {
     });
 }
 
-// Public form submit - intentionally no auth, reached via a private link only
+// Submit handler for the Kirim Dokumen Gaji form
 app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
@@ -3322,7 +3322,7 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
         const statusPegawai = String(req.body.statusPegawai || "").trim();
         const keteranganSurat = String(req.body.keteranganSurat || "").trim();
 
-        // Every field is required on the form; re-check here since the endpoint is public
+        // Re-check server side - the route has no auth of its own
         if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat) {
             return res.status(400).json({ message: "Semua kolom wajib diisi." });
         }

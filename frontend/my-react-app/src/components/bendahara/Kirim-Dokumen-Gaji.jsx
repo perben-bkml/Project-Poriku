@@ -1,16 +1,14 @@
-import {useEffect, useState} from 'react';
-import apiClient from "../lib/apiClient";
-//Import Material UI
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import {useState} from 'react';
+import apiClient from "../../lib/apiClient";
 //Import Components
-import {LoadingScreen} from "../ui/loading.jsx";
-import {PopupAlert} from "../ui/Popup.jsx";
-import {statusPegawaiOptions} from "../components/bendahara/head-data.js";
+import {LoadingScreen} from "../../ui/loading.jsx";
+import {PopupAlert} from "../../ui/Popup.jsx";
+import {SubmitButton} from "../../ui/buttons.jsx";
+import {statusPegawaiOptions} from "./head-data.js";
 
 const MAX_FILE_MB = 10;
 
-// Public page, reached by private link only - deliberately not linked from the navbar
-export default function KirimDokumenGaji() {
+export default function KirimDokumenGaji(props) {
     //State
     const [formData, setFormData] = useState({
         tanggalSurat: "",
@@ -22,16 +20,11 @@ export default function KirimDokumenGaji() {
     const [file, setFile] = useState(null);
     const [fileError, setFileError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [isSuccess, setIsSuccess] = useState(false);
-    const [alertMessage, setAlertMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
 
-    // Enable scrolling for this page
-    useEffect(() => {
-        document.body.classList.add('scrollable-page');
-        return () => {
-            document.body.classList.remove('scrollable-page');
-        };
-    }, []);
+    function backToMonitor() {
+        props.changeComponent("monitor-data-gaji");
+    }
 
     //Handle text/select changes
     function handleInputChange(event) {
@@ -81,35 +74,25 @@ export default function KirimDokumenGaji() {
                 headers: {'Content-Type': 'multipart/form-data'},
             });
             if (response.status === 200) {
-                setIsSuccess(true);
+                // Hand the message to Bendahara-Page so it survives this unmount,
+                // then go straight back to the monitor
+                props.alertMessage("Dokumen Berhasil Dikirim");
+                backToMonitor();
             }
         } catch (error) {
             console.log("Gagal mengirim dokumen.", error);
             // Form state left untouched so the user does not retype anything
-            setAlertMessage("Pengiriman Gagal, Coba Lagi");
-            setTimeout(() => setAlertMessage(""), 5000);
+            setErrorMessage("Pengiriman Gagal, Coba Lagi");
+            setTimeout(() => setErrorMessage(""), 5000);
         } finally {
             setIsLoading(false);
         }
     }
 
-    // Success view replaces the form entirely
-    if (isSuccess) {
-        return (
-            <div className="dokumen-gaji-page">
-                <div className="bg-card dokumen-gaji-card dokumen-gaji-success">
-                    <CheckCircleIcon sx={{color: "green", height: "80px", width: "80px"}}/>
-                    <h1>Dokumen Berhasil Dikirim</h1>
-                    <p>Terima kasih. Dokumen anda telah kami terima dan akan segera diproses.</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="dokumen-gaji-page">
-            <div className="bg-card dokumen-gaji-card">
-                <h1 className="dokumen-gaji-title">Pengiriman Dokumen Perubahan Data Penghasilan Pegawai</h1>
+        <div>
+            <div className="bg-card aksi-content">
+                <h2 className="aksi-content-title">Pengiriman Dokumen Perubahan Data Penghasilan Pegawai</h2>
                 <form className="dokumen-gaji-form" onSubmit={handleSubmit}>
                     <label htmlFor="tanggalSurat">Tanggal Surat</label>
                     <input type="date" id="tanggalSurat" name="tanggalSurat" className="type-btn"
@@ -145,13 +128,15 @@ export default function KirimDokumenGaji() {
 
                     {/* Native submit, not SubmitButton (type="button"), so the browser
                         runs the `required` validation */}
-                    <div className="form-submit dokumen-gaji-submit">
+                    <div className="form-submit">
                         <input type="submit" value="Kirim Dokumen" name="submit-dokumen-gaji"/>
+                        <SubmitButton value="Kembali" name="kembali-dokumen-gaji" onClick={backToMonitor}/>
                     </div>
                 </form>
             </div>
             {isLoading && <LoadingScreen/>}
-            <PopupAlert isAlert={!!alertMessage} severity="error" message={alertMessage}/>
+            {/* Success is reported by Monitor-Perubahan-Gaji after the redirect */}
+            {errorMessage && <PopupAlert isAlert={!!errorMessage} severity="error" message={errorMessage}/>}
         </div>
     );
 }

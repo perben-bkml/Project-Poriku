@@ -25,14 +25,21 @@ function VerifikasiPage(props) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
 
+    // Menus a role="user" must never reach
+    const ADMIN_ONLY_MENUS = ["kelola-PJK", "form-verifikasi"];
+    const isAdmin = user.role === "admin" || user.role === "master admin";
+    const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
+
     // Set buttonSelect when page renders
     useEffect(() => {
         //Get locally saved storage saved button
         const storedButton = localStorage.getItem("selectedButtonVerif");
-        if (storedButton) {
+        // A stored menu can outlive the session that set it, so re-check it against
+        // the current role instead of trusting localStorage
+        if (storedButton && canOpen(storedButton)) {
             setButtonSelect(storedButton);
         } else {
-            if (user.role === "admin" || user.role === "master admin") {
+            if (isAdmin) {
                 setButtonSelect("kelola-PJK");
             }
             if (user.role === "user") {
@@ -73,6 +80,11 @@ function VerifikasiPage(props) {
 
     // Rendering Components
     function renderComponent() {
+        // Last line of defence: never render an admin menu for a role="user",
+        // however buttonSelect got its value
+        if (!canOpen(buttonSelect)) {
+            return <MonitorPJK />;
+        }
         switch (buttonSelect) {
             case "kelola-PJK":
                 return <KelolaPJK />;

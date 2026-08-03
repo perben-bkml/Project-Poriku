@@ -38,14 +38,21 @@ function BendaharaPage(props) {
     const [drppData, setDrppData] = useState([]);
 
 
+    // Menus a role="user" must never reach
+    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp"];
+    const isAdmin = user.role === "admin" || user.role === "master admin";
+    const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
+
     // Set buttonSelect when page renders
     useEffect(() => {
         //Get locally saved storage saved button
         const storedButton = localStorage.getItem("selectedButtonBendahara");
-        if (storedButton) {
+        // A stored menu can outlive the session that set it, so re-check it against
+        // the current role instead of trusting localStorage
+        if (storedButton && canOpen(storedButton)) {
             setButtonSelect(storedButton);
         } else {
-            if (user.role === "admin" || user.role === "master admin") {
+            if (isAdmin) {
                 setButtonSelect("kelola-pengajuan");
             }
             if (user.role === "user") {
@@ -103,6 +110,11 @@ function BendaharaPage(props) {
     }
     // Rendering Components
     function renderComponent() {
+        // Last line of defence: never render an admin menu for a role="user",
+        // however buttonSelect got its value
+        if (!canOpen(buttonSelect)) {
+            return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
+        }
         switch (buttonSelect) {
             case "kelola-pengajuan":
                 return <KelolaPengajuan changeComponent={setButtonSelect} aksiData={setAksiData} />

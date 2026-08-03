@@ -1,4 +1,4 @@
-import React, {useState, Fragment, useEffect, useMemo, useRef} from 'react';
+import {useState, Fragment, useEffect, useMemo, useRef} from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -14,6 +14,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { IconButton, TablePagination, Tooltip } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
+import CheckIcon from '@mui/icons-material/Check';
+import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
 
@@ -594,4 +596,54 @@ export function TableInfoPJK(props) {
         </TableContainer>
     )
 
+}
+
+export function TableNotif(props) {
+    return(
+        <TableContainer sx={{border: '1px solid #e0e0e0', boxShadow: 'none'}}>
+            <Table sx={{'& th, & td': { borderBottom: 'none' }}}>
+
+                <TableBody>
+                    {props.content.map((data, index) => (
+                        // Title and description share one row so the button can sit
+                        // vertically centred against both lines instead of the title alone
+                        <TableRow key={index} sx={{ borderTop: index === 0 ? 'none' : '1px solid #e0e0e0', boxShadow: 'none'}}>
+                            <TableCell sx={{padding: '12px 16px'}}>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '15px', color: data[3] === 'no' ? 'black' : '#939090' }}>{data[1]}</div>
+                                        {/* pre-line keeps the "Keterangan:" line break that the sheet stores */}
+                                        <div style={{ color: '#666', marginTop: '2px', whiteSpace: 'pre-line' }}>{data[2]}</div>
+                                    </div>
+                                    {data[3] === 'no' && (
+                                        <Button
+                                            size="small"
+                                            startIcon={<CheckIcon />}
+                                            onClick={() => props.onMarkAsRead(data[0])}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontSize: '10px',
+                                                padding: '1px 6px',
+                                                minWidth: 0,
+                                                lineHeight: 1.4,
+                                                flexShrink: 0, // keep the label on one line next to a long title
+                                                '& .MuiButton-startIcon': {
+                                                    marginLeft: 0,
+                                                    marginRight: '3px',
+                                                    '& > *:first-of-type': { fontSize: '13px' },
+                                                },
+                                            }}
+                                        >
+                                            Tandai sudah dibaca
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
 }

@@ -290,7 +290,7 @@ export default function Realisasi() {
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '30px'}}>
                     <h2 className="wide-card-title" style={{paddingTop: '20px'}}>Anggaran per Unit Kerja</h2>
                     <div style={{marginTop: '20px', textAlign: 'right'}}>
-                        <input type="button" value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
+                        <input className="btn-aksi btn-aksi-wide" type="button" value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
                                onClick={fetchRealisasi} style={{cursor: isLoading ? 'wait' : 'pointer'}}/>
                         {Object.keys(draftBudget).length > 0 &&
                             <p style={{margin: '5px 0 0', fontSize: '0.8rem', color: '#BD1404'}}>
@@ -306,7 +306,7 @@ export default function Realisasi() {
             <div className="bg-card" style={{paddingBottom: '25px'}}>
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '30px', paddingBottom: '15px'}}>
                     <h2 className="wide-card-title" style={{paddingTop: '20px'}}>Realisasi Anggaran</h2>
-                    <input type="button" style={{marginTop: '20px', cursor: 'pointer'}}
+                    <input className="btn-submit btn-submit-wide" type="button" style={{marginTop: '20px', cursor: 'pointer'}}
                            value={hideZeroBudget ? "Tampilkan Semua Unit Kerja" : "Sembunyikan Unit Kerja Tanpa Anggaran"}
                            onClick={toggleHideZeroBudget}/>
                 </div>

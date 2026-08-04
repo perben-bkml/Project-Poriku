@@ -740,7 +740,7 @@ export function TableAnggaran({funds, budgets, draftBudget, rowStatus, onDraftCh
                                 ))}
                                 <TableCell>{formatRupiah(total)}</TableCell>
                                 <TableCell>
-                                    <input type="button" value={isRowSaving ? "Menyimpan..." : "Simpan"}
+                                    <input className="btn-aksi" type="button" value={isRowSaving ? "Menyimpan..." : "Simpan"}
                                            disabled={!isDirty || isRowSaving}
                                            onClick={() => onSave(budget)}
                                            style={{cursor: isDirty && !isRowSaving ? 'pointer' : 'not-allowed', opacity: isDirty ? 1 : 0.5}}/>

@@ -486,6 +486,60 @@
     grid-template-rows: repeat(2, 1fr);
 }
 
+/* Home lite realisasi dashboard */
+.dashboard-realisasi {
+    width: 80%;
+    background-color: white;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 15px;
+    padding: 20px 25px;
+    box-sizing: border-box;
+}
+
+.dashboard-realisasi-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+    color: #00204A;
+}
+
+.dashboard-realisasi-note {
+    margin-left: auto;
+    font-style: italic;
+    font-size: 0.9rem;
+    color: #7A7A7A;
+}
+
+.dashboard-realisasi-filter select {
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 3px 6px;
+    border-radius: 8px;
+    border: 1px solid rgb(214, 214, 214);
+}
+
+.dashboard-realisasi-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 25px;
+    flex-wrap: wrap;
+}
+
+.dashboard-realisasi-body > *:last-child {
+    flex: 1;
+    min-width: 260px;
+}
+
+.dashboard-realisasi-empty {
+    color: #00449C;
+    font-size: 1rem;
+    text-align: center;
+    padding: 30px 0;
+}
+
 .dashboard-pjk-card {
     display: flex;
     flex-direction: column;
@@ -948,6 +1002,17 @@
 }
 
 @media screen and (max-width: 1400px) {
+    /* Realisasi note drops under the filter once the row gets tight */
+    .dashboard-realisasi {
+        width: 90%;
+    }
+
+    .dashboard-realisasi-note {
+        margin-left: 0;
+        width: 100%;
+        font-size: 0.8rem;
+    }
+
     /* Sizing Landing Page*/
 
     .landing-title h1 {
@@ -1443,6 +1508,18 @@
 
     .pagination {
         transform: scale(0.9);
+    }
+}
+
+/* Home Page - ribbon background on laptop widths
+   The ribbon SVG carries width/height="100%" and only a viewBox, so it has no
+   intrinsic pixel size and the browser renders it "contain": on a 1440px wide
+   screen that is barely 414px tall, and the welcome block (year selector, role
+   text) runs past its bottom edge. Pinning a wider render makes it tall enough to
+   sit behind that block while still clearing the dashboard row underneath. */
+@media screen and (max-width: 1600px) {
+    .home-content {
+        background-size: 1650px auto;
     }
 }
 

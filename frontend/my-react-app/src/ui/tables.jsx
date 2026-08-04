@@ -834,3 +834,45 @@ export function TableRealisasiJenisBelanja({jenisBelanja, rows, totals}) {
         </TableContainer>
     )
 }
+
+// Home.jsx - lite realisasi dashboard
+export function TableRealisasiLite({anggaran, belanja, sisa, persen}) {
+    const baris = [
+        {label: "Anggaran", value: formatRupiah(anggaran)},
+        {label: "Belanja", value: formatRupiah(belanja)},
+        {label: "Sisa", value: formatRupiah(sisa), warn: sisa < 0},
+        {label: "% Realisasi", value: persen, bold: true},
+    ];
+
+    return (
+        <TableContainer sx={{maxWidth: "100%", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <Table size="small">
+                <TableBody>
+                    {baris.map(row => (
+                        <TableRow key={row.label} hover>
+                            <TableCell sx={{
+                                fontSize: "1.05rem",
+                                fontWeight: 550,
+                                color: REALISASI_HEADER_BLUE,
+                                width: "40%",
+                                // Back to the MUI small default on laptop screens
+                                "@media (max-width: 1600px)": {fontSize: "0.875rem"},
+                            }}>
+                                {row.label}
+                            </TableCell>
+                            <TableCell align="right"
+                                       sx={{
+                                           fontSize: row.bold ? "1.2rem" : "1.05rem",
+                                           color: row.warn ? "#BD1404" : "inherit",
+                                           fontWeight: row.bold ? 700 : "inherit",
+                                           "@media (max-width: 1600px)": {fontSize: "0.875rem"},
+                                       }}>
+                                {row.value}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}

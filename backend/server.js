@@ -3614,6 +3614,13 @@ function addToFundTotals(target, fund, nominal) {
 // and who still has to fill a ceiling in. Pass ?detail=1 to also get the raw SPM rows.
 app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
     try {
+        let viewer;
+        try {
+            viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
+        }
+
         const spreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
         // Only the year suffixed key exists, there is no bare SPREADSHEET_ID_VERIFSPM
         // fallback - fail here instead of letting Google reject an undefined id
@@ -3759,7 +3766,16 @@ app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
             }
         });
 
-        const summary = [...summaryBySatker.values()].sort((a, b) => a.satker.localeCompare(b.satker));
+        // role="user" only ever sees its own satker - the lite dashboard on Home reads
+        // this same route, and filtering on the client would still ship every figure
+        const isAdminViewer = ["admin", "master admin", "admin_gaji"].includes(viewer.role);
+        const viewerKey = normalizeSatker(viewer.name);
+        const canSee = entry => isAdminViewer || normalizeSatker(entry.satker) === viewerKey;
+
+        const summary = [...summaryBySatker.values()]
+            .filter(canSee)
+            .sort((a, b) => a.satker.localeCompare(b.satker));
+        const visibleBudgets = budgets.filter(canSee);
 
         // Grand total row - the frontend slices monthly the same way it does per satker
         const totals = {
@@ -3807,14 +3823,14 @@ app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
             });
         });
 
-        const duplicateSatker = budgets
+        const duplicateSatker = visibleBudgets
             .map(budget => budget.satker)
             .filter((satker, index, all) => all.findIndex(other => normalizeSatker(other) === normalizeSatker(satker)) !== index);
 
         return res.status(200).json({
             budgetComplete: needsBudgetInput.length === 0,
             needsBudgetInput,
-            budgets,
+            budgets: visibleBudgets,
             summary,
             totals,
             warnings: {

@@ -1,19 +1,26 @@
-import React, {useContext, useEffect, useState} from "react"
+import React, {useContext, useEffect, useMemo, useState} from "react"
 import { AuthContext } from "../lib/AuthContext";
-import {userSatkerNames} from "../components/verifikasi/head-data.js";
+import {monthNames} from "../components/verifikasi/head-data.js";
 import apiClient from "../lib/apiClient";
 import LoadingAnimate from "../ui/loading.jsx"
 import { NewNavbar } from "../ui/Navbar.jsx"
+import { RealisasiCircle } from "../ui/cards.jsx"
+import { TableRealisasiLite } from "../ui/tables.jsx"
 
 function Home() {
     //Auth Context
     const { user } = useContext(AuthContext);
     const satkerName = user.name;
     const userRole = user.role;
+    const isAdmin = ["admin", "master admin", "admin_gaji"].includes(userRole);
 
     //State
-    const [dashboardData, setDashboardData] = useState([]);
+    const [realisasi, setRealisasi] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [monthFilter, setMonthFilter] = useState(() => {
+        const saved = localStorage.getItem('home-realisasi-month');
+        return saved ? JSON.parse(saved) : "";
+    });
 
     // Year state (load from localStorage or default to current year)
     const currentYear = new Date().getFullYear();
@@ -30,48 +37,45 @@ function Home() {
         window.location.reload(); // Reload to apply year change
     };
 
-    //PJK dashboard items
-    const cardTitles = [
-        {title: "Total PJK", content: dashboardData[0], bgColor: "#00449C"},
-        {title: "Belum Terkumpul", content: dashboardData[1], bgColor: "#BD1404"},
-        {title: "Tertolak", content: dashboardData[2], bgColor: "#811105"},
-        {title: "Lengkap Dengan Catatan", content: dashboardData[3], bgColor: "#016FFC"},
-        {title: "Lengkap", content: dashboardData[4], bgColor: "#00449C"}
-    ]
-
-    function PjkCards(props) {
-        return(
-            <div className={"dashboard-pjk-card"}>
-                <div className={"dashboard-pjk-card-icon"} style={{backgroundColor: props.bgColor}}>{props.content}</div>
-                <p className={"dashboard-pjk-card-text"}>{props.title}</p>
-            </div>
-        )
-    }
-
-    async function fetchData() {
-        const rowsPerPage = 10;
-        let satkerPrefix = userSatkerNames.find(item => item.title === user.name)?.value || "";
+    // The route already scopes itself to the viewer: role="user" gets only its own
+    // satker, admin roles get every unit kerja rolled into totals.
+    async function fetchRealisasi() {
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/verifikasi/data-pjk', { params:{ satkerPrefix, filterKeyword: "", page: 1, limit: rowsPerPage, monthKeyword: "" }});
-            if (response.status === 200){
-                const { data: rowData, totalPages, countData, message } = response.data;
-                setDashboardData(countData);
-                setIsLoading(false);
-                // if (message === false) {
-                //     setIsAlert(true);
-                //     setTimeout(() => setIsAlert(false), 3000);
-                // }
-            }
+            const response = await apiClient.get('/verifikasi/realisasi-anggaran');
+            if (response.status === 200) setRealisasi(response.data);
         } catch (error) {
-            console.error("Error fetching data.", error);
+            console.error("Error fetching realisasi.", error);
+        } finally {
             setIsLoading(false);
         }
     }
 
     useEffect(() => {
-        fetchData();
+        fetchRealisasi();
     }, [])
+
+    function handleMonthChange(event) {
+        setMonthFilter(event.target.value);
+        localStorage.setItem('home-realisasi-month', JSON.stringify(event.target.value));
+    }
+
+    const liteData = useMemo(() => {
+        if (!realisasi) return null;
+        const {anggaran, belanja, monthly} = realisasi.totals;
+        const spent = monthFilter
+            ? monthly.filter(bucket => bucket.month <= parseInt(monthFilter, 10)).reduce((sum, bucket) => sum + bucket.total, 0)
+            : belanja.total;
+        const persenAngka = anggaran.total ? (spent / anggaran.total) * 100 : 0;
+        return {
+            anggaran: anggaran.total,
+            belanja: spent,
+            sisa: anggaran.total - spent,
+            persenAngka,
+            persen: anggaran.total ? `${persenAngka.toFixed(2)}%` : "-",
+            kosong: realisasi.summary.length === 0,
+        };
+    }, [realisasi, monthFilter]);
 
 
     return (
@@ -107,15 +111,31 @@ function Home() {
             </div>
             <div className="home-dashboard">
                 <div className="home-dashboard-left">
-                    <h3 className={"dashboard-title"}>Status PJK</h3>
-                    {isLoading ? <LoadingAnimate /> :
-                    <div className={"dashboard-status-pjk"}>
-                        {cardTitles.map((card, index) => (
-                            <PjkCards key={index} title={card.title} content={card.content} bgColor={card.bgColor} />
-                            ))
+                    <h3 className={"dashboard-title"}>
+                        {isAdmin ? "Realisasi Anggaran" : `Realisasi Anggaran ${satkerName}`}
+                    </h3>
+                    <div className="dashboard-realisasi">
+                        <div className="dashboard-realisasi-filter">
+                            <label htmlFor="realisasi-month">Bulan:</label>
+                            <select id="realisasi-month" value={monthFilter} onChange={handleMonthChange}>
+                                {monthNames.map((month, index) => (
+                                    <option key={index} value={month.value}>{month.title || "Semua Bulan"}</option>
+                                ))}
+                            </select>
+                            <span className="dashboard-realisasi-note">Berdasarkan Data Bagian Keuangan</span>
+                        </div>
+                        {isLoading || !liteData ? <LoadingAnimate /> :
+                            liteData.kosong ?
+                                <p className="dashboard-realisasi-empty">
+                                    Data anggaran untuk {satkerName} belum tersedia.
+                                </p> :
+                                <div className="dashboard-realisasi-body">
+                                    <RealisasiCircle percent={liteData.persenAngka} />
+                                    <TableRealisasiLite anggaran={liteData.anggaran} belanja={liteData.belanja}
+                                                        sisa={liteData.sisa} persen={liteData.persen} />
+                                </div>
                         }
                     </div>
-                    }
                 </div>
                 <div className="home-dashboard-right">
                     <h3 className={"dashboard-title"} style={{fontStyle: "italic", fontSize: "1.9rem", opacity:"0.3"}}>

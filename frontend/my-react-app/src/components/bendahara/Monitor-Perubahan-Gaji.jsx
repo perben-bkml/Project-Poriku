@@ -1,5 +1,6 @@
-import {useEffect, useState} from 'react';
+import {useContext, useEffect, useState} from 'react';
 import apiClient from "../../lib/apiClient";
+import {AuthContext} from "../../lib/AuthContext.jsx";
 //Import Components
 import LoadingAnimate from "../../ui/loading.jsx";
 import {monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions} from "./head-data.js";
@@ -11,6 +12,11 @@ import {PopupAlert} from "../../ui/Popup.jsx";
 import Pagination from '@mui/material/Pagination';
 
 export default function MonitorPerubahanGaji(props) {
+    // Use Context - only "admin_gaji" and "master admin" may open the input form,
+    // plain "admin" gets the monitor read-only
+    const {user} = useContext(AuthContext);
+    const canInputData = user.role === "admin_gaji" || user.role === "master admin";
+
     //State
     const [tableData, setTableData] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +31,7 @@ export default function MonitorPerubahanGaji(props) {
         return saved ? JSON.parse(saved) : {month: "", statusPegawai: ""};
     });
     const [isAlert, setIsAlert] = useState(false);
+    const [isDeniedAlert, setIsDeniedAlert] = useState(false);
 
     // Success message handed over by Kirim-Dokumen-Gaji before it unmounted
     useEffect(() => {
@@ -78,6 +85,16 @@ export default function MonitorPerubahanGaji(props) {
         setFilterSelect(newFilter);
         setCurrentPage(1);
         localStorage.setItem('monitor-perubahan-gaji-filter', JSON.stringify(newFilter));
+    }
+
+    //Handle Input Data - blocked for every role except admin_gaji
+    function handleInputData() {
+        if (!canInputData) {
+            setIsDeniedAlert(true);
+            setTimeout(() => setIsDeniedAlert(false), 3000);
+            return;
+        }
+        props.changeComponent('input-dokumen-gaji');
     }
 
     //Handle rows per page
@@ -143,10 +160,12 @@ export default function MonitorPerubahanGaji(props) {
                 </div>
                 <div className='form-submit'>
                     <SubmitButton value='Input Data' name='input-dokumen-gaji'
-                                  onClick={() => props.changeComponent('input-dokumen-gaji')}/>
+                                  onClick={handleInputData}/>
                 </div>
             </div>
             {isAlert && <PopupAlert isAlert={isAlert} severity="success" message={props.alertMessage}/>}
+            {isDeniedAlert && !isAlert &&
+                <PopupAlert isAlert={isDeniedAlert} severity="error" message="Akses ditolak, hanya admin gaji yang bisa."/>}
         </div>
     );
 }

@@ -99,7 +99,10 @@ function Home() {
                 </div>
 
                 <h3 className={"welcome-title-text"} style={{fontStyle: "italic", fontSize: "1.9rem", fontWeight:"500", marginTop:"20px"}}>
-                    {userRole != "master admin"? (userRole == "admin" ? "Staff Bagian Keuangan ": "Admin PPK Unit Kerja"  ) : "Super User"}</h3>
+                    {userRole === "master admin" ? "Super User"
+                        : userRole === "admin" ? "Staff Bagian Keuangan "
+                        : userRole === "admin_gaji" ? "Admin Gaji"
+                        : "Admin PPK Unit Kerja"}</h3>
 
             </div>
             <div className="home-dashboard">

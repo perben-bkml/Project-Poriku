@@ -43,8 +43,13 @@ function BendaharaPage(props) {
 
     // Menus a role="user" must never reach
     const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji", "input-dokumen-gaji"];
+    // The only menus a role="admin_gaji" may reach - it is an allow-list, not a deny-list
+    const GAJI_ONLY_MENUS = ["monitor-data-gaji", "input-dokumen-gaji"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
-    const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
+    const isAdminGaji = user.role === "admin_gaji";
+    const canOpen = (menu) => isAdminGaji
+        ? GAJI_ONLY_MENUS.includes(menu)
+        : isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
 
     // Set buttonSelect when page renders
     useEffect(() => {
@@ -56,6 +61,9 @@ function BendaharaPage(props) {
         } else {
             if (isAdmin) {
                 setButtonSelect("kelola-pengajuan");
+            }
+            if (isAdminGaji) {
+                setButtonSelect("monitor-data-gaji")
             }
             if (user.role === "user") {
                 setButtonSelect("daftar-pengajuan")
@@ -112,9 +120,11 @@ function BendaharaPage(props) {
     }
     // Rendering Components
     function renderComponent() {
-        // Never render an admin menu for a role="user", however buttonSelect got set
+        // Never render a menu the role is not allowed to open, however buttonSelect got set
         if (!canOpen(buttonSelect)) {
-            return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
+            return isAdminGaji
+                ? <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} />
+                : <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
         }
         switch (buttonSelect) {
             case "kelola-pengajuan":
@@ -177,11 +187,13 @@ function BendaharaPage(props) {
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "monitoring-drpp" ? "btn-selected" : "hidden"}`} name="monitoring-drpp" onClick={(e)=> handleButtonClick(e.target)}><MonitorIcon fontSize="small"/><span className="padd-span-bend"/>Monitoring DRPP</button>
                         : null}
+                        { !isAdminGaji ? <>
                         <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
                         <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
                         <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
-                        { user.role === "admin" || user.role === "master admin" ?
+                        </> : null}
+                        { isAdmin || isAdminGaji ?
                         <button className={`dash-button ${buttonSelect === "monitor-data-gaji" ? "btn-selected" : ""}`} name="monitor-data-gaji" onClick={(e)=> handleButtonClick(e.target)}><PaymentsIcon fontSize="small"/><span className="padd-span-bend"/>Monitor Data Gaji</button>
                         : null}
                     </div>

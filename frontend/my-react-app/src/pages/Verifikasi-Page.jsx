@@ -13,7 +13,7 @@ import Avatar from "@mui/material/Avatar";
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
-import {NavLink} from "react-router-dom";
+import {NavLink, Navigate} from "react-router-dom";
 
 function VerifikasiPage(props) {
     const whatMenu = props.menu;
@@ -94,6 +94,12 @@ function VerifikasiPage(props) {
                 return null;
         }
     }
+    // role="admin_gaji" has no business here - typing the URL bounces back to Bendahara.
+    // Checked after the hooks above so the hook order stays the same on every render.
+    if (user.role === "admin_gaji") {
+        return <Navigate to="/menu-bendahara" replace />;
+    }
+
     return (
         <div className="main-page">
             <div className={"main-page-navbar"}>

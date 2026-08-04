@@ -3,6 +3,7 @@ import React, { useState, useContext, useEffect } from "react";
 import KelolaPJK from "../components/verifikasi/Kelola-PJK.jsx";
 import FormVerifikasi from "../components/verifikasi/Form-Verifikasi.jsx";
 import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
+import Realisasi from "../components/verifikasi/Realisasi.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -13,6 +14,7 @@ import Avatar from "@mui/material/Avatar";
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import {NavLink, Navigate} from "react-router-dom";
 
 function VerifikasiPage(props) {
@@ -26,7 +28,7 @@ function VerifikasiPage(props) {
 
 
     // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["kelola-PJK", "form-verifikasi"];
+    const ADMIN_ONLY_MENUS = ["realisasi", "kelola-PJK", "form-verifikasi"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
     const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
 
@@ -84,6 +86,8 @@ function VerifikasiPage(props) {
             return <MonitorPJK />;
         }
         switch (buttonSelect) {
+            case "realisasi":
+                return <Realisasi />;
             case "kelola-PJK":
                 return <KelolaPJK />;
             case "form-verifikasi":
@@ -126,6 +130,9 @@ function VerifikasiPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "realisasi" ? "btn-selected" : "hidden"}`} name="realisasi" onClick={(e)=> handleButtonClick(e.target)}><PaymentsIcon fontSize="small"/><span className="padd-span-bend"/>Realisasi</button>
+                        : null}
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "kelola-PJK" ? "btn-selected" : "hidden"}`} name="kelola-PJK" onClick={(e)=> handleButtonClick(e.target)}><DashboardIcon fontSize="small"/><span className="padd-span-bend"/>Kelola PJK</button>
                         : null}

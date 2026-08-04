@@ -688,3 +688,149 @@ export function TableNotif(props) {
         </TableContainer>
     )
 }
+// Realisasi.jsx
+const REALISASI_HEADER_BLUE = "#00449C";
+const realisasiHeadCell = {fontSize: "1rem", fontWeight: 550, color: "white", backgroundColor: REALISASI_HEADER_BLUE};
+const realisasiContainer = {maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"};
+
+function formatRupiah(nominal) {
+    return `Rp ${Math.round(nominal).toLocaleString('id-ID')}`;
+}
+
+// Thousand separators for display only - state and the PATCH body stay plain digits
+function formatThousands(digits) {
+    if (digits === "" || digits === undefined || digits === null) return "";
+    return (parseInt(digits, 10) || 0).toLocaleString('id-ID');
+}
+
+function RealisasiHead({heads}) {
+    return (
+        <TableHead>
+            <TableRow>
+                {heads.map((head, index) => (
+                    <TableCell key={index} sx={realisasiHeadCell}>{head}</TableCell>
+                ))}
+            </TableRow>
+        </TableHead>
+    )
+}
+
+export function TableAnggaran({funds, budgets, draftBudget, rowStatus, onDraftChange, onSave}) {
+    return (
+        <TableContainer sx={realisasiContainer}>
+            <Table size="small">
+                <RealisasiHead heads={["Unit Kerja", ...funds.map(fund => fund.label), "Total Anggaran", ""]}/>
+                <TableBody>
+                    {budgets.map(budget => {
+                        const draft = draftBudget[budget.satker] || {};
+                        const values = funds.map(({key}) => draft[key] ?? budget[key]);
+                        const isDirty = funds.some(({key}) => draft[key] !== undefined);
+                        const total = values.reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
+                        const status = rowStatus[budget.satker];
+                        const isRowSaving = status === "saving";
+                        return (
+                            <TableRow key={budget.satker} hover>
+                                <TableCell>{budget.satker}</TableCell>
+                                {funds.map(({key}, fundIndex) => (
+                                    <TableCell key={key}>
+                                        <input type="text" inputMode="numeric" value={formatThousands(values[fundIndex])}
+                                               style={{width: '150px', fontFamily: 'inherit', fontSize: '0.95rem', padding: '4px'}}
+                                               onChange={event => onDraftChange(budget.satker, key, event.target.value)}/>
+                                    </TableCell>
+                                ))}
+                                <TableCell>{formatRupiah(total)}</TableCell>
+                                <TableCell>
+                                    <input type="button" value={isRowSaving ? "Menyimpan..." : "Simpan"}
+                                           disabled={!isDirty || isRowSaving}
+                                           onClick={() => onSave(budget)}
+                                           style={{cursor: isDirty && !isRowSaving ? 'pointer' : 'not-allowed', opacity: isDirty ? 1 : 0.5}}/>
+                                    {status === "saved" &&
+                                        <span style={{color: '#1B7F3B', fontSize: '0.85rem', marginLeft: '8px'}}>Tersimpan</span>}
+                                    {status === "error" &&
+                                        <span style={{color: '#BD1404', fontSize: '0.85rem', marginLeft: '8px'}}>Gagal</span>}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}
+
+export function TableRealisasi({rows, grandTotal}) {
+    return (
+        <TableContainer sx={realisasiContainer}>
+            <Table size="small">
+                <RealisasiHead heads={["Unit Kerja", "Anggaran", "Realisasi", "Sisa", "% Realisasi", "Grafik"]}/>
+                <TableBody>
+                    {rows.map(row => (
+                        <TableRow key={row.satker} hover>
+                            <TableCell>
+                                {row.satker}
+                                {!row.matched &&
+                                    <span style={{color: '#BD1404', fontSize: '0.8rem', display: 'block'}}>
+                                        belum ada di Code_Anggaran
+                                    </span>}
+                            </TableCell>
+                            <TableCell>{formatRupiah(row.anggaran)}</TableCell>
+                            <TableCell>{formatRupiah(row.belanja)}</TableCell>
+                            <TableCell style={{color: row.realisasi < 0 ? '#BD1404' : 'inherit'}}>
+                                {formatRupiah(row.realisasi)}
+                            </TableCell>
+                            <TableCell>{row.persen}</TableCell>
+                            <TableCell sx={{minWidth: '160px'}}>
+                                <div style={{background: '#ECECEC', borderRadius: '6px', height: '14px', width: '100%'}}>
+                                    <div style={{
+                                        width: `${row.barWidth}%`,
+                                        height: '100%',
+                                        borderRadius: '6px',
+                                        backgroundColor: row.overspent ? '#BD1404' : REALISASI_HEADER_BLUE,
+                                    }}/>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                    <TableRow>
+                        <TableCell sx={{fontWeight: 600}}>TOTAL</TableCell>
+                        <TableCell sx={{fontWeight: 600}}>{formatRupiah(grandTotal.anggaran)}</TableCell>
+                        <TableCell sx={{fontWeight: 600}}>{formatRupiah(grandTotal.belanja)}</TableCell>
+                        <TableCell sx={{fontWeight: 600, color: grandTotal.realisasi < 0 ? '#BD1404' : 'inherit'}}>
+                            {formatRupiah(grandTotal.realisasi)}
+                        </TableCell>
+                        <TableCell sx={{fontWeight: 600}}>{grandTotal.persen}</TableCell>
+                        <TableCell/>
+                    </TableRow>
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}
+
+export function TableRealisasiJenisBelanja({jenisBelanja, rows, totals}) {
+    return (
+        <TableContainer sx={realisasiContainer}>
+            <Table size="small">
+                <RealisasiHead heads={["Unit Kerja", ...jenisBelanja.map(jenis => `Belanja ${jenis}`), "Total"]}/>
+                <TableBody>
+                    {rows.map(row => (
+                        <TableRow key={row.satker} hover>
+                            <TableCell>{row.satker}</TableCell>
+                            {row.values.map((nominal, index) => (
+                                <TableCell key={index}>{formatRupiah(nominal)}</TableCell>
+                            ))}
+                            <TableCell>{formatRupiah(row.total)}</TableCell>
+                        </TableRow>
+                    ))}
+                    <TableRow>
+                        <TableCell sx={{fontWeight: 600}}>TOTAL</TableCell>
+                        {totals.values.map((nominal, index) => (
+                            <TableCell key={index} sx={{fontWeight: 600}}>{formatRupiah(nominal)}</TableCell>
+                        ))}
+                        <TableCell sx={{fontWeight: 600}}>{formatRupiah(totals.total)}</TableCell>
+                    </TableRow>
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}

@@ -3454,6 +3454,482 @@ app.get("/bendahara/monitor-perubahan-gaji", async (req, res) => {
     }
 });
 
+// --- Realisasi Anggaran -------------------------------------------------------
+// Spending lives on 'Database SPM', the yearly budget ceiling on 'Code_Anggaran',
+// both inside the SPREADSHEET_ID_VERIFSPM_<year> spreadsheet.
+//
+// There is no realisasi without a ceiling: a satker that has already spent money
+// while its Code_Anggaran cell is still "0" is reported back as needing input,
+// so the admin fills the ceiling in before any percentage is calculated.
+
+const DATABASE_SPM_SHEET = "Database SPM";
+const CODE_ANGGARAN_SHEET = "Code_Anggaran";
+
+// 'Database SPM' column positions. Row 1 is the header, data starts on row 2.
+// The range is read from column A so these indices line up with the sheet letters.
+const SPM_COLUMN = {
+    jenisSpm: 1,      // B
+    tanggalSp2d: 7,   // H - "1-Jan-2026"
+    belanja: 8,       // I - "100000000"
+    unitKerja: 12,    // M
+    jenisBelanja: 13, // N
+    sumberDana: 16,   // Q
+};
+
+// 'Code_Anggaran': one row per satker from row 3 - A satker, B Rupiah Murni, C SBSN, D PLN
+const CODE_ANGGARAN_FIRST_ROW = 3;
+const CODE_ANGGARAN_LAST_COLUMN = "D";
+const FUND_RUPIAH_MURNI = "rupiahMurni";
+const FUND_SBSN = "sbsn";
+const FUND_PLN = "pln";
+// Order matters - it is the order the sheet columns sit in, B onwards
+const FUND_KEYS = [FUND_RUPIAH_MURNI, FUND_SBSN, FUND_PLN];
+const FUND_LABEL = { [FUND_RUPIAH_MURNI]: "Rupiah Murni", [FUND_SBSN]: "SBSN", [FUND_PLN]: "PLN" };
+
+// Both sheets are maintained by hand, so "Dit Latihan", "DIT LATIHAN " and
+// "Dit  Latihan" have to resolve to one satker instead of three.
+function normalizeSatker(value) {
+    return String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+// Map the free text 'Sumber Dana' column onto a budget column. Returns null when
+// the value is unrecognised so the caller can report it - silently dropping the
+// row would understate realisasi.
+function normalizeSumberDana(value) {
+    const raw = normalizeSatker(value);
+    if (raw === "") return null;
+    if (raw.includes("SBSN")) return FUND_SBSN;
+    if (raw.includes("RUPIAH MURNI") || raw === "RM") return FUND_RUPIAH_MURNI;
+    // No PLN row exists on the SPM sheet yet - matched tightly so it cannot swallow
+    // an unrelated code that happens to contain these letters
+    if (raw === "PLN" || raw === "PHLN" || raw.includes("PINJAMAN LUAR NEGERI")) return FUND_PLN;
+    return null;
+}
+
+// Accepts "100000000", "Rp 100.000.000", "(50000)" and "". Anything holding no
+// digit at all returns NaN rather than 0, so a typo cannot pass as zero rupiah.
+// Whole rupiah is assumed - neither sheet carries decimals.
+function parseRupiah(value) {
+    const raw = String(value ?? "").trim();
+    if (raw === "") return 0;
+    const isNegative = raw.startsWith("-") || /^\(.*\)$/.test(raw);
+    const digits = raw.replace(/[^0-9]/g, "");
+    if (digits === "") return NaN;
+    return isNegative ? -Number(digits) : Number(digits);
+}
+
+// Read 'Code_Anggaran' into rows keyed by normalized satker name
+function mapCodeAnggaran(anggaranRows) {
+    const budgets = [];
+    const budgetBySatker = new Map();
+
+    anggaranRows.forEach((row, index) => {
+        const satker = String(row?.[0] ?? "").trim();
+        if (satker === "") return; // trailing blank rows
+
+        const budget = {
+            satker,
+            rowNumber: CODE_ANGGARAN_FIRST_ROW + index,
+            rupiahMurni: String(row?.[1] ?? ""),
+            sbsn: String(row?.[2] ?? ""),
+            pln: String(row?.[3] ?? ""),
+            rupiahMurniNominal: parseRupiah(row?.[1]),
+            sbsnNominal: parseRupiah(row?.[2]),
+            plnNominal: parseRupiah(row?.[3]),
+        };
+        budgets.push(budget);
+        // First row wins if a satker is listed twice - the duplicate is reported as a warning
+        if (!budgetBySatker.has(normalizeSatker(satker))) {
+            budgetBySatker.set(normalizeSatker(satker), budget);
+        }
+    });
+
+    return { budgets, budgetBySatker };
+}
+
+// 'Database SPM' writes Unit Kerja in short form, 'Code_Anggaran' uses the full
+// satker name. Keys are normalized, so spacing and casing do not matter here.
+// The same pairing exists on the frontend as userSatkerNames in
+// components/verifikasi/head-data.js - keep the two in step.
+const UNIT_KERJA_ALIAS = {
+    "BIRO SARPRAS": "Biro Sarana dan Prasarana",
+    "BIRO RENCANA": "Biro Perencanaan",
+    "DIT DATIN": "Dit Data dan Informasi",
+    "DIT KERMA": "Dit Kerja Sama",
+    "DIT OPSLA": "Dit Operasi Laut",
+    "DIT OPSUD": "Dit Operasi Udara",
+    "KPIML": "Puskodal",
+    "UPH": "Unit Penindakan Hukum",
+    "ZONA BARAT": "Zona Maritim Barat",
+    "ZONA TENGAH": "Zona Maritim Tengah",
+    "ZONA TIMUR": "Zona Maritim Timur",
+};
+
+// Unit Kerja as written on the SPM sheet -> the key its Code_Anggaran row is stored under
+function resolveSatkerKey(unitKerja) {
+    const key = normalizeSatker(unitKerja);
+    const alias = UNIT_KERJA_ALIAS[key];
+    return alias ? normalizeSatker(alias) : key;
+}
+
+// 'Tanggal SP2D' arrives as "1-Jan-2026" with Indonesian month tokens.
+// English spellings are accepted too in case the sheet locale ever flips.
+const MONTH_TOKENS = {
+    JAN: 1, FEB: 2, MAR: 3, APR: 4, MEI: 5, MAY: 5, JUN: 6,
+    JUL: 7, AGU: 8, AGT: 8, AGS: 8, AUG: 8, SEP: 9, OKT: 10,
+    OCT: 10, NOV: 11, DES: 12, DEC: 12,
+};
+
+// "1-Jan-2026" -> 1. Returns null when the token is unreadable, so the row can be
+// reported instead of silently landing in January.
+function parseMonthSp2d(value) {
+    const token = String(value ?? "").split("-")[1];
+    if (!token) return null;
+    return MONTH_TOKENS[token.trim().toUpperCase()] ?? null;
+}
+
+// Jenis SPM that must not count as belanja. Matched whole, never as a substring -
+// "UP" sits alongside "GUP", "GUP-KKP" and "TUP", which do count.
+const EXCLUDED_JENIS_SPM = ["PEMBAYARAN RPATA", "UP"];
+
+function isExcludedJenisSpm(jenisSpm) {
+    return EXCLUDED_JENIS_SPM.includes(normalizeSatker(jenisSpm));
+}
+
+function emptyFundTotals() {
+    return { rupiahMurni: 0, sbsn: 0, pln: 0, total: 0 };
+}
+
+// One bucket per month so the frontend can move the month filter without refetching
+function emptyMonthlyBuckets() {
+    return Array.from({ length: 12 }, (_, index) => ({ month: index + 1, ...emptyFundTotals() }));
+}
+
+function addToFundTotals(target, fund, nominal) {
+    target[fund] += nominal;
+    target.total += nominal;
+}
+
+// Realisasi Anggaran - budget ceilings, spending aggregated per satker per month,
+// and who still has to fill a ceiling in. Pass ?detail=1 to also get the raw SPM rows.
+app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
+        // Only the year suffixed key exists, there is no bare SPREADSHEET_ID_VERIFSPM
+        // fallback - fail here instead of letting Google reject an undefined id
+        if (!spreadsheetId) {
+            return res.status(400).json({ message: "Spreadsheet SPM untuk tahun ini belum dikonfigurasi." });
+        }
+
+        const response = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.batchGet({
+                spreadsheetId,
+                ranges: [
+                    `'${DATABASE_SPM_SHEET}'!A2:Q`,
+                    `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:${CODE_ANGGARAN_LAST_COLUMN}`,
+                ],
+            });
+        });
+
+        const spmRows = response.data.valueRanges[0].values || [];
+        const anggaranRows = response.data.valueRanges[1].values || [];
+
+        const { budgets } = mapCodeAnggaran(anggaranRows);
+
+        // Seed one entry per Code_Anggaran satker so a satker that has not spent
+        // anything yet still shows up with its ceiling
+        const summaryBySatker = new Map();
+        const invalidAnggaran = [];
+        budgets.forEach(budget => {
+            const anggaran = emptyFundTotals();
+            FUND_KEYS.forEach(fund => {
+                const nominal = budget[`${fund}Nominal`];
+                if (Number.isNaN(nominal)) return; // reported below, counted as 0
+                anggaran[fund] = nominal;
+                anggaran.total += nominal;
+            });
+            if (FUND_KEYS.some(fund => Number.isNaN(budget[`${fund}Nominal`]))) {
+                invalidAnggaran.push({
+                    satker: budget.satker,
+                    rowNumber: budget.rowNumber,
+                    rupiahMurni: budget.rupiahMurni,
+                    sbsn: budget.sbsn,
+                    pln: budget.pln,
+                });
+            }
+            summaryBySatker.set(normalizeSatker(budget.satker), {
+                satker: budget.satker,
+                rowNumber: budget.rowNumber,
+                matched: true,
+                anggaran,
+                belanja: emptyFundTotals(),
+                monthly: emptyMonthlyBuckets(),
+                byJenisBelanja: {},
+            });
+        });
+
+        const spending = [];
+        // Keyed by the raw cell value - these rows carry real money that lands in no
+        // fund column, so the amount is reported, not just the label
+        const unknownSumberDana = new Map();
+        const excludedJenisSpm = new Map();
+        const unmatchedUnitKerja = new Set();
+        const invalidBelanja = [];
+        const invalidTanggal = [];
+
+        spmRows.forEach((row, index) => {
+            const item = {
+                rowNumber: 2 + index,
+                jenisSpm: String(row?.[SPM_COLUMN.jenisSpm] ?? "").trim(),
+                tanggalSp2d: String(row?.[SPM_COLUMN.tanggalSp2d] ?? "").trim(),
+                belanja: String(row?.[SPM_COLUMN.belanja] ?? "").trim(),
+                unitKerja: String(row?.[SPM_COLUMN.unitKerja] ?? "").trim(),
+                jenisBelanja: String(row?.[SPM_COLUMN.jenisBelanja] ?? "").trim(),
+                sumberDana: String(row?.[SPM_COLUMN.sumberDana] ?? "").trim(),
+            };
+            // Skip the blank rows a sheet range always trails
+            if (item.jenisSpm === "" && item.unitKerja === "" && item.belanja === "") return;
+
+            const nominal = parseRupiah(item.belanja);
+            item.belanjaNominal = Number.isNaN(nominal) ? 0 : nominal;
+            if (Number.isNaN(nominal)) {
+                invalidBelanja.push({ rowNumber: item.rowNumber, unitKerja: item.unitKerja, belanja: item.belanja });
+            }
+
+            // Kept in the detail list but never counted as belanja
+            item.excluded = isExcludedJenisSpm(item.jenisSpm);
+            if (item.excluded) {
+                const seen = excludedJenisSpm.get(item.jenisSpm) || { jenisSpm: item.jenisSpm, rows: 0, totalBelanja: 0 };
+                seen.rows += 1;
+                seen.totalBelanja += item.belanjaNominal;
+                excludedJenisSpm.set(item.jenisSpm, seen);
+                spending.push(item);
+                return;
+            }
+
+            const fund = normalizeSumberDana(item.sumberDana);
+            item.sumberDanaKey = fund; // null when the sheet holds something unexpected
+            if (!fund) {
+                const label = item.sumberDana === "" ? "(kosong)" : item.sumberDana;
+                const seen = unknownSumberDana.get(label) || { sumberDana: label, rows: 0, totalBelanja: 0 };
+                seen.rows += 1;
+                seen.totalBelanja += item.belanjaNominal;
+                unknownSumberDana.set(label, seen);
+            }
+
+            spending.push(item);
+
+            if (item.unitKerja === "" || !fund || item.belanjaNominal === 0) return;
+
+            // Aggregate onto the satker this Unit Kerja resolves to
+            const satkerKey = resolveSatkerKey(item.unitKerja);
+            let entry = summaryBySatker.get(satkerKey);
+            if (!entry) {
+                // Spending from a satker with no Code_Anggaran row - kept visible with a
+                // zero ceiling rather than dropped, so the money is never hidden
+                unmatchedUnitKerja.add(item.unitKerja);
+                entry = {
+                    satker: item.unitKerja,
+                    rowNumber: null,
+                    matched: false,
+                    anggaran: emptyFundTotals(),
+                    belanja: emptyFundTotals(),
+                    monthly: emptyMonthlyBuckets(),
+                    byJenisBelanja: {},
+                };
+                summaryBySatker.set(satkerKey, entry);
+            }
+
+            addToFundTotals(entry.belanja, fund, item.belanjaNominal);
+
+            const jenis = item.jenisBelanja || "-";
+            const jenisBucket = entry.byJenisBelanja[jenis]
+                || (entry.byJenisBelanja[jenis] = { total: 0, monthly: Array(12).fill(0) });
+            jenisBucket.total += item.belanjaNominal;
+
+            const month = parseMonthSp2d(item.tanggalSp2d);
+            item.bulan = month;
+            if (month) {
+                addToFundTotals(entry.monthly[month - 1], fund, item.belanjaNominal);
+                jenisBucket.monthly[month - 1] += item.belanjaNominal;
+            } else {
+                // Counted in the yearly total but not in any month, so a cumulative
+                // filter can never quietly exceed the full year figure
+                invalidTanggal.push({ rowNumber: item.rowNumber, unitKerja: item.unitKerja, tanggalSp2d: item.tanggalSp2d });
+            }
+        });
+
+        const summary = [...summaryBySatker.values()].sort((a, b) => a.satker.localeCompare(b.satker));
+
+        // Grand total row - the frontend slices monthly the same way it does per satker
+        const totals = {
+            anggaran: emptyFundTotals(),
+            belanja: emptyFundTotals(),
+            monthly: emptyMonthlyBuckets(),
+        };
+        summary.forEach(entry => {
+            FUND_KEYS.forEach(fund => {
+                addToFundTotals(totals.anggaran, fund, entry.anggaran[fund]);
+                addToFundTotals(totals.belanja, fund, entry.belanja[fund]);
+                entry.monthly.forEach((bucket, index) => addToFundTotals(totals.monthly[index], fund, bucket[fund]));
+            });
+        });
+
+        // A satker that has spent from a fund whose ceiling is still 0 - or that has no
+        // Code_Anggaran row at all - blocks the realisasi calculation
+        const needsBudgetInput = [];
+        summary.forEach(entry => {
+            FUND_KEYS.forEach(fund => {
+                if (entry.belanja[fund] <= 0) return;
+                if (!entry.matched) {
+                    needsBudgetInput.push({
+                        satker: entry.satker,
+                        sumberDana: FUND_LABEL[fund],
+                        sumberDanaKey: fund,
+                        rowNumber: null,
+                        totalBelanja: entry.belanja[fund],
+                        reason: "satker-belum-ada-di-code-anggaran",
+                        message: `${entry.satker} belum terdaftar di Code_Anggaran.`,
+                    });
+                    return;
+                }
+                if (entry.anggaran[fund] === 0) {
+                    needsBudgetInput.push({
+                        satker: entry.satker,
+                        sumberDana: FUND_LABEL[fund],
+                        sumberDanaKey: fund,
+                        rowNumber: entry.rowNumber,
+                        totalBelanja: entry.belanja[fund],
+                        reason: "anggaran-masih-nol",
+                        message: `Anggaran ${FUND_LABEL[fund]} untuk ${entry.satker} masih 0, mohon diisi terlebih dahulu.`,
+                    });
+                }
+            });
+        });
+
+        const duplicateSatker = budgets
+            .map(budget => budget.satker)
+            .filter((satker, index, all) => all.findIndex(other => normalizeSatker(other) === normalizeSatker(satker)) !== index);
+
+        return res.status(200).json({
+            budgetComplete: needsBudgetInput.length === 0,
+            needsBudgetInput,
+            budgets,
+            summary,
+            totals,
+            warnings: {
+                unknownSumberDana: [...unknownSumberDana.values()],
+                excludedJenisSpm: [...excludedJenisSpm.values()],
+                unmatchedUnitKerja: [...unmatchedUnitKerja],
+                invalidBelanja,
+                invalidTanggal,
+                invalidAnggaran,
+                duplicateSatker,
+            },
+            // 500+ rows are only worth shipping when something needs checking by hand
+            ...(req.query.detail === "1" ? { spending } : {}),
+        });
+
+    } catch (error) {
+        console.error("Error in /verifikasi/realisasi-anggaran:", error);
+        return res.status(500).json({ error: "Failed to fetch realisasi anggaran data" });
+    }
+});
+
+// Validate one budget cell coming from the admin form
+function parseBudgetInput(value, label) {
+    if (value === undefined || value === null || String(value).trim() === "") {
+        return { ok: false, message: `Nilai ${label} tidak boleh kosong.` };
+    }
+    const nominal = parseRupiah(value);
+    if (Number.isNaN(nominal) || !Number.isInteger(nominal) || nominal < 0) {
+        return { ok: false, message: `Nilai ${label} harus berupa angka bulat tidak negatif.` };
+    }
+    return { ok: true, value: nominal };
+}
+
+// Write a satker's budget ceiling onto 'Code_Anggaran'. Send only the fund you
+// want to change - the other one keeps whatever the sheet already holds.
+app.patch("/verifikasi/code-anggaran", async (req, res) => {
+    try {
+        // This route moves money figures, so it checks the JWT itself. Every other
+        // route trusts the UI, which would let any signed in user post a ceiling.
+        let role = "";
+        try {
+            role = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET).role || "";
+        } catch {
+            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
+        }
+        if (role !== "admin" && role !== "master admin") {
+            return res.status(403).json({ message: "Akses ditolak, hanya admin yang bisa mengubah anggaran." });
+        }
+
+        const { satker } = req.body;
+        if (!satker || String(satker).trim() === "") {
+            return res.status(400).json({ message: "Nama satker wajib diisi." });
+        }
+        if (FUND_KEYS.every(fund => req.body[fund] === undefined)) {
+            return res.status(400).json({ message: "Tidak ada nilai anggaran yang dikirim." });
+        }
+
+        // Validate every fund that was sent before touching the sheet, so a bad SBSN
+        // cannot land after a good Rupiah Murni has already been written
+        const parsedFunds = {};
+        for (const fund of FUND_KEYS) {
+            if (req.body[fund] === undefined) continue;
+            const parsed = parseBudgetInput(req.body[fund], FUND_LABEL[fund]);
+            if (!parsed.ok) return res.status(400).json({ message: parsed.message });
+            parsedFunds[fund] = parsed.value;
+        }
+
+        const spreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
+        if (!spreadsheetId) {
+            return res.status(400).json({ message: "Spreadsheet SPM untuk tahun ini belum dikonfigurasi." });
+        }
+
+        // Read first - the row number of a satker is not knowable up front, and the
+        // fund that was not sent has to keep its current value
+        const response = await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:C`,
+            });
+        });
+
+        const { budgetBySatker } = mapCodeAnggaran(response.data.values || []);
+        const budget = budgetBySatker.get(normalizeSatker(satker));
+        if (!budget) {
+            return res.status(404).json({ message: `Satker "${String(satker).trim()}" tidak ditemukan di Code_Anggaran.` });
+        }
+
+        // Stored as strings, matching how the sheet already holds "0". A fund that was
+        // not sent keeps the value just read back.
+        const nextValues = FUND_KEYS.map(fund => parsedFunds[fund] !== undefined ? String(parsedFunds[fund]) : budget[fund]);
+
+        await withBackoff(async () => {
+            return await sheets2.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'${CODE_ANGGARAN_SHEET}'!B${budget.rowNumber}:${CODE_ANGGARAN_LAST_COLUMN}${budget.rowNumber}`,
+                valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
+                resource: { values: [nextValues] },
+            });
+        });
+
+        return res.status(200).json({
+            message: "Anggaran berhasil disimpan.",
+            data: {
+                satker: budget.satker,
+                rowNumber: budget.rowNumber,
+                ...Object.fromEntries(FUND_KEYS.map((fund, index) => [fund, nextValues[index]])),
+            },
+        });
+
+    } catch (error) {
+        console.error("Error in /verifikasi/code-anggaran:", error);
+        return res.status(500).json({ error: "Failed to update code anggaran" });
+    }
+});
+
 // Ports
 app.listen(3000, () => {
     console.log("Server is live on port 3000!")

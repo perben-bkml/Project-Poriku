@@ -829,6 +829,14 @@ const AJUAN_FLOWS = {
 
 const getAjuanFlow = (value) => AJUAN_FLOWS[value === "verif" ? "verif" : "gup"];
 
+// 0-based indices of the PJK columns, derived from the letters above so the two cannot drift
+const PJK_COLUMN = Object.fromEntries(
+    Object.entries(AJUAN_FLOWS.verif.pjk)
+        .filter(([, letter]) => typeof letter === "string")
+        .map(([name, letter]) => [name, letter.charCodeAt(0) - 65])
+);
+const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
+
 // Jenis is stored as a label, so the flow a row belongs to is read back off it
 function resolveJenis(value) {
     const target = String(value ?? "").trim().toLowerCase();
@@ -1957,13 +1965,22 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const currentYear = new Date().getFullYear().toString();
         const isHistoricalYear = selectedYear !== currentYear;
 
-        // Fetch entire column B from Google Sheets with backoff
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Write Antrian'!B:B",
-            });
-        });
+        // Column B drives the date filter; the verifikasi antrian rides alongside it so the
+        // PJK status of each mirror row costs no extra round trip
+        const [response, mirrorResponse] = await Promise.all([
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: "'Write Antrian'!B:B",
+                });
+            }),
+            withBackoff(async () => {
+                return await sheets.spreadsheets.values.get({
+                    spreadsheetId,
+                    range: `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
+                });
+            }),
+        ]);
 
         // Get all rows
         const allRows = response.data.values || [];
@@ -2020,14 +2037,39 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         function filterByStatus(array, status) {
             return array.filter(row => row.includes(status));
         }
-        // Filtering to separate into 6 array
-        const dalamAntrian = filterByStatus(rowData, "Dalam Antrian");
-        const sedangVerif = filterByStatus(rowData, "Sedang Di Verifikasi");
-        const sudahVerif = filterByStatus(rowData, "Sudah Di Verifikasi");
-        const ajuanHariIni = filterByStatus(rowData, "Diajukan Hari Ini");
-        const terbitDRPP = filterByStatus(rowData, "Sudah Diterbitkan DRPP");
-        const diajukanKPPN = filterByStatus(rowData, "Sudah Diajukan ke KPPN");
-        res.json({ data: [dalamAntrian, sedangVerif, sudahVerif, ajuanHariIni, terbitDRPP, diajukanKPPN] });
+
+        // PJK status of each mirror row, keyed the same way delete and edit pair them
+        const pjkByKey = new Map();
+        for (const row of mirrorResponse.data.values || []) {
+            pjkByKey.set(mirrorRowKey(row?.[1], row?.[2]), [row?.[PJK_COLUMN.substansi], row?.[PJK_COLUMN.kelengkapan]]);
+        }
+
+        // Bendahara is done but the verifikator has not signed off yet. A row with no mirror
+        // has no PJK to wait on, so it stays where it was.
+        const isOk = value => String(value ?? "").trim() === "OK";
+        const waitingPjk = (row) => {
+            const pjk = pjkByKey.get(mirrorRowKey(row[1], row[2]));
+            return !!pjk && isOk(row[12]) && isOk(row[13])
+                && !(PJK_VERIFIED_VALUES.includes(String(pjk[0] ?? "").trim())
+                    && PJK_VERIFIED_VALUES.includes(String(pjk[1] ?? "").trim()));
+        };
+
+        const sedangAll = filterByStatus(rowData, "Sedang Di Verifikasi");
+        const sudahAll = filterByStatus(rowData, "Sudah Di Verifikasi");
+        // Substansi/Kelengkapan appended past the 20 'Write Antrian' columns, so every
+        // index the aksi page reads keeps its meaning
+        const menungguPJK = [...sedangAll, ...sudahAll].filter(waitingPjk)
+            .map(row => [...row, ...(pjkByKey.get(mirrorRowKey(row[1], row[2])) || ["", ""])]);
+
+        res.json({ data: [
+            filterByStatus(rowData, "Dalam Antrian"),
+            sedangAll.filter(row => !waitingPjk(row)),
+            sudahAll.filter(row => !waitingPjk(row)),
+            filterByStatus(rowData, "Diajukan Hari Ini"),
+            filterByStatus(rowData, "Sudah Diterbitkan DRPP"),
+            filterByStatus(rowData, "Sudah Diajukan ke KPPN"),
+            menungguPJK,
+        ] });
 
       } catch (error) {
             console.error("Error in /bendahara/kelola-ajuan:", error);
@@ -3415,9 +3457,6 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 })
 
 // Pengujian PJK - the whole verifikasi antrian in one read, split into its three sections
-const PJK_COLUMN = { substansi: 9, kelengkapan: 10, mulaiVerif: 11, selesaiVerif: 12 };
-const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
-
 app.get("/verifikasi/pengujian-pjk", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');

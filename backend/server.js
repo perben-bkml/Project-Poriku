@@ -833,17 +833,43 @@ const AJUAN_FLOWS = {
     },
 };
 
-// sheetValue is what lands in the Jenis column. GUP/PTUP keep their lowercase keys so
-// existing rows and the edit dropdown stay readable.
+// sheetValue is what lands in the Jenis column of the flow's own antrian sheet. GUP/PTUP
+// keep their lowercase keys there so existing rows and the edit dropdown stay readable,
+// and use verifValue for their mirror row so 'Write Antrian Verif' reads consistently
+// against the labels the other jenis write.
 const JENIS_PENGAJUAN = {
-    "gup": { sheetValue: "gup", flow: "gup", hasTable: true },
-    "ptup": { sheetValue: "ptup", flow: "gup", hasTable: true },
+    "gup": { sheetValue: "gup", verifValue: "GUP", flow: "gup", hasTable: true },
+    "ptup": { sheetValue: "ptup", verifValue: "PTUP", flow: "gup", hasTable: true },
     "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true },
     "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true },
     "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true },
     "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false },
     "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false },
 };
+
+// One antrian row plus the three single cell writes that belong with it
+function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLink) {
+    return [
+        {
+            range: `'${flowConfig.antrianSheet}'!A${rowNumber}:${getColumnLetter(values.length - 1)}${rowNumber}`,
+            values: [values],
+        },
+        {
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.counterCell}`,
+            values: [[values[0]]],
+        },
+        {
+            //Write Satuan Kerja Name
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.unitKerjaColumn}${rowNumber}`,
+            values: [[unitKerja]],
+        },
+        {
+            //Write file link
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.lampiranColumn}${rowNumber}`,
+            values: [[lampiranLink]],
+        },
+    ];
+}
 
 const driveFolderIdVerifPjk = process.env.DRIVE_FOLDER_ID_VERIF_PJK;
 
@@ -872,13 +898,13 @@ function handleAjuanUpload(req, res, next) {
     });
 }
 
-async function uploadToDriveFolder(uploadFile, folderId) {
+async function uploadToDriveFolder(uploadFile, folderId, fileName) {
     const bufferStream = new stream.Readable();
     bufferStream.push(uploadFile.buffer);
     bufferStream.push(null);
 
     const driveResponse = await driveGaji.files.create({
-        requestBody: { name: uploadFile.originalname, parents: [folderId] },
+        requestBody: { name: fileName || uploadFile.originalname, parents: [folderId] },
         media: { mimeType: uploadFile.mimetype, body: bufferStream },
         fields: "webViewLink",
         supportsAllDrives: true,
@@ -907,6 +933,9 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             if (jenis.hasTable && !hasTable) {
                 return res.status(400).json({ message: "Data tabel wajib diisi." });
             }
+            // GUP/PTUP also register in the verifikasi antrian, using the same short
+            // layout the other jenis write, but never get a Write Table Verif block
+            const mirrorFlow = jenis.flow === "gup" ? AJUAN_FLOWS.verif : null;
 
             // File Upload Handling
             let fileLink = "";    //Bupot, GUP/PTUP only
@@ -930,7 +959,12 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                     return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
                 }
                 if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
-                if (pjkFile) pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk);
+                if (pjkFile) {
+                    // Drive rejects "/" in names, and a jenis label can carry one
+                    const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
+                    const pjkName = `${safePart(userdata)}_${safePart(jenis.verifValue || jenis.sheetValue)}_${safePart(jumlahAjuan)}.pdf`;
+                    pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk, pjkName);
+                }
             }
 
             // Get textdata/input data antrian and tabledata
@@ -939,6 +973,9 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 `'${flow.tableSheet}'!A:A`,
                 `'${flow.antrianSheet}'!${flow.counterCell}`  //Getting antrian ID counter
             ]
+            if (mirrorFlow) {
+                ranges.push(`'${mirrorFlow.antrianSheet}'!A:A`, `'${mirrorFlow.antrianSheet}'!${mirrorFlow.counterCell}`);
+            }
 
             // Apply backoff strategy for batch data fetch
             const allRequest = await withBackoff(async () => {
@@ -954,38 +991,44 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
 
             const lastFilledRows = responseAntrian.length || 0;
             const lastTableRows = responseTable.length || 0;
-            const newIdCounter = parseInt(responseId) + 1;
+            const timestamp = getFormattedDate().fullDateTimeFormat;
+
+            // The counter cell lags any row added to the sheet by hand, and handing out
+            // an id that already exists makes TRANS_ID ambiguous. Never issue below the
+            // highest id actually present.
+            const nextAntrianId = (rows, counter) => Math.max(
+                parseInt(counter) || 0,
+                (rows || []).reduce((max, row) => Math.max(max, Number(row?.[0]) || 0), 0)
+            ) + 1;
+            const newIdCounter = nextAntrianId(responseAntrian, responseId);
 
             // The verifikasi sheet has no Request Tanggal column, so its row stops at Nominal
             const antrianValues = jenis.flow === "gup"
-                ? [newIdCounter, getFormattedDate().fullDateTimeFormat, namaPengisi, jenis.sheetValue, jumlahAjuan, tanggalAjuan]
-                : [newIdCounter, getFormattedDate().fullDateTimeFormat, namaPengisi, jenis.sheetValue, jumlahAjuan];
+                ? [newIdCounter, timestamp, namaPengisi, jenis.sheetValue, jumlahAjuan, tanggalAjuan]
+                : [newIdCounter, timestamp, namaPengisi, jenis.sheetValue, jumlahAjuan];
 
-            // Posting on the antrian sheet
+            // Posting on the antrian sheet. Lampiran holds Bupot for GUP/PTUP, PJK otherwise.
             const startAntrianRow = lastFilledRows + 1;
-            const antrianColumnEnd = getColumnLetter(antrianValues.length - 1);
-            const newAntrianRange = `'${flow.antrianSheet}'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
+            const data = buildAntrianWrites(
+                flow,
+                startAntrianRow,
+                antrianValues,
+                userdata,
+                jenis.flow === "gup" ? fileLink : pjkLink
+            );
 
-            const data = [
-                {
-                    range: newAntrianRange,
-                    values: [antrianValues],
-                },
-                {
-                    range: `'${flow.antrianSheet}'!${flow.counterCell}`,
-                    values: [[newIdCounter]],
-                },
-                {
-                    //Write Satuan Kerja Name
-                    range: `'${flow.antrianSheet}'!${flow.unitKerjaColumn}${startAntrianRow}`,
-                    values: [[userdata]],
-                },
-                {
-                    //Write file link - Bupot for GUP/PTUP, PJK for the verifikasi flow
-                    range: `'${flow.antrianSheet}'!${flow.lampiranColumn}${startAntrianRow}`,
-                    values: [[jenis.flow === "gup" ? fileLink : pjkLink]],
-                }
-            ];
+            if (mirrorFlow) {
+                const mirrorRows = allRequest.data.valueRanges[3].values || [];
+                const mirrorId = nextAntrianId(mirrorRows, allRequest.data.valueRanges[4].values || []);
+                const mirrorRow = mirrorRows.length + 1;
+                data.push(...buildAntrianWrites(
+                    mirrorFlow,
+                    mirrorRow,
+                    [mirrorId, timestamp, namaPengisi, jenis.verifValue, jumlahAjuan],
+                    userdata,
+                    pjkLink
+                ));
+            }
 
             // Posting on the table sheet
             let startTableRow = 0;

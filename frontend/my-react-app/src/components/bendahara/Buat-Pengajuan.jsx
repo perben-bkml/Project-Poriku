@@ -1116,7 +1116,7 @@ function BuatPengajuan(props) {
                         {componentType === "lihat" ? null :
                             <div className="upload-btn-group">
                                 {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
-                                {isBuat && !isTabelPenuh && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
+                                {isBuat && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
                             </div>
                         }
                         {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}

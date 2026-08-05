@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
-import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels } from "./head-data.js";
+import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel } from "./head-data.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
@@ -18,6 +18,7 @@ import TableRow from '@mui/material/TableRow';
 import { TableFooter, TablePagination } from "@mui/material";
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import LockIcon from '@mui/icons-material/Lock';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
 // Import Context
 import { AuthContext } from "../../lib/AuthContext.jsx";
@@ -46,7 +47,13 @@ function BuatPengajuan(props) {
 
     //State for form input tag
     const [namaPengisi, setNamaPengisi] = useState("");
-    const [ajuan, setAjuan] = useState("gup");
+    // A reopened row carries the sheet's Jenis label, which has to become the form's slug.
+    // Seeded here rather than synced in an effect so the form shape is right on first render.
+    const [ajuan, setAjuan] = useState(() => (
+        props.type === "buat" || !props.passedData
+            ? "gup"
+            : jenisValueFromLabel(props.passedData[2]) || "gup"
+    ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
     const [tanggalAjuan, setTanggalAjuan] = useState("");
     const [lockRow, setLockRow] = useState(false);
@@ -74,26 +81,36 @@ function BuatPengajuan(props) {
     // State to held file from UploadFile
     const [file, setFile] = useState(null);
     const [filePjk, setFilePjk] = useState(null);
+    // Marks the stored PJK for removal - applied, together with deleting the file itself,
+    // when the edit is saved
+    const [removePjk, setRemovePjk] = useState(false);
 
-    // Jenis Pengajuan drives the whole form shape. Anything other than GUP/PTUP is a
-    // verifikasi flow. Edit and view always render the full table - only GUP/PTUP
-    // pengajuan can be reopened here.
+    // Jenis Pengajuan drives the whole form shape in every mode. Anything other than
+    // GUP/PTUP is a verifikasi flow, whether it is being created or reopened from the
+    // daftar, so the table shape follows the jenis rather than the mode.
     const isBuat = componentType === "buat";
-    const isTabelPenuh = !isBuat || jenisTabelPenuh.includes(ajuan);
-    const isTanpaTabel = isBuat && jenisTanpaTabel.includes(ajuan);
+    const isTabelPenuh = jenisTabelPenuh.includes(ajuan);
+    const isTanpaTabel = jenisTanpaTabel.includes(ajuan);
+    // Which antrian/table sheet pair this pengajuan lives on
+    const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
+    // GUP/PTUP keep the Bupot on their own row and the PJK on the mirror row, which the
+    // daftar carries across separately. Every other jenis only ever has a PJK.
+    const bupotLink = rowFlow === "gup" ? (props.passedData?.[9] || "") : "";
+    const pjkLink = props.passedData?.[11] || (rowFlow && rowFlow !== "gup" ? props.passedData?.[9] || "" : "");
     const activeColumns = useMemo(
         () => (isTabelPenuh ? columns.map((_, index) => index) : ringkasColumns),
         [isTabelPenuh]
     );
 
-    // The verifikasi table is a single row, and its sheet has no Request Tanggal column
+    // The verifikasi table is a single row, and its sheet has no Request Tanggal column.
+    // Only applies while composing - a reopened row already arrives in its own shape.
     useEffect(() => {
-        if (isTabelPenuh) return;
+        if (!isBuat || isTabelPenuh) return;
         setRowNum(1);
         setTanggalAjuan("");
         setTableData(prevData => [[1, ...(prevData[0] || initialRow).slice(1)]]);
         setPage(0);
-    }, [isTabelPenuh]);
+    }, [isBuat, isTabelPenuh]);
 
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
@@ -122,10 +139,20 @@ function BuatPengajuan(props) {
         try {
             setIsLoading2(true);
             const tableKeyword = `TRANS_ID:${props.passedData[0]}`
-            const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword } })
+            const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword, flow: rowFlow } })
             if (response.status === 200) {
-                setTableData(response.data.data || []);
-                setRowNum(response.data.data.length);
+                // The verifikasi sheet stores only the ringkas columns, but every row held
+                // in state is full width - scatter them back to the positions they edit at
+                const fetched = response.data.data || [];
+                const rows = isTabelPenuh
+                    ? fetched
+                    : fetched.map(row => {
+                        const full = Array(columns.length).fill("");
+                        ringkasColumns.forEach((colIndex, position) => { full[colIndex] = row[position] ?? ""; });
+                        return full;
+                    });
+                setTableData(rows);
+                setRowNum(rows.length);
                 setKeywordRowPos(response.data.keywordRowPos)
                 setKeywordEndRow(response.data.keywordEndRow)
                 setTimeout(() => {
@@ -141,10 +168,11 @@ function BuatPengajuan(props) {
         const newComponentType = props.type;
         setComponentType(newComponentType);
 
-        if (newComponentType !== "buat") {
+        // LS Pegawai and LS Platform never wrote a table block, so there is nothing to fetch
+        if (newComponentType !== "buat" && !isTanpaTabel) {
             fetchAntrianTable();
         }
-    }, [props.type]);
+    }, [props.type, isTanpaTabel]);
 
 
     //Handle how many rows the user wants
@@ -857,11 +885,18 @@ function BuatPengajuan(props) {
         if (file) {
             formData.append('file', file);
         }
+        if (filePjk) {
+            formData.append('filePjk', filePjk);
+        }
+        if (removePjk && !filePjk) {
+            formData.append('removePjk', 'true');
+        }
 
 
-        // Converting column info into data, then insert in existing tableData
-        const tableHead = columns.map(col => col.label)
-        const sendTable = [[...tableHead], ...tableData]
+        // Converting column info into data, then insert in existing tableData. Cropped to
+        // the flow's own columns the same way a new pengajuan is.
+        const tableHead = activeColumns.map(colIndex => (!isTabelPenuh && ringkasLabels[colIndex]) || columns[colIndex].label)
+        const sendTable = isTanpaTabel ? [] : [tableHead, ...tableData.map(row => activeColumns.map(colIndex => row[colIndex] ?? ""))]
         const antriPosition = parseInt(props.passedData[5]);
 
 
@@ -871,6 +906,7 @@ function BuatPengajuan(props) {
         formData.append('tablePosition', JSON.stringify(keywordRowPos));
         formData.append('antriPosition', JSON.stringify(antriPosition));
         formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
+        formData.append('flow', rowFlow);
 
         try {
             setIsLoading(true);
@@ -880,7 +916,11 @@ function BuatPengajuan(props) {
                 }
             })
             if (response.status === 200){
-                props.alertMessage("Data berhasil diubah.");
+                // The row saves even if deleting the PJK from Drive did not - say so rather
+                // than reporting a clean success
+                props.alertMessage(response.data?.warning
+                    ? response.data.message
+                    : "Data berhasil diubah.");
                 props.changeComponent(props.fallbackTo);
             }
             setIsLoading(false);
@@ -1073,9 +1113,12 @@ function BuatPengajuan(props) {
                             ))}
                         </select>
                         :
-                        (props.passedData && (<select name="ajuan" id="ajuan" onChange={(e) => setAjuan(e.target.value)} disabled={componentType === "lihat"}>
-                            <option value={props.passedData[2]}>{props.passedData[2].toUpperCase()}</option>
-                            <option value={props.passedData[2] === "gup"? "ptup": "gup"}>{props.passedData[2] === "gup" ? "PTUP" : "GUP"}</option>
+                        // GUP and PTUP can still be swapped for each other. Every other jenis is
+                        // fixed: switching it would move the row to the other flow's sheets.
+                        (props.passedData && (<select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)} disabled={componentType === "lihat" || rowFlow !== "gup"}>
+                            {rowFlow === "gup"
+                                ? ["gup", "ptup"].map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)
+                                : <option value={ajuan}>{String(props.passedData[2]).toUpperCase()}</option>}
                         </select>))
                         }
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
@@ -1108,15 +1151,31 @@ function BuatPengajuan(props) {
                                 {lockRow === false ? <LockOpenIcon fontSize={"medium"} /> : <LockIcon fontSize={"medium"} />}
                             </div>
                             </>}
-                            {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
+                            {componentType !== "buat" && (bupotLink || pjkLink) ?
                                 <div className={"pengajuan-form-tableinfo-message"}>
-                                    <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>
+                                    {bupotLink ? <p>Bupot: <a href={bupotLink} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p> : null}
+                                    {pjkLink ?
+                                        <p>PJK: {removePjk
+                                            ? <span style={{textDecoration: "line-through"}}>Klik Disini</span>
+                                            : <a href={pjkLink} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a>}
+                                            {/* Replacing supersedes removing, so the control hides once a new file is picked */}
+                                            {componentType === "edit" && !filePjk ?
+                                                <DeleteForeverIcon
+                                                    titleAccess={removePjk ? "Batalkan hapus PJK" : "Hapus PJK"}
+                                                    sx={{fontSize: 20, marginLeft: "6px", verticalAlign: "middle", cursor: "pointer",
+                                                        color: removePjk ? "#6c757d" : "#BD1404"}}
+                                                    onClick={() => setRemovePjk(!removePjk)}/>
+                                                : null}
+                                        </p> : null}
+                                    {removePjk ? <p style={{color: "#BD1404"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
                                 </div> : null}
                         </div>
                         {componentType === "lihat" ? null :
                             <div className="upload-btn-group">
                                 {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
-                                {isBuat && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
+                                {/* Uploading again replaces the stored link - also on edit, where the
+                                    PJK of a GUP/PTUP pengajuan lands on its mirror row */}
+                                <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>
                             </div>
                         }
                         {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}

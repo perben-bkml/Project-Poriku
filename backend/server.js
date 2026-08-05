@@ -705,25 +705,19 @@ app.get("/bendahara/antrian", async (req, res) => {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const { page = 1, limit = 5, username } = req.query;
 
-        // Fetch all data from columns A to L starting from row 3
-        const getAllRowsResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Write Antrian'!A3:T",
-            });
-        });
-
-        let allRows = getAllRowsResponse.data.values || [];
+        // Both antrian sheets, already projected onto the canonical layout
+        const allRows = await fetchMergedAntrianRows(spreadsheetId);
 
         // Filter rows where column L matches username (if username don't exist it will handle Lihat-Antrian)
         let filteredRows = []
         if (username) {
-            filteredRows = allRows.filter(row => row[11] === username);
+            filteredRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
         } else {
             filteredRows = allRows;
         }
-        // Sort from latest to earliest by reversing
-        filteredRows = filteredRows.reverse();
+        // Latest first. The two sheets each number their own rows, so the timestamp is
+        // the only ordering the merged list can share.
+        filteredRows = sortAntrianLatestFirst(filteredRows);
 
         const totalFiltered = filteredRows.length;
 
@@ -732,13 +726,8 @@ app.get("/bendahara/antrian", async (req, res) => {
         const endIndex = startIndex + parseInt(limit);
         const paginatedRows = filteredRows.slice(startIndex, endIndex);
 
-        // Ensure each row has 20 columns
-        const normalizedRows = paginatedRows.map(row => {
-            while (row.length < 20) row.push("");
-            return row;
-        });
-
-        res.json({ data: normalizedRows, realAllAntrianRows: totalFiltered });
+        // Rows are already ANTRIAN_ROW_WIDTH wide from the canonical projection
+        res.json({ data: paginatedRows, realAllAntrianRows: totalFiltered });
 
     } catch (error) {
         console.error("Error in /bendahara/antrian:", error);
@@ -756,46 +745,28 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        // Fetch the entire column B from Google Sheets with backoff handling
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Write Antrian'!B:B", // Adjust to your sheet name and range
-            });
-        });
+        const { username } = req.query;
 
-        // Get all rows from column B
-        const allRows = response.data.values || [];
+        // Same merged source as /bendahara/antrian, so a filtered row carries the flow
+        // tag and the full canonical width the unfiltered list gives
+        let allRows = await fetchMergedAntrianRows(spreadsheetId);
+        if (username) {
+            allRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
+        }
 
-        // Filter rows that match the date prefix
-        const filteredRows = allRows
-            .map((row, index) => ({ date: row[0], rowIndex: index + 1 })) // Add row index for reference
-            .filter(row => row.date && row.date.startsWith(datePrefix));
+        // Filter rows whose timestamp matches the date prefix
+        const filteredRows = sortAntrianLatestFirst(
+            allRows.filter(row => String(row[1] ?? "").startsWith(datePrefix))
+        );
         // Error handling if no keyword found
         if (filteredRows.length === 0) {
             return res.status(404).json({ error: "No matching rows found." });
         }
-        // Sort rows in reverse order (latest dates first)
-        filteredRows.reverse();
 
         // Calculate pagination
         const totalRows = filteredRows.length;
         const startIndex = (page - 1) * limit;
-        const paginatedRows = filteredRows.slice(startIndex, startIndex + limit);
-
-        // Fetch full row data for the paginated rows with backoff handling
-        const rowRanges = paginatedRows.map(row => `'Write Antrian'!A${row.rowIndex}:L${row.rowIndex}`); // Adjust range if needed
-
-        // Using backoff for the batch get operation
-        const batchGetResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: rowRanges,
-            });
-        });
-
-        // Combine row data
-        const rowData = batchGetResponse.data.valueRanges.map(range => range.values[0]);
+        const rowData = filteredRows.slice(startIndex, startIndex + parseInt(limit));
         const totalPages = Math.ceil(totalRows / limit)
 
         // Send paginated data and total rows count for pagination
@@ -816,22 +787,155 @@ app.get("/bendahara/filter-date", async (req, res) => {
 // Two submission flows share this route. GUP/PTUP keep the original sheets; every
 // other Jenis Pengajuan is a verifikasi flow that writes the '... Verif' pair, which
 // has no Request Tanggal column and keeps its ID counter in O1 rather than R1.
+const ANTRIAN_ROW_WIDTH = 20;
+
 const AJUAN_FLOWS = {
     gup: {
+        key: "gup",
         antrianSheet: "Write Antrian",
         tableSheet: "Write Table",
         counterCell: "R1",
         unitKerjaColumn: "L",
         lampiranColumn: "T",
+        antrianLastColumn: "T",
+        tableColumnCount: 22,
+        hasRequestTanggal: true,
+        antrianMap: null, // already the canonical layout
     },
     verif: {
+        key: "verif",
         antrianSheet: "Write Antrian Verif",
         tableSheet: "Write Table Verif",
         counterCell: "O1",
         unitKerjaColumn: "I",
         lampiranColumn: "O",
+        antrianLastColumn: "O",
+        tableColumnCount: 4,
+        hasRequestTanggal: false,
+        // canonical index ('Write Antrian' layout) -> column on this sheet
+        antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
 };
+
+const getAjuanFlow = (value) => AJUAN_FLOWS[value === "verif" ? "verif" : "gup"];
+
+// Jenis is stored as a label, so the flow a row belongs to is read back off it
+function resolveJenis(value) {
+    const target = String(value ?? "").trim().toLowerCase();
+    return Object.values(JENIS_PENGAJUAN).find(jenis =>
+        jenis.sheetValue.toLowerCase() === target || String(jenis.verifValue || "").toLowerCase() === target
+    ) || null;
+}
+
+// Both antrian sheets are projected onto the 'Write Antrian' column layout, so the
+// list and everything reading it work against one shape
+function toCanonicalAntrianRow(row, flowConfig) {
+    const canonical = Array(ANTRIAN_ROW_WIDTH).fill("");
+    if (!flowConfig.antrianMap) {
+        (row || []).slice(0, ANTRIAN_ROW_WIDTH).forEach((cell, index) => { canonical[index] = cell ?? ""; });
+        return canonical;
+    }
+    for (const [target, source] of Object.entries(flowConfig.antrianMap)) {
+        canonical[target] = row?.[source] ?? "";
+    }
+    return canonical;
+}
+
+// Canonical indices the routes and the frontend both index by position
+const ANTRIAN_JENIS_INDEX = 3;
+const ANTRIAN_UNIT_KERJA_INDEX = 11;
+// Appended past the canonical width so every existing index keeps its meaning. Tells
+// the frontend which flow a row came from, so edit/delete can be routed back to it.
+const ANTRIAN_FLOW_INDEX = ANTRIAN_ROW_WIDTH;
+// A GUP/PTUP pengajuan keeps its Bupot on its own row but its PJK on the mirror row,
+// so the mirror's lampiran is carried across for the daftar to show
+const ANTRIAN_PJK_INDEX = ANTRIAN_ROW_WIDTH + 1;
+
+// The mirror row carries its own id, so timestamp + nama is the only link back to the
+// 'Write Antrian' row that produced it. Both are written in the same batch, so they match
+// exactly; a nama colliding within the same second is the only way this is ambiguous.
+const mirrorRowKey = (timestamp, nama) =>
+    JSON.stringify([String(timestamp ?? "").trim(), String(nama ?? "").trim()]);
+
+// Picks the 'Write Antrian Verif' mirror of a 'Write Antrian' row out of that sheet's rows.
+// Returns { row, canonical } only when exactly one row matches - a duplicate or missing match
+// means we cannot tell which row is the mirror, and touching the wrong one is worse than
+// doing nothing. Takes the rows rather than fetching them so callers that already hold the
+// sheet do not pay for a second read.
+function matchMirrorAntrianRow(mirrorRows, antrianRowValues, purpose = "update") {
+    const key = mirrorRowKey(antrianRowValues?.[1], antrianRowValues?.[2]);
+    if (key === mirrorRowKey("", "")) return null; // nothing to match on
+
+    const matches = [];
+    (mirrorRows || []).forEach((row, index) => {
+        if (mirrorRowKey(row?.[1], row?.[2]) === key) {
+            matches.push({ row: index + 1, canonical: toCanonicalAntrianRow(row, AJUAN_FLOWS.verif) });
+        }
+    });
+    if (matches.length !== 1) {
+        console.warn(`Mirror row for ${key}: ${matches.length} matches, skipping mirror ${purpose}.`);
+        return null;
+    }
+    return matches[0];
+}
+
+async function findMirrorAntrianRow(spreadsheetId, antrianRowValues, purpose = "update") {
+    const verifFlow = AJUAN_FLOWS.verif;
+    const response = await withBackoff(async () => {
+        return await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
+        });
+    });
+    return matchMirrorAntrianRow(response.data.values, antrianRowValues, purpose);
+}
+
+// Timestamps are 'yyyy-mm-dd hh:mm:ss', so a plain string compare orders them correctly
+function sortAntrianLatestFirst(rows) {
+    return [...rows].sort((a, b) => String(b[1] ?? "").localeCompare(String(a[1] ?? "")));
+}
+
+// The daftar shows both antrian sheets as one list. GUP/PTUP also register a mirror row
+// on 'Write Antrian Verif', so those are dropped here - the 'Write Antrian' original is
+// the authoritative one and carries the columns the mirror does not have.
+async function fetchMergedAntrianRows(spreadsheetId) {
+    const flows = [AJUAN_FLOWS.gup, AJUAN_FLOWS.verif];
+    const response = await withBackoff(async () => {
+        return await sheets.spreadsheets.values.batchGet({
+            spreadsheetId,
+            ranges: flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.antrianLastColumn}`),
+        });
+    });
+
+    // The mirrors are dropped from the list itself, but their lampiran is the only copy of
+    // the PJK a GUP/PTUP pengajuan uploaded, so it is indexed on the way past
+    const mirrorPjkByKey = new Map();
+    const merged = [];
+    flows.forEach((flow, index) => {
+        const rows = response.data.valueRanges?.[index]?.values || [];
+        for (const row of rows) {
+            const canonical = toCanonicalAntrianRow(row, flow);
+            if (flow.key === "verif") {
+                const jenis = resolveJenis(canonical[ANTRIAN_JENIS_INDEX]);
+                if (jenis?.flow === "gup") { // mirror of a 'Write Antrian' row
+                    mirrorPjkByKey.set(mirrorRowKey(canonical[1], canonical[2]), canonical[19]);
+                    continue;
+                }
+            }
+            canonical[ANTRIAN_FLOW_INDEX] = flow.key;
+            merged.push(canonical);
+        }
+    });
+
+    for (const row of merged) {
+        if (row[ANTRIAN_FLOW_INDEX] === "gup") {
+            row[ANTRIAN_PJK_INDEX] = mirrorPjkByKey.get(mirrorRowKey(row[1], row[2])) || "";
+        } else {
+            row[ANTRIAN_PJK_INDEX] = row[19]; // its own lampiran already is the PJK
+        }
+    }
+    return merged;
+}
 
 // sheetValue is what lands in the Jenis column of the flow's own antrian sheet. GUP/PTUP
 // keep their lowercase keys there so existing rows and the edit dropdown stay readable,
@@ -911,6 +1015,41 @@ async function uploadToDriveFolder(uploadFile, folderId, fileName) {
         supportsTeamDrives: true
     });
     return driveResponse.data.webViewLink || "";
+}
+
+// Drive stores a webViewLink, not an id. Both shapes it hands back are covered:
+// .../file/d/<id>/view and .../open?id=<id>
+function driveFileIdFromLink(link) {
+    const value = String(link ?? "").trim();
+    if (!value) return null;
+    return value.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1]
+        || value.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]
+        || null;
+}
+
+// Removes the uploaded file itself. A file that is already gone counts as removed - the
+// caller only needs to know the link no longer points at anything it should keep.
+async function deleteDriveFile(link) {
+    const fileId = driveFileIdFromLink(link);
+    if (!fileId) return { deleted: false, reason: "link tidak dikenali" };
+    try {
+        await driveGaji.files.delete({ fileId, supportsAllDrives: true });
+        return { deleted: true };
+    } catch (error) {
+        const status = error?.code || error?.response?.status;
+        if (status === 404 || status === 410) return { deleted: true };
+        console.error(`Gagal menghapus berkas Drive ${fileId}:`, error?.message || error);
+        return { deleted: false, reason: error?.message || "gagal menghapus dari Drive" };
+    }
+}
+
+// Deletes every link in one go rather than one after another - these are independent
+// files and the caller is holding a response open. Returns the reasons that failed.
+async function deleteDriveFiles(links) {
+    const wanted = [...new Set((links || []).filter(Boolean))];
+    if (wanted.length === 0) return [];
+    const results = await Promise.all(wanted.map(link => deleteDriveFile(link)));
+    return results.filter(result => !result.deleted).map(result => result.reason);
 }
 
 app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
@@ -1150,8 +1289,10 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const transaksiKeyword = req.query.tableKeyword;
-        // Finding keyword range with data from X & Y columns on Write Table Sheet
-        const matchRange = "'Write Table'!X:Y";
+        const flowConfig = getAjuanFlow(req.query.flow);
+        // Finding keyword range with data from X & Y columns on the flow's table sheet.
+        // Both sheets keep the TRANS_ID marker in X/Y regardless of how wide their data is.
+        const matchRange = `'${flowConfig.tableSheet}'!X:Y`;
 
         // Apply backoff strategy for finding keyword match
         const matchResponse = await withBackoff(async () => {
@@ -1177,7 +1318,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         }
         // Fetch entire table data based on table row data
         let endKeywordTableRow = parseInt(keywordRow) + parseInt(keywordTableRow) - 1; //Adjusting matchResponseRows data so it target rows instead of telling how many rows exist.
-        const keywordTableRange = `'Write Table'!A${keywordRow}:V${endKeywordTableRow}`;
+        const keywordTableRange = `'${flowConfig.tableSheet}'!A${keywordRow}:${getColumnLetter(flowConfig.tableColumnCount - 1)}${endKeywordTableRow}`;
 
         // Apply backoff strategy for getting table data
         const keywordTableRespose = await withBackoff(async () => {
@@ -1190,8 +1331,8 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         });
 
         let keywordTableData = keywordTableRespose.data.values || [];
-        // Add empty rows to generate max 22 columns
-        const num_Columns = 22;
+        // Pad every row out to the flow's table width
+        const num_Columns = flowConfig.tableColumnCount;
         keywordTableData = keywordTableData.map(row => {
             while (row.length < num_Columns) {
                 row.push("");
@@ -1208,7 +1349,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
 })
 
 // Patch/Updates table data based on edited data from user
-app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
+app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
     //Extracting each part from formData
     const textdata = JSON.parse(req.body.textdata);
     const tabledata = JSON.parse(req.body.tabledata);
@@ -1217,17 +1358,27 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
     const lastTableEndRow = JSON.parse(req.body.lastTableEndRow);
 
     const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+    const flowConfig = getAjuanFlow(req.body.flow);
+    // LS Pegawai and LS Platform submit no table at all, so the whole table half of
+    // this route has to be skippable
+    const hasTable = Array.isArray(tabledata) && tabledata.length > 0;
+    // Uploading a replacement supersedes a removal, so a request carrying both is a replace
+    const removePjk = req.body.removePjk === "true" && !req.files?.filePjk?.[0];
 
-    if (!textdata || !tabledata || !tablePosition || !antriPosition || !lastTableEndRow) {
-        return res.status(400).json({message: "Invalid Data."})  
+    if (!textdata || !tabledata || !antriPosition || (hasTable && (!tablePosition || !lastTableEndRow))) {
+        return res.status(400).json({message: "Invalid Data."})
     }
     try {
 
-        // File Upload Handling
+        // File Upload Handling. Bupot replaces the lampiran on this row; PJK always belongs
+        // to the verifikasi side, which for GUP/PTUP is the mirror row on the other sheet.
         let fileLink = "";
+        let pjkLink = "";
+        const bupotFile = req.files?.file?.[0];
+        const pjkFile = req.files?.filePjk?.[0];
 
-        //Check if req.file from formData exist
-        if (req.file) {
+        // Removing a PJK deletes the file too, so it needs the same Drive access as uploading
+        if (bupotFile || pjkFile || removePjk) {
             // Dedicated uploader account, not the shared /auth/google token
             const uploaderReady = await ensureGajiDriveReady();
             if (!uploaderReady) {
@@ -1238,67 +1389,74 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
                     redirectToAuth: true
                 });
             }
-
-            const bufferStream = new stream.Readable();
-            bufferStream.push(req.file.buffer);
-            bufferStream.push(null);
-
-            // This is your 'requestBody' for metadata
-            const requestBody = {
-                name: req.file.originalname,
-                parents: [driveFolderId] // <-- The critical part the example omits
-            };
-
-            // This is your 'media' for the file content
-            const media = {
-                mimeType: req.file.mimetype,
-                body: bufferStream
-            };
-
-            const driveResponse = await driveGaji.files.create({
-                requestBody: requestBody,
-                media: media,
-                fields: 'webViewLink',
-                supportsAllDrives: true,
-                supportsTeamDrives: true
-            });
-
-            fileLink = driveResponse.data.webViewLink;
+            if (pjkFile && !driveFolderIdVerifPjk) {
+                console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
+                return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
+            }
+            if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
         }
 
         // Setting antrian data range
         textdata.unshift(getFormattedDate().fullDateTimeFormat);
 
+        // The form works in jenis slugs, the sheet stores labels. They only coincide for
+        // GUP/PTUP, so writing the slug straight through would corrupt every other jenis.
+        const editJenis = JENIS_PENGAJUAN[String(textdata[2] ?? "").trim()];
+        if (!editJenis || editJenis.flow !== flowConfig.key) {
+            return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
+        }
+        textdata[2] = editJenis.sheetValue;
+
+        // Column F on the verifikasi antrian is Status, not Request Tanggal. Writing the
+        // full row there would blank the status, so the trailing date is dropped instead.
+        const antrianValues = flowConfig.hasRequestTanggal ? textdata : textdata.slice(0, 4);
+
         // Apply backoff strategy for getting antrian data
+        // The whole row, not just A - the mirror is matched on the timestamp and nama this row
+        // still holds, and the lampiran is the only handle on the file it currently points at.
+        // Both are about to be overwritten.
         const antriResponse = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
-                spreadsheetId, 
-                range: "'Write Antrian'!A3:A"
+                spreadsheetId,
+                range: `'${flowConfig.antrianSheet}'!A3:${flowConfig.antrianLastColumn}`
             });
         });
 
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
+        let currentAntrianValues = null;
+        let currentLampiran = "";
         for (let i = 0; i < matchResult.length; i++) {
             if (String(matchResult[i][0]) === String(antriPosition)) {
                 antriRow = i + 1 + 2; //Convert to 1-based row index. +2 to exclude header and start from A3
+                currentAntrianValues = matchResult[i];
+                currentLampiran = toCanonicalAntrianRow(matchResult[i], flowConfig)[19];
                 break;
             }
         }
         if (!antriRow) {
             return res.status(400).json({ error: "Keyword not found" });
         }
+
+        if (pjkFile) {
+            // Drive rejects "/" in names, and a jenis label can carry one
+            const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
+            const pjkName = `${safePart(textdata[1])}_${safePart(editJenis.verifValue || editJenis.sheetValue)}_${safePart(textdata[3])}.pdf`;
+            pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk, pjkName);
+        }
         // Setting table data range
         const startTableRow = tablePosition;
-        const endTableRow = startTableRow + tabledata.length -1;
-        const tableColumnCount = tabledata[0].length;
+        const endTableRow = hasTable ? startTableRow + tabledata.length - 1 : 0;
+        const tableColumnCount = hasTable ? tabledata[0].length : 0;
             // Getting sheet ID
         // Get Sheet IDs with backoff
-        const sheetInfo = await withBackoff(async () => {
+        const sheetInfo = hasTable ? await withBackoff(async () => {
             return await sheets.spreadsheets.get({ spreadsheetId });
-        });
+        }) : null;
 
-        const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
+        const tableSheetId = hasTable
+            ? sheetInfo.data.sheets.find((s) => s.properties.title === flowConfig.tableSheet).properties.sheetId
+            : null;
 
         // For Border Style
         const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
@@ -1307,7 +1465,9 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
         const endRowDifference = Math.abs(endTableRow - lastTableEndRow);
         let requests = [];
 
-        if (endTableRow > lastTableEndRow) {
+        if (!hasTable) {
+            // no table block to resize
+        } else if (endTableRow > lastTableEndRow) {
             // ADD empty rows if new data is longer
             requests.push({
                 insertDimension: {
@@ -1366,25 +1526,71 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
         // Prepare batch data updates (Preserves text formatting with single API call)
         const batchDataUpdates = [
             {
-                range: `'Write Table'!A${startTableRow}:${String.fromCharCode(65 + tableColumnCount - 1)}${endTableRow}`,
-                values: tabledata
-            },
-            {
-                range: `'Write Antrian'!B${antriRow}:${String.fromCharCode(66 + textdata.length - 1)}${antriRow}`,
-                values: [textdata]
-            },
-            {
-                range: `'Write Table'!Y${startTableRow}`,
-                values: [[`${tabledata.length - 1}`]]
+                range: `'${flowConfig.antrianSheet}'!B${antriRow}:${getColumnLetter(antrianValues.length)}${antriRow}`,
+                values: [antrianValues]
             }
         ];
+
+        if (hasTable) {
+            batchDataUpdates.push(
+                {
+                    range: `'${flowConfig.tableSheet}'!A${startTableRow}:${getColumnLetter(tableColumnCount - 1)}${endTableRow}`,
+                    values: tabledata
+                },
+                {
+                    range: `'${flowConfig.tableSheet}'!Y${startTableRow}`,
+                    values: [[`${tabledata.length - 1}`]]
+                }
+            );
+        }
 
         // Add file link update if file was uploaded
         if (fileLink) {
             batchDataUpdates.push({
-                range: `'Write Antrian'!T${antriRow}`,
+                range: `'${flowConfig.antrianSheet}'!${flowConfig.lampiranColumn}${antriRow}`,
                 values: [[fileLink]]
             });
+        }
+
+        // Where this pengajuan's PJK lives: on its own row for a verifikasi jenis, on the
+        // mirror row on the other sheet for GUP/PTUP
+        let pjkTarget = null;
+        if (flowConfig.key === "gup") {
+            // The mirror row is matched on the values this row had before the edit, so it has
+            // to be re-synced here or the two drift apart and can never be paired again.
+            const mirrorFlow = AJUAN_FLOWS.verif;
+            const mirrorMatch = await findMirrorAntrianRow(spreadsheetId, currentAntrianValues, "update");
+            if (mirrorMatch) {
+                batchDataUpdates.push({
+                    // Same four columns the mirror was created with, jenis under its verif label
+                    range: `'${mirrorFlow.antrianSheet}'!B${mirrorMatch.row}:E${mirrorMatch.row}`,
+                    values: [[textdata[0], textdata[1], editJenis.verifValue || editJenis.sheetValue, textdata[3]]]
+                });
+                pjkTarget = { flow: mirrorFlow, row: mirrorMatch.row, currentLink: mirrorMatch.canonical[19] };
+            }
+        } else {
+            pjkTarget = { flow: flowConfig, row: antriRow, currentLink: currentLampiran };
+        }
+
+        if ((pjkLink || removePjk) && !pjkTarget) {
+            return res.status(409).json({ message: "Baris verifikasi untuk pengajuan ini tidak ditemukan, PJK tidak dapat diperbarui." });
+        }
+
+        // Whatever the lampiran cells stop pointing at gets removed from Drive, so replacing
+        // a file does not leave the superseded one behind
+        const linksToDelete = [];
+        if (pjkTarget && (removePjk || pjkLink)) {
+            batchDataUpdates.push({
+                range: `'${pjkTarget.flow.antrianSheet}'!${pjkTarget.flow.lampiranColumn}${pjkTarget.row}`,
+                values: [[removePjk ? "" : pjkLink]]
+            });
+            if (pjkTarget.currentLink && pjkTarget.currentLink !== pjkLink) {
+                linksToDelete.push(pjkTarget.currentLink);
+            }
+        }
+        // The Bupot sits on this row and is only ever replaced, never removed
+        if (fileLink && currentLampiran && currentLampiran !== fileLink && flowConfig.key === "gup") {
+            linksToDelete.push(currentLampiran);
         }
 
         // Execute batch data update with backoff (preserves text format)
@@ -1400,6 +1606,16 @@ app.patch("/bendahara/edit-table", upload.single('file'), async (req, res) => {
 
         console.log("✅ Update successful!");
 
+        // Drive last: the sheet no longer points at these files, so a failure here leaves
+        // unreferenced files rather than links to something already deleted
+        const failed = await deleteDriveFiles(linksToDelete);
+        if (failed.length > 0) {
+            return res.status(200).json({
+                message: "Data tersimpan, tetapi berkas lama gagal dihapus dari Drive.",
+                warning: failed.join("; ")
+            });
+        }
+
         res.status(200).json({ message: "Table updated successfully." });
 
     } catch (error) {
@@ -1414,26 +1630,42 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     const delTableKeyword = `TRANS_ID:${delKeyword}`
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        // Finding keyword range with data from X & Y columns and A column on Write Table and Write Antrian Sheet 
+        const flowConfig = getAjuanFlow(req.query.flow);
+        // Finding keyword range with data from X & Y columns on the flow's table sheet, and
+        // the full row on its antrian sheet - D carries the Jenis, which says whether a table
+        // exists, and the lampiran is the only handle on the uploaded file. For GUP/PTUP the
+        // mirror sheet rides along in the same batch so the mirror needs no second read.
+         const isGupFlow = flowConfig.key === "gup";
          const matchRange = [
-            "'Write Table'!X:Y",  //Table data Range
-            "'Write Antrian'!A:A", //Antrian data Range
+            `'${flowConfig.tableSheet}'!X:Y`,  //Table data Range
+            `'${flowConfig.antrianSheet}'!A:${flowConfig.antrianLastColumn}`, //Antrian data Range
             ];
+         if (isGupFlow) {
+             matchRange.push(`'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`);
+         }
 
-         // Apply backoff for batch get operation
-         const matchResponse = await withBackoff(async () => { 
-             return await sheets.spreadsheets.values.batchGet({ 
-                 spreadsheetId, 
-                 ranges: matchRange 
-             });
-         });
+         // The sheet ids are needed either way, so that lookup runs alongside the read
+         // rather than after it
+         const [matchResponse, sheetInfo] = await Promise.all([
+             withBackoff(async () => {
+                 return await sheets.spreadsheets.values.batchGet({
+                     spreadsheetId,
+                     ranges: matchRange
+                 });
+             }),
+             withBackoff(async () => {
+                 return await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(sheetId,title)" });
+             }),
+         ]);
 
          const responseTable = matchResponse.data.valueRanges[0].values || [];
          const responseAntrian = matchResponse.data.valueRanges[1].values || [];
+         const responseMirror = isGupFlow ? (matchResponse.data.valueRanges[2].values || []) : [];
          // Matching range with user inputted keyword
          let keywordRow = null;  //To get the keyword row range. Used to grab table data later.
          let keywordTableRow = null;  //To get how long the row is on the keyword table data.
          let keywordAntrian = null; //To get antrian row range.
+         let antrianRowValues = null;
          for (let i = 0; i < responseTable.length; i++) {
              if (responseTable[i][0] === delTableKeyword) {
                  keywordRow = i + 1 ; //Convert to 1-based row index.
@@ -1442,22 +1674,27 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
              }
          }
          for (let i = 0; i < responseAntrian.length; i++) {
-            if (responseAntrian[i][0] === delKeyword) {
+            if (String(responseAntrian[i][0]) === String(delKeyword)) {
                 keywordAntrian = i + 1; //Convert to 1-based row index
+                antrianRowValues = responseAntrian[i];
                 break;
             }
          }
-         if (!keywordRow || !keywordTableRow || !keywordAntrian){
+         if (!keywordAntrian){
              return res.status(400).json({ error: "Keyword not found" })
          }
+         // LS Pegawai and LS Platform never wrote a table block. Anything else that
+         // should have one but has no findable marker is a mismatch, not an empty table -
+         // deleting only the antrian row there would orphan the table.
+         const jenis = resolveJenis(antrianRowValues?.[ANTRIAN_JENIS_INDEX]);
+         const expectsTable = jenis ? jenis.hasTable : true;
+         if (expectsTable && (!keywordRow || !keywordTableRow)) {
+             return res.status(400).json({ error: "Keyword not found" })
+         }
+         const deleteTable = expectsTable && keywordRow && keywordTableRow;
         //  Delete Rows
-            // Find Sheets ID with backoff
-        const sheetInfo = await withBackoff(async () => {
-            return await sheets.spreadsheets.get({ spreadsheetId });
-        });
-
-        const antriSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Antrian").properties.sheetId;
-        const tableSheetId = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table").properties.sheetId;
+        const findSheetId = (title) => sheetInfo.data.sheets.find((s) => s.properties.title === title).properties.sheetId;
+        const antriSheetId = findSheetId(flowConfig.antrianSheet);
             // Create the batch update request
         const batchRequest = {
             requests: [
@@ -1470,21 +1707,49 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
                             endIndex: keywordAntrian
                         }
                     }
-                },
-                { // Delete row in Table Sheet
-                    deleteDimension: {
-                        range: {
-                            sheetId: tableSheetId,
-                            dimension: "ROWS",
-                            startIndex: keywordRow - 3, //Zero based index. Add -2 to delete two columns above
-                            endIndex: parseInt(keywordRow) + parseInt(keywordTableRow) //Zero based index.
-                        }
-                    }
                 }
             ]
         };
+
+        if (deleteTable) {
+            batchRequest.requests.push({ // Delete row in Table Sheet
+                deleteDimension: {
+                    range: {
+                        sheetId: findSheetId(flowConfig.tableSheet),
+                        dimension: "ROWS",
+                        startIndex: keywordRow - 3, //Zero based index. Add -2 to delete two columns above
+                        endIndex: parseInt(keywordRow) + parseInt(keywordTableRow) //Zero based index.
+                    }
+                }
+            });
+        }
+
+        // A GUP/PTUP pengajuan also registered a mirror row on 'Write Antrian Verif' under
+        // its own id, so deleting only the original would leave that mirror behind. It is
+        // matched on timestamp + nama; anything but a single hit is left alone rather than
+        // risk deleting an unrelated row.
+        const mirrorMatch = isGupFlow
+            ? matchMirrorAntrianRow(responseMirror, antrianRowValues, "delete")
+            : null;
+        if (mirrorMatch) {
+            batchRequest.requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: findSheetId(AJUAN_FLOWS.verif.antrianSheet),
+                        dimension: "ROWS",
+                        startIndex: mirrorMatch.row - 1,
+                        endIndex: mirrorMatch.row
+                    }
+                }
+            });
+        }
+
+        // Every file this pengajuan uploaded: the Bupot on its own row, and the PJK which
+        // for GUP/PTUP only ever lived on the mirror row
+        const linksToDelete = [toCanonicalAntrianRow(antrianRowValues, flowConfig)[19]];
+        if (mirrorMatch) linksToDelete.push(mirrorMatch.canonical[19]);
         // Send the batch update request with backoff
-        const result = await withBackoff(async () => {
+        await withBackoff(async () => {
             return await sheets.spreadsheets.batchUpdate({
                 spreadsheetId,
                 resource: batchRequest
@@ -1492,6 +1757,20 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
         });
 
         console.log("Successfully delete data.")
+
+        // Drive last, for the same reason as the edit route: a failure here leaves
+        // unreferenced files rather than rows pointing at something already deleted
+        const driveReady = linksToDelete.some(Boolean) ? await ensureGajiDriveReady() : true;
+        const failed = driveReady
+            ? await deleteDriveFiles(linksToDelete)
+            : ["akun Drive belum terhubung"];
+        if (failed.length > 0) {
+            return res.status(200).json({
+                message: "Pengajuan dihapus, tetapi berkas di Drive gagal dihapus.",
+                warning: failed.join("; ")
+            });
+        }
+
         res.status(200).json({ message: "Table Deleted successfully." });
 
     } catch (error) {

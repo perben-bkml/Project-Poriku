@@ -60,6 +60,13 @@ const jenisTanpaTabel = ["ls-pegawai", "ls-platform"];
 const ringkasColumns = [0, 1, 2, 4];
 const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
 
+// The antrian sheets store the Jenis as a label, not the slug the form works in. GUP/PTUP
+// store theirs lowercased, so the comparison is case-insensitive on both sides.
+const jenisValueFromLabel = (label) => {
+    const target = String(label ?? "").trim().toLowerCase();
+    return jenisPengajuan.find(jenis => jenis.label.toLowerCase() === target)?.value || null;
+};
+
 //For SPM-Bend.jsx
 const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
 const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
@@ -127,5 +134,5 @@ const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Su
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
 

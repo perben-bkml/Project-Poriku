@@ -20,6 +20,7 @@ function Pengajuan(props) {
         fileLink: props.fileLink,
         flow: props.flow,
         pjkLink: props.pjkLink,
+        spp: props.spp,
     }
 
     return (

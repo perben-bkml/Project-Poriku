@@ -80,6 +80,28 @@ const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerj
 //For Aksi-Pengajuan.jsx
 const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Satker", "Nominal", "Tgl. Request"]
 
+//For Pengujian-PJK.jsx & Aksi-Verif-PJK.jsx
+const pjkHeadData = ["No.", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
+const pjkHeadDataMulai = [...pjkHeadData, "Tgl. Mulai Verifikasi"];
+const pjkInfoHeadData = ["No. Antri", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
+
+// Mirrors the backend: 5 digit zero padding, non-numeric values left as they are.
+// Rows written before the padding existed still display padded.
+const formatNomorSpp = (value) => {
+    const text = String(value ?? "").trim();
+    return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
+};
+const pjkStatusOptions = [
+    {label: "Belum", color: "white", textcolor: "#00204A"},
+    {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
+    {label: "OK Catatan", color: "#FFE39F", textcolor: "#8A6100"},
+    {label: "Ditolak", color: "#EB2727", textcolor: "#EEC6C6"},
+];
+const pjkKelengkapanOptions = [
+    {...pjkStatusOptions[0], label: "Belum Verif"},
+    ...pjkStatusOptions.slice(1),
+];
+
 //For Aksi-Drpp.jsx
 const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
 
@@ -134,5 +156,5 @@ const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Su
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
 

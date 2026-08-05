@@ -1,6 +1,8 @@
 import React, { useState, useContext, useEffect } from "react";
 // Import Components
 import KelolaPJK from "../components/verifikasi/Kelola-PJK.jsx";
+import PengujianPJK from "../components/verifikasi/Pengujian-PJK.jsx";
+import AksiVerifPJK from "../components/verifikasi/Aksi-Verif-PJK.jsx";
 import FormVerifikasi from "../components/verifikasi/Form-Verifikasi.jsx";
 import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
 import Realisasi from "../components/verifikasi/Realisasi.jsx";
@@ -14,6 +16,7 @@ import Avatar from "@mui/material/Avatar";
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import {NavLink, Navigate} from "react-router-dom";
 
@@ -25,10 +28,11 @@ function VerifikasiPage(props) {
     // States
     const [buttonSelect, setButtonSelect] = useState("");
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [pjkData, setPjkData] = useState([]);
 
 
     // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["realisasi", "kelola-PJK", "form-verifikasi"];
+    const ADMIN_ONLY_MENUS = ["realisasi", "kelola-PJK", "pengujian-PJK", "aksi-verif-PJK", "form-verifikasi"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
     const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
 
@@ -90,6 +94,10 @@ function VerifikasiPage(props) {
                 return <Realisasi />;
             case "kelola-PJK":
                 return <KelolaPJK />;
+            case "pengujian-PJK":
+                return <PengujianPJK changeComponent={setButtonSelect} aksiData={setPjkData} />;
+            case "aksi-verif-PJK":
+                return <AksiVerifPJK fulldata={pjkData} changeComponent={setButtonSelect} />;
             case "form-verifikasi":
                 return <FormVerifikasi changeComponent={setButtonSelect}/>;
             case "monitor-PJK":
@@ -135,6 +143,9 @@ function VerifikasiPage(props) {
                         : null}
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "kelola-PJK" ? "btn-selected" : "hidden"}`} name="kelola-PJK" onClick={(e)=> handleButtonClick(e.target)}><DashboardIcon fontSize="small"/><span className="padd-span-bend"/>Kelola PJK</button>
+                        : null}
+                        { user.role === "admin" || user.role === "master admin" ?
+                        <button className={`dash-button ${buttonSelect === "pengujian-PJK" ? "btn-selected" : "hidden"}`} name="pengujian-PJK" onClick={(e)=> handleButtonClick(e.target)}><FactCheckIcon fontSize="small"/><span className="padd-span-bend"/>Pengujian PJK</button>
                         : null}
                         { user.role === "admin" || user.role === "master admin" ?
                         <button className={`dash-button ${buttonSelect === "form-verifikasi" ? "btn-selected" : "hidden"}`} name="form-verifikasi" onClick={(e)=> handleButtonClick(e.target)}><ChecklistRtlIcon fontSize="small"/><span className="padd-span-bend"/>Form Verifikasi</button>

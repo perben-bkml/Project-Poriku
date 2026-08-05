@@ -19,10 +19,11 @@ export function WideTableCard(props) {
         <div className="bg-card wide-card">
             <h2 className="wide-card-title">{title}</h2>
             <div className="wide-card-content">
-                { title === "Sudah Verifikasi" ?
-                    <TableKelola type="kelola" feature="SudahVerif" header={props.tableHead} content={props.tableContent} fullContent={props.fullContent} changeComponent={props.changeComponent} aksiData={props.aksiData}/>
-                    : <TableKelola type="kelola" header={props.tableHead} content={props.tableContent} fullContent={props.fullContent} changeComponent={props.changeComponent} aksiData={props.aksiData}/>
-                }
+                <TableKelola type="kelola"
+                    feature={props.feature !== undefined ? props.feature : (title === "Sudah Verifikasi" ? "SudahVerif" : undefined)}
+                    aksiLabel={props.aksiLabel} aksiTarget={props.aksiTarget}
+                    header={props.tableHead} content={props.tableContent} fullContent={props.fullContent}
+                    changeComponent={props.changeComponent} aksiData={props.aksiData}/>
             </div>
         </div>
     )

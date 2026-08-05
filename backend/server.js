@@ -703,17 +703,18 @@ app.get("/bendahara/antrian-gaji", async (req, res) => {
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 5, username } = req.query;
+        const { page = 1, limit = 5, username, flow } = req.query;
 
         // Both antrian sheets, already projected onto the canonical layout
-        const allRows = await fetchMergedAntrianRows(spreadsheetId);
+        let filteredRows = await fetchMergedAntrianRows(spreadsheetId);
 
         // Filter rows where column L matches username (if username don't exist it will handle Lihat-Antrian)
-        let filteredRows = []
         if (username) {
-            filteredRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
-        } else {
-            filteredRows = allRows;
+            filteredRows = filteredRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
+        }
+        // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
+        if (flow) {
+            filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
         }
         // Latest first. The two sheets each number their own rows, so the timestamp is
         // the only ordering the merged list can share.
@@ -812,6 +813,15 @@ const AJUAN_FLOWS = {
         antrianLastColumn: "O",
         tableColumnCount: 4,
         hasRequestTanggal: false,
+        pjk: {
+            spp: "G",
+            substansi: "J",
+            kelengkapan: "K",
+            mulaiVerif: "L",
+            selesaiVerif: "M",
+            catatan: "N",
+            defaults: { substansi: "Belum", kelengkapan: "Belum Verif" },
+        },
         // canonical index ('Write Antrian' layout) -> column on this sheet
         antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
@@ -951,9 +961,16 @@ const JENIS_PENGAJUAN = {
     "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false },
 };
 
-// One antrian row plus the three single cell writes that belong with it
-function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLink) {
-    return [
+// Nomor SPP is stored zero padded to 5 digits. Anything not purely numeric is left alone
+// rather than mangled, and the sheet write must stay RAW to keep the leading zeros.
+const formatNomorSpp = (value) => {
+    const text = String(value ?? "").trim();
+    return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
+};
+
+// One antrian row plus the single cell writes that belong with it
+function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLink, nomorSpp = "") {
+    const writes = [
         {
             range: `'${flowConfig.antrianSheet}'!A${rowNumber}:${getColumnLetter(values.length - 1)}${rowNumber}`,
             values: [values],
@@ -973,6 +990,19 @@ function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLi
             values: [[lampiranLink]],
         },
     ];
+
+    // Every row on the verifikasi antrian starts unverified, mirrors included
+    if (flowConfig.pjk) {
+        writes.push({
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.substansi}${rowNumber}:${flowConfig.pjk.kelengkapan}${rowNumber}`,
+            values: [[flowConfig.pjk.defaults.substansi, flowConfig.pjk.defaults.kelengkapan]],
+        });
+        writes.push({
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spp}${rowNumber}`,
+            values: [[formatNomorSpp(nomorSpp)]],
+        });
+    }
+    return writes;
 }
 
 const driveFolderIdVerifPjk = process.env.DRIVE_FOLDER_ID_VERIF_PJK;
@@ -1062,7 +1092,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
         try {
             const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
 
-            const [namaPengisi, jenisKey, jumlahAjuan, tanggalAjuan] = textdata;
+            const [namaPengisi, jenisKey, jumlahAjuan, tanggalAjuan, nomorSpp = ""] = textdata;
             const jenis = JENIS_PENGAJUAN[String(jenisKey || "").trim()];
             if (!jenis) {
                 return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
@@ -1153,7 +1183,8 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 startAntrianRow,
                 antrianValues,
                 userdata,
-                jenis.flow === "gup" ? fileLink : pjkLink
+                jenis.flow === "gup" ? fileLink : pjkLink,
+                nomorSpp
             );
 
             if (mirrorFlow) {
@@ -1530,6 +1561,13 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
                 values: [antrianValues]
             }
         ];
+
+        if (flowConfig.pjk && req.body.nomorSpp !== undefined) {
+            batchDataUpdates.push({
+                range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spp}${antriRow}`,
+                values: [[formatNomorSpp(req.body.nomorSpp)]]
+            });
+        }
 
         if (hasTable) {
             batchDataUpdates.push(
@@ -3373,6 +3411,107 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 
     } catch (error) {
         console.error("Error fetching Data PJK", error);
+    }
+})
+
+// Pengujian PJK - the whole verifikasi antrian in one read, split into its three sections
+const PJK_COLUMN = { substansi: 9, kelengkapan: 10, mulaiVerif: 11, selesaiVerif: 12 };
+const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
+
+app.get("/verifikasi/pengujian-pjk", async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const verifFlow = AJUAN_FLOWS.verif;
+
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
+            });
+        });
+
+        const width = 15;
+        const rows = (response.data.values || [])
+            .filter(row => String(row?.[0] ?? "").trim() !== "")
+            .map(row => Array.from({ length: width }, (_, i) => row[i] ?? ""))
+            .reverse();
+
+        const isVerified = value => PJK_VERIFIED_VALUES.includes(String(value).trim());
+        const filled = value => String(value ?? "").trim() !== "";
+
+        // A row belongs to one section only, tested furthest stage first so it moves along
+        // as it progresses and settles in Sudah Verifikasi
+        const informasi = [], sedangVerif = [], sudahVerif = [];
+        for (const row of rows) {
+            if (filled(row[PJK_COLUMN.selesaiVerif])
+                || (isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan]))) {
+                sudahVerif.push(row);
+            } else if (filled(row[PJK_COLUMN.mulaiVerif])) {
+                sedangVerif.push(row);
+            } else {
+                informasi.push(row);
+            }
+        }
+
+        res.json({ data: [informasi, sedangVerif, sudahVerif] });
+    } catch (error) {
+        console.error("Error in /verifikasi/pengujian-pjk:", error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+})
+
+app.post("/verifikasi/aksi-pjk", async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const { no_antri, mulai_verifikasi, tgl_selesai, substansi, kelengkapan, catatan } = req.body || {};
+        if (!no_antri) {
+            return res.status(400).json({ message: "Invalid or missing data." });
+        }
+
+        const verifFlow = AJUAN_FLOWS.verif;
+        const { pjk } = verifFlow;
+
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${verifFlow.antrianSheet}'!A:A`,
+            });
+        });
+
+        const rows = response.data.values || [];
+        const rowIndex = rows.findIndex(row => String(row?.[0] ?? "") === String(no_antri)) + 1;
+        if (rowIndex === 0) {
+            return res.status(400).json({ error: "Keyword not found in column A" });
+        }
+
+        // Once a selesai date exists the mulai date is history and must not be rewritten
+        const selesaiValue = tgl_selesai ?? "";
+        const mulaiValue = mulai_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
+        const updates = [
+            [`${pjk.selesaiVerif}${rowIndex}`, selesaiValue],
+            [`${pjk.substansi}${rowIndex}`, substansi],
+            [`${pjk.kelengkapan}${rowIndex}`, kelengkapan],
+            [`${pjk.catatan}${rowIndex}`, catatan],
+            selesaiValue === "" ? [`${pjk.mulaiVerif}${rowIndex}`, mulaiValue] : null,
+        ].filter(Boolean);
+
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    valueInputOption: "USER_ENTERED",
+                    data: updates.map(([cell, value]) => ({
+                        range: `'${verifFlow.antrianSheet}'!${cell}`,
+                        values: [[value ?? ""]],
+                    })),
+                },
+            });
+        });
+
+        res.status(200).json({ message: "Data successfully written." });
+    } catch (error) {
+        console.error("Error in /verifikasi/aksi-pjk:", error);
+        res.status(500).json({ message: "Server error." });
     }
 })
 

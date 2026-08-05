@@ -103,17 +103,17 @@ function BendaharaPage(props) {
       }
 
     // Handle invisible component (invisible on button)
-    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink}) {
+    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp}) {
         if (!lastPage) {
             return () => {
                 setButtonSelect(compType);
-                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink])
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp])
             }
         } else {
             return () =>{
                 setButtonSelect(compType);
                 setSavedPagination(lastPage);
-                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink])
+                setAntrianData([keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp])
                 setAlertMessage(null);
             }
         }

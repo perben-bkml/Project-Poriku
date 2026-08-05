@@ -55,6 +55,7 @@ function BuatPengajuan(props) {
             : jenisValueFromLabel(props.passedData[2]) || "gup"
     ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
+    const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
     const [tanggalAjuan, setTanggalAjuan] = useState("");
     const [lockRow, setLockRow] = useState(false);
 
@@ -773,7 +774,7 @@ function BuatPengajuan(props) {
         setIsPopup(false);
 
         // Grabbing input & select tag values from useState
-        const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan];
+        const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan, nomorSpp];
 
         //Handling file upload. Create FormData object
         const formData = new FormData();
@@ -907,6 +908,9 @@ function BuatPengajuan(props) {
         formData.append('antriPosition', JSON.stringify(antriPosition));
         formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
         formData.append('flow', rowFlow);
+        if (!isTabelPenuh) {
+            formData.append('nomorSpp', nomorSpp);
+        }
 
         try {
             setIsLoading(true);
@@ -1125,8 +1129,14 @@ function BuatPengajuan(props) {
                         <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan"
                             value={jumlahAjuan}
                             onChange={handleJumlahChange}
-                            readOnly={componentType === "lihat"} 
+                            readOnly={componentType === "lihat"}
                             required/>
+                        {!isTabelPenuh && <>
+                        <label htmlFor="aju-spp">Nomor SPP:</label>
+                        <input type="text" id="aju-spp" name="nomor-spp" value={nomorSpp}
+                            readOnly={componentType === "lihat"}
+                            onChange={(e) => setNomorSpp(e.target.value)}/>
+                        </>}
                         {isTabelPenuh && <>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
                         <input type="date" id="aju-date" name="tanggal-ajuan" className="pengajuan-date"

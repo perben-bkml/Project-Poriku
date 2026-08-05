@@ -145,16 +145,15 @@ export function TableKelola(props) {
         setPage(0);
     };
 
+    // Read here rather than inside Row, whose own props shadow these
+    const aksiLabel = props.aksiLabel || "Lihat";
+
     function handleAksiClick(index) {
-        if (props.type === "kelola") {
-            props.changeComponent("aksi-pengajuan")
-            props.aksiData(props.fullContent[index])
-        } else if (props.type === "monitor") {
-            props.changeComponent("aksi-drpp")
-            props.aksiData(props.fullContent[index])
-        } else {
-            null
-        }
+        const target = props.aksiTarget
+            || (props.type === "kelola" ? "aksi-pengajuan" : props.type === "monitor" ? "aksi-drpp" : null);
+        if (!target) return;
+        props.changeComponent(target)
+        props.aksiData(props.fullContent[index])
     }
 
     //For footers
@@ -430,7 +429,7 @@ export function TableKelola(props) {
                     <TableCell sx ={{ paddingBottom: 0, paddingTop: 0, border: "none" }} colSpan={tableType === "kelola" || tableType === "monitor"?  props.rowData[0].length + 2 : 20}>
                         <Collapse in={isOpen} timeout="auto" unmountOnExit>
                             <div className="collapsible">
-                                <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>Lihat</button>
+                                <button className="btn-aksi" onClick={() => handleAksiClick(props.rowIndex)}>{aksiLabel}</button>
                             </div>
                         </Collapse>
                     </TableCell>

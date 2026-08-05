@@ -42,6 +42,24 @@ const columns2 = [
     { id:"tgl-selesai", label: "Tgl. Selesai Verif", minWidth: 40 },
 ]
 
+//For Buat-Pengajuan.jsx - sorted alphabetically by label
+const jenisPengajuan = [
+    { value: "gup", label: "GUP" },
+    { value: "gup-kkp", label: "GUP KKP" },
+    { value: "ls-bendahara", label: "LS Bendahara" },
+    { value: "ls-kontraktual", label: "LS Kontraktual" },
+    { value: "ls-pegawai", label: "LS Pegawai" },
+    { value: "ls-platform", label: "LS Platform Pembayaran Pemerintah" },
+    { value: "ptup", label: "PTUP" },
+];
+
+// GUP/PTUP keep the full table and the Request Tanggal input. Everything else is
+// a verifikasi flow: a one row table cropped from the full one, or no table at all.
+const jenisTabelPenuh = ["gup", "ptup"];
+const jenisTanpaTabel = ["ls-pegawai", "ls-platform"];
+const ringkasColumns = [0, 1, 2, 4];
+const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
+
 //For SPM-Bend.jsx
 const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
 const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
@@ -109,5 +127,5 @@ const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Su
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
 

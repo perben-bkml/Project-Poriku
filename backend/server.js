@@ -813,7 +813,81 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
 
 // Write data from table on sheet
-app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
+// Two submission flows share this route. GUP/PTUP keep the original sheets; every
+// other Jenis Pengajuan is a verifikasi flow that writes the '... Verif' pair, which
+// has no Request Tanggal column and keeps its ID counter in O1 rather than R1.
+const AJUAN_FLOWS = {
+    gup: {
+        antrianSheet: "Write Antrian",
+        tableSheet: "Write Table",
+        counterCell: "R1",
+        unitKerjaColumn: "L",
+        lampiranColumn: "T",
+    },
+    verif: {
+        antrianSheet: "Write Antrian Verif",
+        tableSheet: "Write Table Verif",
+        counterCell: "O1",
+        unitKerjaColumn: "I",
+        lampiranColumn: "O",
+    },
+};
+
+// sheetValue is what lands in the Jenis column. GUP/PTUP keep their lowercase keys so
+// existing rows and the edit dropdown stay readable.
+const JENIS_PENGAJUAN = {
+    "gup": { sheetValue: "gup", flow: "gup", hasTable: true },
+    "ptup": { sheetValue: "ptup", flow: "gup", hasTable: true },
+    "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true },
+    "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true },
+    "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true },
+    "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false },
+    "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false },
+};
+
+const driveFolderIdVerifPjk = process.env.DRIVE_FOLDER_ID_VERIF_PJK;
+
+// Bupot keeps its unrestricted handling; PJK is PDF only. multer applies fileSize
+// across all fields, so the cap is the larger of the two.
+const uploadAjuan = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.fieldname === "filePjk" && file.mimetype !== "application/pdf") {
+            return cb(new Error("Berkas PJK harus berformat PDF."));
+        }
+        cb(null, true);
+    }
+});
+
+function handleAjuanUpload(req, res, next) {
+    uploadAjuan.fields([{ name: "file", maxCount: 1 }, { name: "filePjk", maxCount: 1 }])(req, res, (err) => {
+        if (err) {
+            const message = err.code === "LIMIT_FILE_SIZE"
+                ? "Ukuran berkas melebihi 100 MB."
+                : (err.message || "Berkas tidak valid.");
+            return res.status(400).json({ message });
+        }
+        next();
+    });
+}
+
+async function uploadToDriveFolder(uploadFile, folderId) {
+    const bufferStream = new stream.Readable();
+    bufferStream.push(uploadFile.buffer);
+    bufferStream.push(null);
+
+    const driveResponse = await driveGaji.files.create({
+        requestBody: { name: uploadFile.originalname, parents: [folderId] },
+        media: { mimeType: uploadFile.mimetype, body: bufferStream },
+        fields: "webViewLink",
+        supportsAllDrives: true,
+        supportsTeamDrives: true
+    });
+    return driveResponse.data.webViewLink || "";
+}
+
+app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
     //Extracting each part from formData
     const textdata = JSON.parse(req.body.textdata);
     const tabledata = JSON.parse(req.body.tabledata);
@@ -822,11 +896,25 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
     if (textdata && tabledata && userdata) {
         try {
             const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-            // File Upload Handling
-            let fileLink = ""; //Link to see the uploaded file
 
-            //Check if req.file from formData exist
-            if (req.file) {
+            const [namaPengisi, jenisKey, jumlahAjuan, tanggalAjuan] = textdata;
+            const jenis = JENIS_PENGAJUAN[String(jenisKey || "").trim()];
+            if (!jenis) {
+                return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
+            }
+            const flow = AJUAN_FLOWS[jenis.flow];
+            const hasTable = jenis.hasTable && Array.isArray(tabledata) && tabledata.length > 0;
+            if (jenis.hasTable && !hasTable) {
+                return res.status(400).json({ message: "Data tabel wajib diisi." });
+            }
+
+            // File Upload Handling
+            let fileLink = "";    //Bupot, GUP/PTUP only
+            let pjkLink = "";     //PJK, verifikasi flow only
+            const bupotFile = req.files?.file?.[0];
+            const pjkFile = req.files?.filePjk?.[0];
+
+            if (bupotFile || pjkFile) {
                 // Dedicated uploader account, not the shared /auth/google token
                 const uploaderReady = await ensureGajiDriveReady();
                 if (!uploaderReady) {
@@ -837,46 +925,26 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
                         redirectToAuth: true
                     });
                 }
-
-                const bufferStream = new stream.Readable();
-                bufferStream.push(req.file.buffer);
-                bufferStream.push(null);
-
-                // This is your 'requestBody' for metadata
-                const requestBody = {
-                    name: req.file.originalname,
-                    parents: [driveFolderId]
-                };
-
-                // This is your 'media' for the file content
-                const media = {
-                    mimeType: req.file.mimetype,
-                    body: bufferStream
-                };
-
-                const driveResponse = await driveGaji.files.create({
-                    requestBody: requestBody,
-                    media: media,
-                    fields: 'webViewLink',
-                    supportsAllDrives: true,
-                    supportsTeamDrives: true
-                });
-
-                fileLink = driveResponse.data.webViewLink;
+                if (pjkFile && !driveFolderIdVerifPjk) {
+                    console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
+                    return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
+                }
+                if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
+                if (pjkFile) pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk);
             }
 
             // Get textdata/input data antrian and tabledata
             const ranges = [
-                "'Write Antrian'!A:A",
-                "'Write Table'!A:A",
-                "'Write Antrian'!R1:R1"  //Getting antrian ID counter
+                `'${flow.antrianSheet}'!A:A`,
+                `'${flow.tableSheet}'!A:A`,
+                `'${flow.antrianSheet}'!${flow.counterCell}`  //Getting antrian ID counter
             ]
 
             // Apply backoff strategy for batch data fetch
             const allRequest = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.batchGet({ 
-                    spreadsheetId, 
-                    ranges: ranges 
+                return await sheets.spreadsheets.values.batchGet({
+                    spreadsheetId,
+                    ranges: ranges
                 });
             });
 
@@ -885,100 +953,80 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
             const responseId = allRequest.data.valueRanges[2].values || [];
 
             const lastFilledRows = responseAntrian.length || 0;
-            const lastTableRows = responseTable.length || [];
-            // Add date to beginning of textdata array
-            textdata.unshift(getFormattedDate().fullDateTimeFormat);
-            // Add counter increment and unshift to textdata
+            const lastTableRows = responseTable.length || 0;
             const newIdCounter = parseInt(responseId) + 1;
-            textdata.unshift(newIdCounter)
-            // Posting on Write Antrian
+
+            // The verifikasi sheet has no Request Tanggal column, so its row stops at Nominal
+            const antrianValues = jenis.flow === "gup"
+                ? [newIdCounter, getFormattedDate().fullDateTimeFormat, namaPengisi, jenis.sheetValue, jumlahAjuan, tanggalAjuan]
+                : [newIdCounter, getFormattedDate().fullDateTimeFormat, namaPengisi, jenis.sheetValue, jumlahAjuan];
+
+            // Posting on the antrian sheet
             const startAntrianRow = lastFilledRows + 1;
-            const antrianColumnCount = textdata.length;
-            const antrianColumnEnd = String.fromCharCode(65 + antrianColumnCount); //Convert to letter.
-            const newAntrianRange = `'Write Antrian'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
-            // Posting on Write Table
-            const startTableRow = lastTableRows + 3;
-            const endTableRow = startTableRow + tabledata.length -1;
-            const tableColumnCount = tabledata[0].length;
-            const tableColumnEnd = String.fromCharCode(65 + tableColumnCount - 1); //Convert to letter
-            const newTableRange = `'Write Table'!A${startTableRow}:${tableColumnEnd}${endTableRow}`
-            // Update Gsheet Antrian and Table
-            var resource = {
-                data: [
-                    {
-                        range: newAntrianRange,
-                        values: [textdata],
-                    },
-                    {
-                        range: newTableRange,
-                        values: tabledata,
-                    },
-                    {
-                        range: "'Write Antrian'!R1:R1",
-                        values: [[newIdCounter]],
-                    },
-                    {
-                        //Write Satuan Kerja Name
-                        range: `'Write Antrian'!L${startAntrianRow}`,
-                        values: [[userdata]],
-                    },
-                    {
-                        //Write file name
-                        range: `'Write Antrian'!T${startAntrianRow}`,
-                        values: [[fileLink]],
-                    }
-                ],
-                valueInputOption: "RAW",
+            const antrianColumnEnd = getColumnLetter(antrianValues.length - 1);
+            const newAntrianRange = `'${flow.antrianSheet}'!A${startAntrianRow}:${antrianColumnEnd}${startAntrianRow}`
+
+            const data = [
+                {
+                    range: newAntrianRange,
+                    values: [antrianValues],
+                },
+                {
+                    range: `'${flow.antrianSheet}'!${flow.counterCell}`,
+                    values: [[newIdCounter]],
+                },
+                {
+                    //Write Satuan Kerja Name
+                    range: `'${flow.antrianSheet}'!${flow.unitKerjaColumn}${startAntrianRow}`,
+                    values: [[userdata]],
+                },
+                {
+                    //Write file link - Bupot for GUP/PTUP, PJK for the verifikasi flow
+                    range: `'${flow.antrianSheet}'!${flow.lampiranColumn}${startAntrianRow}`,
+                    values: [[jenis.flow === "gup" ? fileLink : pjkLink]],
+                }
+            ];
+
+            // Posting on the table sheet
+            let startTableRow = 0;
+            let endTableRow = 0;
+            let tableColumnCount = 0;
+            if (hasTable) {
+                startTableRow = lastTableRows + 3;
+                endTableRow = startTableRow + tabledata.length - 1;
+                tableColumnCount = tabledata[0].length;
+                const tableColumnEnd = getColumnLetter(tableColumnCount - 1);
+                data.push({
+                    range: `'${flow.tableSheet}'!A${startTableRow}:${tableColumnEnd}${endTableRow}`,
+                    values: tabledata,
+                });
+                // Transaksi ID and row count, the key /bendahara/data-transaksi reads back.
+                // Folded into this batch since both values are already known.
+                data.push({
+                    range: `'${flow.tableSheet}'!X${startTableRow}:Y${startTableRow}`,
+                    values: [[`TRANS_ID:${newIdCounter}`, tabledata.length - 1]],
+                });
             }
 
             // Apply backoff strategy for batch update
-            const response = await withBackoff(async () => {
+            await withBackoff(async () => {
                 return await sheets.spreadsheets.values.batchUpdate({
                     spreadsheetId,
-                    resource,
+                    resource: { data, valueInputOption: "RAW" },
                 });
             });
 
-            // Assign Transaksi ID and Row number (Row number for edits)
-            // Getting posted Antrian Number
-            const newAntrianNumRange = `'Write Antrian'!A${startAntrianRow}:A${startAntrianRow}` 
-
-            // Apply backoff for getting antrian number
-            const requestNewAntrianNum = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({
-                    spreadsheetId, 
-                    range: newAntrianNumRange
-                });
-            });
-
-            const getNewAntrianNum = requestNewAntrianNum.data.values;
-            const newAntrianNum = getNewAntrianNum[0][0]
-            // Getting posted Table row numbers
-            const postedTableRow = tabledata.length - 1;
-            // Writing it to desired table
-            const idAndRowNum = [ `TRANS_ID:${newAntrianNum}`, postedTableRow ];
-            const idAndRowNumRange = `'Write Table'!X${startTableRow}:Y${startTableRow}`;
-            resource = { values: [idAndRowNum] }
-
-            // Apply backoff for updating ID and row number
-            const writeIdAndRowNum = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.update({
-                    spreadsheetId, 
-                    range: idAndRowNumRange, 
-                    valueInputOption: "RAW", 
-                    resource
-                });
-            });
+            if (!hasTable) {
+                return res.status(200).json({message: "Data sent successfully."});
+            }
 
             // Coloring Gsheet Table header & giving borders
-            resource = "";
-
             // Apply backoff for getting sheet info
             const sheetInfo = await withBackoff(async () => {
-                return await sheets.spreadsheets.get({ spreadsheetId });
+                return await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(sheetId,title)" });
             });
 
-            const sheet = sheetInfo.data.sheets.find((s) => s.properties.title === "Write Table");
+            const sheet = sheetInfo.data.sheets.find((s) => s.properties.title === flow.tableSheet);
             const sheetId = sheet.properties.sheetId
             const tableBorderStyle = { style: "SOLID", width: 1, color: {red: 0, green: 0, blue: 0,}, }
             const batchUpdateRequest = {
@@ -1036,9 +1084,9 @@ app.post("/bendahara/buat-ajuan", upload.single('file'), async (req, res) => {
             };
 
             // Apply backoff for batch update (coloring and borders)
-            const updateColor = await withBackoff(async () => {
+            await withBackoff(async () => {
                 return await sheets.spreadsheets.batchUpdate({
-                    spreadsheetId, 
+                    spreadsheetId,
                     resource: batchUpdateRequest
                 });
             });
@@ -3945,6 +3993,428 @@ app.patch("/verifikasi/code-anggaran", async (req, res) => {
         return res.status(500).json({ error: "Failed to update code anggaran" });
     }
 });
+
+// --- Pembayaran BP ------------------------------------------------------------
+// Grid style data entry over 'Pembayaran BP'!A3:O. The API speaks ISO dates and
+// plain numbers; the sheet keeps "1-Jan-2026" text and whole rupiah, so every
+// conversion happens at this boundary and nowhere else.
+
+const PEMBAYARAN_BP_SHEET = "Pembayaran BP";
+const PEMBAYARAN_BP_FIRST_ROW = 3;
+const PEMBAYARAN_BP_LAST_COLUMN = "O";
+const PEMBAYARAN_BP_MAX_ROWS = 200;
+const PEMBAYARAN_BP_VIEW_ROLES = ["admin", "master admin", "admin_gaji"];
+const PEMBAYARAN_BP_EDIT_ROLES = ["admin", "master admin"];
+
+const STATUS_BAYAR_BP_OPTIONS = ["Belum Bayar", "Sudah Bayar"];
+const STATUS_PAJAK_BP_OPTIONS = ["Belum Setor", "Sudah Setor"];
+
+// Short form spellings, matching how Unit Kerja is written on 'Database SPM'
+const UNIT_KERJA_BP_OPTIONS = [
+    "Biro Umum", "Biro Sarpras", "Biro Rencana", "Dit Datin", "Dit Hukum",
+    "Dit Kebijakan", "Dit Kerma", "Dit Latihan", "Dit Litbang", "Dit Opsla",
+    "Dit Opsud", "Dit Strategi", "Inspektorat", "KPIML", "UPH",
+    "Zona Barat", "Zona Tengah", "Zona Timur",
+];
+
+// Column order is the sheet order, A to O. The two 'auto' columns are written by
+// the server; the rest are what the admin fills in.
+const PEMBAYARAN_BP_COLUMNS = [
+    { key: "no", label: "No", type: "auto" },
+    { key: "tanggalEdit", label: "Tanggal Edit", type: "auto" },
+    { key: "unitKerja", label: "Unit Kerja", type: "satker", required: true },
+    { key: "nomorSpm", label: "Nomor SPM", type: "text", required: true },
+    { key: "jenisSpm", label: "Jenis SPM", type: "text", required: true },
+    { key: "tanggalSp2d", label: "Tanggal SP2D", type: "date", required: true },
+    { key: "va", label: "VA", type: "text" },
+    { key: "nilaiSp2d", label: "Nilai SP2D", type: "money", required: true },
+    { key: "kodeBniDirect", label: "Kode BNI Direct", type: "text" },
+    { key: "statusBayarPenerima", label: "Status Bayar Penerima", type: "enum", options: STATUS_BAYAR_BP_OPTIONS },
+    { key: "tanggalBayarPenerima", label: "Tanggal Bayar Penerima", type: "date" },
+    { key: "fileBuktiBayar", label: "File Bukti Bayar", type: "link" },
+    { key: "statusPajak", label: "Status Pajak", type: "enum", options: STATUS_PAJAK_BP_OPTIONS },
+    { key: "tanggalPajak", label: "Tanggal Pajak", type: "date" },
+    { key: "fileDepositPajak", label: "File Deposit Pajak", type: "link" },
+];
+const PEMBAYARAN_BP_EDITABLE = PEMBAYARAN_BP_COLUMNS.filter(column => column.type !== "auto");
+
+// Written form of MONTH_TOKENS, which already parses both these and the English
+// spellings back
+const MONTH_TOKENS_ID = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+function splitSheetDate(value) {
+    const parts = String(value).split("-");
+    if (parts.length !== 3) return null;
+    const day = Number(parts[0]);
+    const month = MONTH_TOKENS[parts[1].trim().toUpperCase()];
+    const year = Number(parts[2]);
+    if (!month || !Number.isInteger(day) || day < 1 || day > 31 || !Number.isInteger(year)) return null;
+    return { day, month, year };
+}
+
+// "2026-01-01" or "1-Jan-2026" -> "1-Jan-2026". null when unreadable.
+function toSheetDate(value) {
+    const raw = String(value ?? "").trim();
+    if (raw === "") return "";
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) {
+        const month = Number(iso[2]);
+        const day = Number(iso[3]);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+        return `${day}-${MONTH_TOKENS_ID[month - 1]}-${Number(iso[1])}`;
+    }
+    const parsed = splitSheetDate(raw);
+    return parsed ? `${parsed.day}-${MONTH_TOKENS_ID[parsed.month - 1]}-${parsed.year}` : null;
+}
+
+// "1-Jan-2026" -> "2026-01-01", so a date input on the frontend can bind directly
+function fromSheetDate(value) {
+    const raw = String(value ?? "").trim();
+    if (raw === "") return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = splitSheetDate(raw);
+    if (!parsed) return null;
+    return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
+}
+
+function pembayaranBpTimestamp() {
+    const date = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const time = [date.getHours(), date.getMinutes(), date.getSeconds()]
+        .map(part => String(part).padStart(2, "0")).join(":");
+    return `${date.getDate()}-${MONTH_TOKENS_ID[date.getMonth()]}-${date.getFullYear()} ${time}`;
+}
+
+// Normalizes as it validates, so "DIT LATIHAN " can never land as a third spelling
+// of an existing satker the way it does when the sheet is typed into directly
+function validatePembayaranBpRow(input, index) {
+    const cells = {};
+    for (const column of PEMBAYARAN_BP_EDITABLE) {
+        const raw = input?.[column.key];
+        const value = typeof raw === "number" ? raw : String(raw ?? "").trim();
+        const where = `Baris ${index + 1}, kolom "${column.label}"`;
+
+        if (value === "") {
+            if (column.required) return { ok: false, message: `${where} wajib diisi.` };
+            cells[column.key] = "";
+            continue;
+        }
+
+        switch (column.type) {
+            case "satker": {
+                const match = UNIT_KERJA_BP_OPTIONS.find(option => normalizeSatker(option) === normalizeSatker(value));
+                if (!match) return { ok: false, message: `${where}: "${value}" bukan unit kerja yang dikenal.` };
+                cells[column.key] = match;
+                break;
+            }
+            case "enum": {
+                const match = column.options.find(option => normalizeSatker(option) === normalizeSatker(value));
+                if (!match) return { ok: false, message: `${where} harus salah satu dari: ${column.options.join(", ")}.` };
+                cells[column.key] = match;
+                break;
+            }
+            case "date": {
+                const date = toSheetDate(value);
+                if (date === null) return { ok: false, message: `${where}: tanggal "${value}" tidak terbaca.` };
+                cells[column.key] = date;
+                break;
+            }
+            case "money": {
+                const nominal = parseRupiah(value);
+                if (Number.isNaN(nominal)) return { ok: false, message: `${where}: nilai "${value}" bukan angka.` };
+                if (nominal < 0) return { ok: false, message: `${where} tidak boleh negatif.` };
+                cells[column.key] = nominal;
+                break;
+            }
+            case "link": {
+                if (!/^https:\/\//i.test(value)) return { ok: false, message: `${where} harus berupa tautan hasil unggahan.` };
+                cells[column.key] = value;
+                break;
+            }
+            default:
+                cells[column.key] = String(value);
+        }
+    }
+    return { ok: true, cells };
+}
+
+function pembayaranBpToRecord(row, rowNumber) {
+    const record = { rowNumber, no: Number(row?.[0]) || null, tanggalEdit: String(row?.[1] ?? "").trim() };
+    const invalidFields = [];
+
+    PEMBAYARAN_BP_EDITABLE.forEach((column, index) => {
+        const value = String(row?.[index + 2] ?? "").trim();
+        if (value === "") {
+            record[column.key] = column.type === "money" ? null : "";
+            return;
+        }
+        if (column.type === "money") {
+            const nominal = parseRupiah(value);
+            if (Number.isNaN(nominal)) { record[column.key] = value; invalidFields.push(column.key); }
+            else record[column.key] = nominal;
+        } else if (column.type === "date") {
+            const iso = fromSheetDate(value);
+            if (iso === null) { record[column.key] = value; invalidFields.push(column.key); }
+            else record[column.key] = iso;
+        } else {
+            record[column.key] = value;
+        }
+    });
+
+    // Unreadable cells come back as their raw text so the grid can flag them
+    // instead of blanking real data on the next save
+    if (invalidFields.length) record.invalidFields = invalidFields;
+    return record;
+}
+
+const pembayaranBpRow = (no, timestamp, cells) =>
+    [no, timestamp, ...PEMBAYARAN_BP_EDITABLE.map(column => cells[column.key])];
+
+function requirePembayaranBpRole(roles) {
+    return (req, res, next) => {
+        let viewer;
+        try {
+            viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
+        }
+        if (!roles.includes(viewer.role)) {
+            return res.status(403).json({ message: "Akses ditolak." });
+        }
+        req.viewer = viewer;
+        next();
+    };
+}
+
+function pembayaranBpSpreadsheet(req, res) {
+    const spreadsheetId = getSpreadsheetId(req, 'PEMBAYARAN_BP');
+    if (!spreadsheetId) {
+        res.status(400).json({ message: "Spreadsheet Pembayaran BP untuk tahun ini belum dikonfigurasi." });
+        return null;
+    }
+    return spreadsheetId;
+}
+
+// Sheets trims trailing empty rows, so the length of column A is the offset of the
+// last populated row. Next No comes off the max rather than the count, so a row
+// deleted from the sheet cannot make a new entry reuse an existing id.
+async function readPembayaranBpIds(spreadsheetId) {
+    const response = await withBackoff(async () => {
+        return await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:A`,
+        });
+    });
+    const ids = (response.data.values || []).map(row => String(row?.[0] ?? "").trim());
+    return {
+        ids,
+        nextRow: PEMBAYARAN_BP_FIRST_ROW + ids.length,
+        nextNo: ids.reduce((max, id) => Math.max(max, Number(id) || 0), 0) + 1,
+    };
+}
+
+function readPembayaranBpBody(req, res) {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [req.body?.row].filter(Boolean);
+    if (rows.length === 0) {
+        res.status(400).json({ message: "Tidak ada baris yang dikirim." });
+        return null;
+    }
+    if (rows.length > PEMBAYARAN_BP_MAX_ROWS) {
+        res.status(400).json({ message: `Maksimal ${PEMBAYARAN_BP_MAX_ROWS} baris per simpan.` });
+        return null;
+    }
+    return rows;
+}
+
+app.get("/bendahara/pembayaran-bp/options", requirePembayaranBpRole(PEMBAYARAN_BP_VIEW_ROLES), (req, res) => {
+    return res.status(200).json({
+        unitKerja: UNIT_KERJA_BP_OPTIONS,
+        statusBayarPenerima: STATUS_BAYAR_BP_OPTIONS,
+        statusPajak: STATUS_PAJAK_BP_OPTIONS,
+        columns: PEMBAYARAN_BP_COLUMNS.map(({ key, label, type, required }) => ({
+            key, label, type, required: Boolean(required),
+        })),
+    });
+});
+
+app.get("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_VIEW_ROLES), async (req, res) => {
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const response = await withBackoff(async () => {
+            return await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:${PEMBAYARAN_BP_LAST_COLUMN}`,
+            });
+        });
+
+        const data = (response.data.values || [])
+            .map((row, index) => pembayaranBpToRecord(row, PEMBAYARAN_BP_FIRST_ROW + index))
+            .filter(record => record.no !== null || PEMBAYARAN_BP_EDITABLE.some(column => {
+                const value = record[column.key];
+                return value !== "" && value !== null;
+            }));
+
+        return res.status(200).json({ data });
+    } catch (error) {
+        console.error("Error in GET /bendahara/pembayaran-bp:", error);
+        return res.status(500).json({ message: "Gagal memuat data Pembayaran BP." });
+    }
+});
+
+app.post("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES), async (req, res) => {
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const rows = readPembayaranBpBody(req, res);
+        if (!rows) return;
+
+        // Every row is validated before anything is written, so a bad row at the end
+        // of a batch cannot land after good rows above it
+        const validated = [];
+        for (let index = 0; index < rows.length; index++) {
+            const result = validatePembayaranBpRow(rows[index], index);
+            if (!result.ok) return res.status(400).json({ message: result.message, rowIndex: index });
+            validated.push(result.cells);
+        }
+
+        const { nextRow, nextNo } = await readPembayaranBpIds(spreadsheetId);
+        const timestamp = pembayaranBpTimestamp();
+        const values = validated.map((cells, index) => pembayaranBpRow(nextNo + index, timestamp, cells));
+        const endRow = nextRow + values.length - 1;
+
+        // RAW keeps "1-Jan-2026" as the text the rest of the app parses, while a JS
+        // number still lands as a real number cell
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'${PEMBAYARAN_BP_SHEET}'!A${nextRow}:${PEMBAYARAN_BP_LAST_COLUMN}${endRow}`,
+                valueInputOption: "RAW",
+                requestBody: { values },
+            });
+        });
+
+        return res.status(201).json({
+            message: `${values.length} baris berhasil disimpan.`,
+            data: values.map((row, index) => ({ rowNumber: nextRow + index, no: row[0], tanggalEdit: timestamp })),
+        });
+    } catch (error) {
+        console.error("Error in POST /bendahara/pembayaran-bp:", error);
+        return res.status(500).json({ message: "Gagal menyimpan data Pembayaran BP." });
+    }
+});
+
+app.patch("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES), async (req, res) => {
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const rows = readPembayaranBpBody(req, res);
+        if (!rows) return;
+
+        const validated = [];
+        const seenRows = new Set();
+        for (let index = 0; index < rows.length; index++) {
+            const rowNumber = Number(rows[index]?.rowNumber);
+            const no = String(rows[index]?.no ?? "").trim();
+            if (!Number.isInteger(rowNumber) || rowNumber < PEMBAYARAN_BP_FIRST_ROW) {
+                return res.status(400).json({ message: `Baris ${index + 1}: rowNumber tidak valid.`, rowIndex: index });
+            }
+            if (no === "") {
+                return res.status(400).json({ message: `Baris ${index + 1}: No wajib dikirim saat memperbarui.`, rowIndex: index });
+            }
+            if (seenRows.has(rowNumber)) {
+                return res.status(400).json({ message: `Baris ${rowNumber} dikirim lebih dari sekali.`, rowIndex: index });
+            }
+            seenRows.add(rowNumber);
+
+            const result = validatePembayaranBpRow(rows[index], index);
+            if (!result.ok) return res.status(400).json({ message: result.message, rowIndex: index });
+            validated.push({ rowNumber, no, cells: result.cells });
+        }
+
+        // Column A is read back and matched against the No the client fetched. Anyone
+        // inserting a row directly in the sheet shifts every rowNumber, and without
+        // this an edit would silently overwrite a different payment.
+        const { ids } = await readPembayaranBpIds(spreadsheetId);
+        for (const item of validated) {
+            const current = ids[item.rowNumber - PEMBAYARAN_BP_FIRST_ROW];
+            if (current === undefined || current !== item.no) {
+                return res.status(409).json({
+                    message: `Data di baris ${item.rowNumber} sudah berubah di spreadsheet. Muat ulang sebelum menyimpan.`,
+                    rowNumber: item.rowNumber,
+                });
+            }
+        }
+
+        // Starts at B so the No in column A survives the update
+        const timestamp = pembayaranBpTimestamp();
+        const data = validated.map(item => ({
+            range: `'${PEMBAYARAN_BP_SHEET}'!B${item.rowNumber}:${PEMBAYARAN_BP_LAST_COLUMN}${item.rowNumber}`,
+            values: [[timestamp, ...PEMBAYARAN_BP_EDITABLE.map(column => item.cells[column.key])]],
+        }));
+
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.batchUpdate({
+                spreadsheetId,
+                requestBody: { valueInputOption: "RAW", data },
+            });
+        });
+
+        return res.status(200).json({
+            message: `${data.length} baris berhasil diperbarui.`,
+            tanggalEdit: timestamp,
+        });
+    } catch (error) {
+        console.error("Error in PATCH /bendahara/pembayaran-bp:", error);
+        return res.status(500).json({ message: "Gagal memperbarui data Pembayaran BP." });
+    }
+});
+
+// Upload stays off the save path: the grid gets a link back, then saves it like any
+// other cell value, so a batch save never carries file bytes
+const driveFolderIdPembayaranBp = process.env.DRIVE_FOLDER_ID_PEMBAYARAN_BP;
+
+app.post(
+    "/bendahara/pembayaran-bp/upload",
+    requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES),
+    handleDokumenGajiUpload,
+    async (req, res) => {
+        try {
+            if (!req.file) return res.status(400).json({ message: "Berkas PDF wajib diunggah." });
+            if (!driveFolderIdPembayaranBp) {
+                console.error("DRIVE_FOLDER_ID_PEMBAYARAN_BP belum diatur - upload dibatalkan.");
+                return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
+            }
+            if (!await ensureGajiDriveReady()) {
+                console.error("Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.");
+                return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
+            }
+
+            const safePart = (value) => String(value || "").replace(/[\\/]/g, "-").trim();
+            const jenis = safePart(req.body.jenis).toLowerCase() === "pajak" ? "Deposit Pajak" : "Bukti Bayar";
+            const nomorSpm = safePart(req.body.nomorSpm) || "Tanpa Nomor SPM";
+
+            const bufferStream = new stream.Readable();
+            bufferStream.push(req.file.buffer);
+            bufferStream.push(null);
+
+            const driveResponse = await driveGaji.files.create({
+                requestBody: {
+                    name: `${jenis} - ${nomorSpm}.pdf`,
+                    parents: [driveFolderIdPembayaranBp],
+                },
+                media: { mimeType: req.file.mimetype, body: bufferStream },
+                fields: "webViewLink",
+                supportsAllDrives: true,
+            });
+
+            return res.status(200).json({ link: driveResponse.data.webViewLink || "" });
+        } catch (error) {
+            console.error("Error in /bendahara/pembayaran-bp/upload:", error);
+            return res.status(500).json({ message: "Gagal mengunggah berkas." });
+        }
+    }
+);
 
 // Ports
 app.listen(3000, () => {

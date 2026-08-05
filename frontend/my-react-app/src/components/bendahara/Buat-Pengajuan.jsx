@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
-import { columns } from "./head-data.js";
+import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels } from "./head-data.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
@@ -28,6 +28,9 @@ import PropTypes from "prop-types";
 import debounce from 'lodash.debounce';
 
 
+const emptyCell = Array(21).fill("");
+const initialRow = [1, ...emptyCell];
+
 function BuatPengajuan(props) {
     //Determining if this component is being used for viewing, editing, or creating new pengajuan
     const [componentType, setComponentType] = useState("")
@@ -37,8 +40,6 @@ function BuatPengajuan(props) {
 
     //State
     const [rowNum, setRowNum] = useState(1);
-    const emptyCell = Array(21).fill("");
-    const initialRow = [1, ...emptyCell];
     const [tableData, setTableData] = useState([initialRow]);
     const [mouseSelectRange, setMouseSelectRange] = useState({start: null, end:null});
     const [isSelecting, setIsSelecting] = useState(false);
@@ -72,6 +73,27 @@ function BuatPengajuan(props) {
 
     // State to held file from UploadFile
     const [file, setFile] = useState(null);
+    const [filePjk, setFilePjk] = useState(null);
+
+    // Jenis Pengajuan drives the whole form shape. Anything other than GUP/PTUP is a
+    // verifikasi flow. Edit and view always render the full table - only GUP/PTUP
+    // pengajuan can be reopened here.
+    const isBuat = componentType === "buat";
+    const isTabelPenuh = !isBuat || jenisTabelPenuh.includes(ajuan);
+    const isTanpaTabel = isBuat && jenisTanpaTabel.includes(ajuan);
+    const activeColumns = useMemo(
+        () => (isTabelPenuh ? columns.map((_, index) => index) : ringkasColumns),
+        [isTabelPenuh]
+    );
+
+    // The verifikasi table is a single row, and its sheet has no Request Tanggal column
+    useEffect(() => {
+        if (isTabelPenuh) return;
+        setRowNum(1);
+        setTanggalAjuan("");
+        setTableData(prevData => [[1, ...(prevData[0] || initialRow).slice(1)]]);
+        setPage(0);
+    }, [isTabelPenuh]);
 
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
@@ -620,7 +642,9 @@ function BuatPengajuan(props) {
     // Handling keyboard presses - optimized with useCallback
     const handleCellKeyDown = useCallback((event, rowIndex, colIndex) => {
         const numRows = tableData.length;
-        const numCols = tableData[0].length;
+        // Tab walks the columns actually on screen, which are a subset on the
+        // verifikasi table
+        const visibleIndex = activeColumns.indexOf(colIndex);
 
         switch (event.key) {
             case "Enter":
@@ -644,10 +668,10 @@ function BuatPengajuan(props) {
                     setCurrentEditableCell(null); 
                     setTargetReference(null);
                 }
-                if (colIndex < numCols - 1) {
-                    focusCell(rowIndex, colIndex + 1);
+                if (visibleIndex < activeColumns.length - 1) {
+                    focusCell(rowIndex, activeColumns[visibleIndex + 1]);
                 } else if (rowIndex < numRows - 1) {
-                    focusCell(rowIndex + 1, 0);
+                    focusCell(rowIndex + 1, activeColumns[0]);
                 }
                 break;
 
@@ -659,7 +683,7 @@ function BuatPengajuan(props) {
             default:
                 break;
         }
-    }, [tableData.length, evaluateEquation, isFormulaMode, focusCell, clearSelectedCells, handleCellBlur]);
+    }, [tableData.length, evaluateEquation, isFormulaMode, focusCell, clearSelectedCells, handleCellBlur, activeColumns]);
 
     // Memoize column totals calculation for better performance
     const calculateColumnTotal = useCallback((columnIndex) => {
@@ -728,10 +752,14 @@ function BuatPengajuan(props) {
         if (file) {
             formData.append('file', file);
         }
+        if (filePjk) {
+            formData.append('filePjk', filePjk);
+        }
 
-        // Converting column info into data, then insert in existing tableData
-        const tableHead = columns.map(col => col.label)
-        const sendTable = [[...tableHead], ...tableData]
+        // Converting column info into data, then insert in existing tableData.
+        // activeColumns is every column on the full table, so this crops nothing there.
+        const tableHead = activeColumns.map(colIndex => (!isTabelPenuh && ringkasLabels[colIndex]) || columns[colIndex].label)
+        const sendTable = isTanpaTabel ? [] : [tableHead, ...tableData.map(row => activeColumns.map(colIndex => row[colIndex] ?? ""))]
 
         //Append other data (inputArray, sendTable, user name) into formData
         formData.append('textdata', JSON.stringify(inputArray));
@@ -912,9 +940,9 @@ function BuatPengajuan(props) {
                 <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
                     <Table stickyHeader aria-label="sticky table">
                         <TableHead className="table-head">
-                            <TableRow className="table-row"> 
-                                {columns.map((cols) => (
-                                    <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: "bold", minWidth: cols.minWidth, backgroundColor: "#00449C", color: "white", border: "none"}} align="center">{cols.label}</TableCell>
+                            <TableRow className="table-row">
+                                {activeColumns.map((colIndex) => (
+                                    <TableCell className="table-cell head-data" key={columns[colIndex].id} sx={{fontWeight: "bold", minWidth: columns[colIndex].minWidth, backgroundColor: "#00449C", color: "white", border: "none"}} align="center">{ringkasLabels[colIndex] && !isTabelPenuh ? ringkasLabels[colIndex] : columns[colIndex].label}</TableCell>
                                 ))}
                             </TableRow>
                         </TableHead>
@@ -924,7 +952,7 @@ function BuatPengajuan(props) {
                                 const actualRowIndex = page * rowsPerPage + rowIndex;
                                 return (
                                     <TableRow key={actualRowIndex}>
-                                        {row.map((cell, colIndex) => (
+                                        {activeColumns.map((colIndex) => (
                                             <TableCell className={`table-cell ${isCellSelected(actualRowIndex, colIndex) ? "selected-cell" : ""}`}
                                                 key={colIndex}
                                                 data-row={actualRowIndex}
@@ -940,7 +968,7 @@ function BuatPengajuan(props) {
                                                 <textarea
                                                     ref={(el) => (textAreaRefs.current[actualRowIndex * row.length + colIndex] = el)}
                                                     className={`${isCellSelected(actualRowIndex, colIndex) ? "selected-cell" : ""}`}
-                                                    value={cell}
+                                                    value={row[colIndex] ?? ""}
                                                     data-row={actualRowIndex}
                                                     data-col={colIndex}
                                                     onChange={(input) => handleCellChange(actualRowIndex, colIndex, input.target.value, input.target)}
@@ -957,12 +985,12 @@ function BuatPengajuan(props) {
                         </TableBody>
                         <TableFooter>
                             <TableRow>
-                                {columns.map((col, colIndex) => (
+                                {activeColumns.map((colIndex) => (
                                     <TableCell className="table-footer-cell" key={colIndex}>
-                                        {Object.values(summableColumns).includes(colIndex) ? 
+                                        {Object.values(summableColumns).includes(colIndex) ?
                                             numberFormats(
                                                 columnTotals[
-                                                    Object.keys(summableColumns).find(key => 
+                                                    Object.keys(summableColumns).find(key =>
                                                         summableColumns[key] === colIndex
                                                     )
                                                 ].toString()
@@ -975,7 +1003,7 @@ function BuatPengajuan(props) {
                 </TableContainer>
 
                 {/* Add pagination controls */}
-                <TablePagination
+                {isTabelPenuh && <TablePagination
                     rowsPerPageOptions={[10, 25, 50, 100]}
                     component="div"
                     count={tableData.length}
@@ -986,29 +1014,31 @@ function BuatPengajuan(props) {
                         setRowsPerPage(parseInt(e.target.value, 10));
                         setPage(0);
                     }}
-                />
+                />}
             </React.Fragment>
         );
     }, [
-        tableData, 
-        page, 
-        rowsPerPage, 
-        columns, 
-        summableColumns, 
-        columnTotals, 
-        isCellSelected, 
-        handleCellMouseDown, 
-        handleCellMouseOver, 
-        handleCellClick, 
-        handleCellChange, 
-        handleCellBlur, 
-        handleCellKeyDown, 
-        handlePaste, 
+        tableData,
+        page,
+        rowsPerPage,
+        columns,
+        summableColumns,
+        columnTotals,
+        isCellSelected,
+        handleCellMouseDown,
+        handleCellMouseOver,
+        handleCellClick,
+        handleCellChange,
+        handleCellBlur,
+        handleCellKeyDown,
+        handlePaste,
         componentType,
         setPage,
         setRowsPerPage,
         setTargetReference,
-        numberFormats
+        numberFormats,
+        activeColumns,
+        isTabelPenuh
     ]);
 
     return (
@@ -1038,8 +1068,9 @@ function BuatPengajuan(props) {
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
                         <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)}>
-                            <option value="gup">GUP</option>
-                            <option value="ptup">PTUP</option>
+                            {jenisPengajuan.map((jenis) => (
+                                <option key={jenis.value} value={jenis.value}>{jenis.label}</option>
+                            ))}
                         </select>
                         :
                         (props.passedData && (<select name="ajuan" id="ajuan" onChange={(e) => setAjuan(e.target.value)} disabled={componentType === "lihat"}>
@@ -1053,33 +1084,42 @@ function BuatPengajuan(props) {
                             onChange={handleJumlahChange}
                             readOnly={componentType === "lihat"} 
                             required/>
+                        {isTabelPenuh && <>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
                         <input type="date" id="aju-date" name="tanggal-ajuan" className="pengajuan-date"
                             readOnly={componentType === "lihat"}
                             value={tanggalAjuan}
                             onChange={(e)=>setTanggalAjuan(e.target.value)}
                             defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
+                        </>}
                     </div>
                     <br/>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
                             <p>Input Data Pengajuan</p>
+                            {isTabelPenuh && <>
                             <label>Tentukan Jumlah Row Tabel:</label>
-                            <input type="number" value={rowNum > 0 ? rowNum : ""} 
-                                onChange={handleRowChange} onBlur={handleRowBlur} 
+                            <input type="number" value={rowNum > 0 ? rowNum : ""}
+                                onChange={handleRowChange} onBlur={handleRowBlur}
                                 readOnly={componentType === "lihat"} min="0"
                                 disabled={lockRow}
                             />
                             <div className="table-lock" onClick={() => setLockRow(!lockRow)}>
                                 {lockRow === false ? <LockOpenIcon fontSize={"medium"} /> : <LockIcon fontSize={"medium"} />}
                             </div>
+                            </>}
                             {componentType !== "buat" && props.passedData && props.passedData[9] !== "" ?
                                 <div className={"pengajuan-form-tableinfo-message"}>
                                     <p>Bupot: <a href={props.passedData[9]} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a></p>
                                 </div> : null}
                         </div>
-                        {componentType === "lihat" ? null : <UploadButton title={"Bupot"} onFileSelect={setFile}/> }
-                        {isLoading2 ? <LoadingAnimate /> : TableComponent}
+                        {componentType === "lihat" ? null :
+                            <div className="upload-btn-group">
+                                {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
+                                {isBuat && !isTabelPenuh && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
+                            </div>
+                        }
+                        {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}
                     </div>
                     {componentType === "buat" ?
                     <div className="form-submit">

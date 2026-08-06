@@ -10,8 +10,9 @@ const FIELD = {
     no: 0, timestamp: 1, nama: 2, jenis: 3, nominal: 4, spp: 6,
     unitKerja: 8, substansi: 9, kelengkapan: 10,
     mulaiVerif: 11, selesaiVerif: 12, catatan: 13, lampiran: 14,
+    dokVerif: 15,
     // Appended by the backend: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
-    sourceId: 15,
+    sourceId: 16,
 };
 
 function AksiVerifPJK(props) {

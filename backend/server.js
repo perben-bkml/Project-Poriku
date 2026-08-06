@@ -820,6 +820,9 @@ const AJUAN_FLOWS = {
             mulaiVerif: "L",
             selesaiVerif: "M",
             catatan: "N",
+            // Link to the newest Hasil Verifikasi PDF. Past O, which is the lampiran and
+            // the last column the antrian write path touches.
+            dokVerif: "P",
             defaults: { substansi: "Belum", kelengkapan: "Belum Verif" },
         },
         // canonical index ('Write Antrian' layout) -> column on this sheet
@@ -3468,7 +3471,9 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
                 ranges: [
-                    `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
+                    // Through P, not antrianLastColumn: the Dok. Verifikasi link sits past
+                    // the columns the antrian write path knows about
+                    `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.dokVerif}`,
                     `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
                 ],
             });
@@ -3484,8 +3489,8 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             ? sourceIdByKey.get(mirrorRowKey(row[1], row[2])) || ""
             : "";
 
-        // Index 15, appended past the sheet's own columns
-        const width = 15;
+        // Index 16, appended past the sheet's own columns (A..P)
+        const width = PJK_COLUMN.dokVerif + 1;
         const rows = (response.data.valueRanges[0].values || [])
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => Array.from({ length: width }, (_, i) => row[i] ?? ""))
@@ -3509,12 +3514,148 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             }
         }
 
-        res.json({ data: [informasi, sedangVerif, sudahVerif] });
+        res.json({ data: [informasi, sedangVerif, sudahVerif], pending: [...pendingHasilVerif.keys()] });
     } catch (error) {
         console.error("Error in /verifikasi/pengujian-pjk:", error);
         res.status(500).json({ error: "Failed to fetch data." });
     }
 })
+
+// Which rows are still generating a PDF. In memory only, so polling this costs no Sheets quota
+app.get("/verifikasi/hasil-verif/pending", (req, res) => {
+    res.json({ pending: [...pendingHasilVerif.keys()] });
+})
+
+// --- Hasil Verifikasi Substansi PDF -------------------------------------------
+// One PDF per saved change to Substansi or Kelengkapan. Nothing is ever overwritten:
+// each run counts the PDFs already tagged with this transaction and appends the next
+// #N, so a later revision lands beside the earlier one under its own admin's name.
+
+const driveFolderIdHasilVerif = process.env.DRIVE_FOLDER_ID_HASIL_VERIF;
+// Kept in appProperties rather than parsed back out of the file name - Drive matches
+// names by token, so an id sitting mid-string would not be found reliably
+const HASIL_VERIF_KEY = "pjkHasilVerif";
+
+// Generation runs after the save responds. Nothing waits on it - the rows still being
+// generated are reported instead, so the list can label them and swap the link in later.
+const pendingHasilVerif = new Map();
+
+function trackHasilVerif(key, promise) {
+    const id = String(key);
+    // Only clear if this run is still the current one - a fast re-save must not have its
+    // entry deleted by the promise it replaced
+    const tracked = promise.finally(() => {
+        if (pendingHasilVerif.get(id) === tracked) pendingHasilVerif.delete(id);
+    });
+    pendingHasilVerif.set(id, tracked);
+}
+
+async function nextHasilVerifSequence(transactionKey) {
+    const existing = await driveVerif.files.list({
+        q: `appProperties has { key='${HASIL_VERIF_KEY}' and value='${transactionKey}' } and trashed = false`,
+        fields: "files(id)",
+        pageSize: 1000,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+    });
+    return (existing.data.files || []).length + 1;
+}
+
+async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, operator }) {
+    if (!driveVerif || !docsVerif) {
+        console.log("Verifikasi Google APIs belum terautentikasi - PDF hasil verifikasi dilewati.");
+        return null;
+    }
+    const templateDocId = process.env.DOCS_ID_HASIL_VERIF_SUBSTANSI;
+    if (!templateDocId || !driveFolderIdHasilVerif) {
+        console.log("DOCS_ID_HASIL_VERIF_SUBSTANSI / DRIVE_FOLDER_UD_HASIL_VERIF belum diatur - PDF hasil verifikasi dilewati.");
+        return null;
+    }
+
+    // GUP/PTUP carry no Nomor SPP, so they are identified by the id of the
+    // 'Write Antrian' row they mirror
+    const isGup = resolveJenis(row[3])?.flow === "gup";
+    const noSpp = isGup ? "" : formatNomorSpp(row[PJK_COLUMN.spp]);
+    const noId = isGup ? String(sourceId ?? "").trim() : String(row[0] ?? "").trim();
+
+    const placeholders = {
+        TimestampPengajuan: row[1],
+        JenisPengajuan: row[3],
+        UnitKerja: row[8],
+        NoSPP: noSpp,
+        NoID: noId,
+        TanggalSelesaiPengujian: row[PJK_COLUMN.selesaiVerif],
+        SubstansiPJK: row[PJK_COLUMN.substansi],
+        KelengkapanPJK: row[PJK_COLUMN.kelengkapan],
+        Catatan: row[PJK_COLUMN.catatan],
+        Operator: operator,
+    };
+
+    const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
+    const { fullDateFormat, fullDateTimeFormat } = getFormattedDate();
+    const [year, month, day] = fullDateFormat.split("-");
+    const stamp = `${day}-${month}-${year} ${fullDateTimeFormat.slice(11, 16)}`;
+    // The copy is scratch space that gets deleted, so its name is irrelevant and the
+    // sequence lookup does not have to finish first - both go out at once
+    const [sequence, copyResponse] = await Promise.all([
+        nextHasilVerifSequence(row[0]),
+        driveVerif.files.copy({ fileId: templateDocId, fields: "id", supportsAllDrives: true }),
+    ]);
+    const fileName = `${safePart(operator)}_${stamp}_${safePart(row[3])}_${safePart(noSpp || noId)}_#${sequence}`;
+    const newDocId = copyResponse.data.id;
+
+    try {
+        await docsVerif.documents.batchUpdate({
+            documentId: newDocId,
+            requestBody: {
+                requests: Object.entries(placeholders).map(([placeholder, value]) => ({
+                    replaceAllText: {
+                        containsText: { text: `{{${placeholder}}}`, matchCase: false },
+                        replaceText: String(value ?? ""),
+                    }
+                })),
+            },
+        });
+
+        const pdfResponse = await driveVerif.files.export(
+            { fileId: newDocId, mimeType: "application/pdf" },
+            { responseType: "arraybuffer" }
+        );
+
+        const pdfFile = await driveVerif.files.create({
+            requestBody: {
+                name: `${fileName}.pdf`,
+                parents: [driveFolderIdHasilVerif],
+                appProperties: { [HASIL_VERIF_KEY]: String(row[0] ?? "") },
+            },
+            media: {
+                mimeType: "application/pdf",
+                body: stream.Readable.from(Buffer.from(pdfResponse.data)),
+            },
+            fields: "id, webViewLink",
+            supportsAllDrives: true,
+        });
+
+        // The cell always points at the newest revision - earlier PDFs stay in Drive
+        // under their own #N rather than being replaced
+        const viewLink = pdfFile.data.webViewLink || "";
+        await withBackoff(async () => {
+            return await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'${AJUAN_FLOWS.verif.antrianSheet}'!${AJUAN_FLOWS.verif.pjk.dokVerif}${rowIndex}`,
+                valueInputOption: "RAW",
+                requestBody: { values: [[viewLink]] },
+            });
+        });
+
+        console.log(`PDF hasil verifikasi dibuat: ${fileName}.pdf`);
+        return { fileName: `${fileName}.pdf`, viewLink };
+    } finally {
+        // Cleanup runs whether or not the export got that far, but nothing waits on it
+        driveVerif.files.delete({ fileId: newDocId, supportsAllDrives: true })
+            .catch(error => console.error("Gagal menghapus salinan dokumen sementara:", error.message));
+    }
+}
 
 app.post("/verifikasi/aksi-pjk", async (req, res) => {
     try {
@@ -3527,10 +3668,12 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         const verifFlow = AJUAN_FLOWS.verif;
         const { pjk } = verifFlow;
 
+        // The whole row, not just column A: the pre-update verdicts decide whether a PDF
+        // is due, and the rest of the row fills the template
         const response = await withBackoff(async () => {
             return await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: `'${verifFlow.antrianSheet}'!A:A`,
+                range: `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
             });
         });
 
@@ -3539,6 +3682,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         if (rowIndex === 0) {
             return res.status(400).json({ error: "Keyword not found in column A" });
         }
+        const previousRow = rows[rowIndex - 1] || [];
 
         // Once a selesai date exists the mulai date is history and must not be rewritten
         const selesaiValue = tgl_selesai ?? "";
@@ -3563,6 +3707,47 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
                 },
             });
         });
+
+        // Only a changed verdict is worth a document - opening a row and saving it
+        // untouched must not mint another revision
+        const changed = (before, after) => String(before ?? "").trim() !== String(after ?? "").trim();
+        if (changed(previousRow[PJK_COLUMN.substansi], substansi)
+            || changed(previousRow[PJK_COLUMN.kelengkapan], kelengkapan)) {
+            const savedRow = [...previousRow];
+            savedRow[PJK_COLUMN.substansi] = substansi ?? "";
+            savedRow[PJK_COLUMN.kelengkapan] = kelengkapan ?? "";
+            savedRow[PJK_COLUMN.catatan] = catatan ?? "";
+            savedRow[PJK_COLUMN.selesaiVerif] = selesaiValue;
+
+            // Signed in name, not a client supplied one, so the document credits whoever
+            // actually saved this revision. Read now, while the request is still around.
+            let operator = "";
+            try {
+                operator = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET).name || "";
+            } catch {
+                console.warn("Sesi tidak terbaca - PDF hasil verifikasi dibuat tanpa nama operator.");
+            }
+
+            // Deliberately not awaited - the verdict is already on the sheet, so half a
+            // dozen Drive/Docs round trips have no business holding up the save. Tracked
+            // by row id so the list can show the row as still being generated.
+            trackHasilVerif(no_antri, (async () => {
+                // Only GUP/PTUP need the mirrored id, so this read stays off the common path
+                let sourceId = "";
+                if (resolveJenis(savedRow[3])?.flow === "gup") {
+                    const gupResponse = await withBackoff(async () => {
+                        return await sheets.spreadsheets.values.get({
+                            spreadsheetId,
+                            range: `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
+                        });
+                    });
+                    const key = mirrorRowKey(savedRow[1], savedRow[2]);
+                    sourceId = (gupResponse.data.values || [])
+                        .find(row => mirrorRowKey(row?.[1], row?.[2]) === key)?.[0] ?? "";
+                }
+                await generateHasilVerifPdf({ spreadsheetId, rowIndex, row: savedRow, sourceId, operator });
+            })().catch(error => console.error("Gagal membuat PDF hasil verifikasi:", error)));
+        }
 
         res.status(200).json({ message: "Data successfully written." });
     } catch (error) {

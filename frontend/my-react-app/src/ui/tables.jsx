@@ -15,6 +15,8 @@ import { IconButton, TablePagination, Tooltip } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
 import CheckIcon from '@mui/icons-material/Check';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
@@ -569,6 +571,10 @@ export function TableInfoAntri(props) {
 
 // Monitor Data Gaji - last column renders as a Drive link instead of raw text
 export function TableDokumenGaji(props) {
+    // Without the handlers the table stays read-only and drops the Aksi column, which is
+    // how the roles that may only look at the monitor get rendered
+    const showActions = Boolean(props.onEdit || props.onDelete);
+
     return(
         <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
             <Table>
@@ -579,12 +585,16 @@ export function TableDokumenGaji(props) {
                                 sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
                                 >{data}</TableCell>
                         ))}
+                        {showActions &&
+                            <TableCell align="center"
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                >Aksi</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {props.content.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={props.header.length} align="center" sx={{color: "#666"}}>
+                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "#666"}}>
                                 Tidak ada data.
                             </TableCell>
                         </TableRow>
@@ -599,6 +609,21 @@ export function TableDokumenGaji(props) {
                                         <a href={row[7]} target="_blank" rel="noopener noreferrer">Lihat Berkas</a>
                                     ) : "-"}
                                 </TableCell>
+                                {showActions &&
+                                    <TableCell align="center" sx={{whiteSpace: "nowrap"}}>
+                                        {props.onEdit &&
+                                            <Tooltip title="Ubah">
+                                                <IconButton size="small" onClick={() => props.onEdit(row)}>
+                                                    <EditIcon sx={{fontSize: 24, color: "#edbd4d"}}/>
+                                                </IconButton>
+                                            </Tooltip>}
+                                        {props.onDelete &&
+                                            <Tooltip title="Hapus">
+                                                <IconButton size="small" onClick={() => props.onDelete(row)}>
+                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "#BD1404"}}/>
+                                                </IconButton>
+                                            </Tooltip>}
+                                    </TableCell>}
                             </TableRow>
                         ))
                     )}

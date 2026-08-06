@@ -2,12 +2,12 @@ import {useContext, useEffect, useState} from 'react';
 import apiClient from "../../lib/apiClient";
 import {AuthContext} from "../../lib/AuthContext.jsx";
 //Import Components
-import LoadingAnimate from "../../ui/loading.jsx";
+import LoadingAnimate, {LoadingScreen} from "../../ui/loading.jsx";
 import {monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions} from "./head-data.js";
 //Import Table
 import {TableDokumenGaji} from "../../ui/tables.jsx";
 import {SubmitButton} from "../../ui/buttons.jsx";
-import {PopupAlert} from "../../ui/Popup.jsx";
+import Popup, {PopupAlert} from "../../ui/Popup.jsx";
 //Import Pagination
 import Pagination from '@mui/material/Pagination';
 
@@ -32,6 +32,10 @@ export default function MonitorPerubahanGaji(props) {
     });
     const [isAlert, setIsAlert] = useState(false);
     const [isDeniedAlert, setIsDeniedAlert] = useState(false);
+    // Result of an edit/delete done from this page, as {severity, message}
+    const [actionAlert, setActionAlert] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Success message handed over by Kirim-Dokumen-Gaji before it unmounted
     useEffect(() => {
@@ -97,6 +101,39 @@ export default function MonitorPerubahanGaji(props) {
         props.changeComponent('input-dokumen-gaji');
     }
 
+    function showActionAlert(severity, message) {
+        setActionAlert({severity, message});
+        setTimeout(() => setActionAlert(null), 5000);
+    }
+
+    // Row layout is [No., Tanggal Terima, Tanggal Surat, Nomor Surat, Nama, Status,
+    // Keterangan, Link, sheet row number]. Only the sheet row number plus the No. and
+    // Nomor Surat it should still hold are handed on - the server re-checks those two
+    // before writing, and the form fetches the rest itself rather than editing a stale copy.
+    function handleEditRow(row) {
+        props.editData({rowNumber: row[8], no: row[0], nomorSurat: row[3]});
+        props.changeComponent('edit-dokumen-gaji');
+    }
+
+    async function handleDeleteRow() {
+        const row = deleteTarget;
+        setDeleteTarget(null);
+        try {
+            setIsDeleting(true);
+            const response = await apiClient.delete(`/dokumen-gaji/${row[8]}`, {
+                params: {expectedNo: row[0], expectedNomorSurat: row[3]}
+            });
+            showActionAlert("success", response.data?.message || "Dokumen Berhasil Dihapus");
+            // Deleting renumbers every row below it, so nothing here can be reused
+            await fetchDokumenGaji(currentPage, rowsPerPage, filterSelect);
+        } catch (error) {
+            console.error("Gagal menghapus dokumen.", error);
+            showActionAlert("error", error.response?.data?.message || "Penghapusan Gagal, Coba Lagi");
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
     //Handle rows per page
     function handleRowsPerPageChange(event) {
         const value = parseInt(event.target.value, 10);
@@ -139,7 +176,9 @@ export default function MonitorPerubahanGaji(props) {
             <div className="bg-card">
                 {isLoading ? <LoadingAnimate/> :
                     <div className="lihat-antri-table">
-                        <TableDokumenGaji header={dokumenGajiHeadData} content={tableData}/>
+                        <TableDokumenGaji header={dokumenGajiHeadData} content={tableData}
+                                          onEdit={canInputData ? handleEditRow : null}
+                                          onDelete={canInputData ? setDeleteTarget : null}/>
                     </div>
                 }
                 <div className="lihat-antri-pagination" style={{
@@ -163,8 +202,11 @@ export default function MonitorPerubahanGaji(props) {
                                   onClick={handleInputData}/>
                 </div>
             </div>
-            {isAlert && <PopupAlert isAlert={isAlert} severity="success" message={props.alertMessage}/>}
-            {isDeniedAlert && !isAlert &&
+            {deleteTarget && <Popup type="delete" whenCancel={() => setDeleteTarget(null)} whenDel={handleDeleteRow}/>}
+            {isDeleting && <LoadingScreen/>}
+            {actionAlert && <PopupAlert isAlert={!!actionAlert} severity={actionAlert.severity} message={actionAlert.message}/>}
+            {isAlert && !actionAlert && <PopupAlert isAlert={isAlert} severity="success" message={props.alertMessage}/>}
+            {isDeniedAlert && !isAlert && !actionAlert &&
                 <PopupAlert isAlert={isDeniedAlert} severity="error" message="Akses ditolak, hanya admin gaji yang bisa."/>}
         </div>
     );

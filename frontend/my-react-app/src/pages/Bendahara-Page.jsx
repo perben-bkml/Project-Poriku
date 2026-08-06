@@ -39,12 +39,14 @@ function BendaharaPage(props) {
     const [alertMessage, setAlertMessage] = useState("");
     const [aksiData, setAksiData] = useState([]);
     const [drppData, setDrppData] = useState([]);
+    // Which Dokumen Gaji row the edit form should load, set by Monitor-Perubahan-Gaji
+    const [dokumenGajiData, setDokumenGajiData] = useState(null);
 
 
     // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji", "input-dokumen-gaji"];
+    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji", "input-dokumen-gaji", "edit-dokumen-gaji"];
     // The only menus a role="admin_gaji" may reach - it is an allow-list, not a deny-list
-    const GAJI_ONLY_MENUS = ["monitor-data-gaji", "input-dokumen-gaji"];
+    const GAJI_ONLY_MENUS = ["monitor-data-gaji", "input-dokumen-gaji", "edit-dokumen-gaji"];
     const isAdmin = user.role === "admin" || user.role === "master admin";
     const isAdminGaji = user.role === "admin_gaji";
     const canOpen = (menu) => isAdminGaji
@@ -123,7 +125,7 @@ function BendaharaPage(props) {
         // Never render a menu the role is not allowed to open, however buttonSelect got set
         if (!canOpen(buttonSelect)) {
             return isAdminGaji
-                ? <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} />
+                ? <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} />
                 : <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
         }
         switch (buttonSelect) {
@@ -148,9 +150,11 @@ function BendaharaPage(props) {
             case "SPM-bendahara":
                 return <InfoSPMBendahara />
             case "monitor-data-gaji":
-                return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} />
+                return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} />
             case "input-dokumen-gaji":
-                return <KirimDokumenGaji changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
+                return <KirimDokumenGaji type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
+            case "edit-dokumen-gaji":
+                return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:
                 return null;
         }

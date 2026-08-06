@@ -1576,6 +1576,19 @@
     width: 100%;
 }
 
+.dokumen-gaji-form textarea.type-btn {
+    height: auto;
+    min-height: 76px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-weight: 400;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+}
+
 .dokumen-gaji-file {
     display: flex;
     flex-direction: column;

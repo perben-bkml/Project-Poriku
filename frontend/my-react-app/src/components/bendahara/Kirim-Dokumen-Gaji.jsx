@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import apiClient from "../../lib/apiClient";
 //Import Components
 import LoadingAnimate, {LoadingScreen} from "../../ui/loading.jsx";
@@ -29,6 +29,14 @@ export default function KirimDokumenGaji(props) {
     const [loadError, setLoadError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const keteranganRef = useRef(null);
+
+    useEffect(() => {
+        const field = keteranganRef.current;
+        if (!field) return;
+        field.style.height = "auto";
+        field.style.height = `${field.scrollHeight}px`;
+    }, [formData.keteranganSurat, isFetching]);
 
     function backToMonitor() {
         props.changeComponent("monitor-data-gaji");
@@ -181,8 +189,9 @@ export default function KirimDokumenGaji(props) {
                     </select>
 
                     <label htmlFor="keteranganSurat">Keterangan Surat</label>
-                    <input type="text" id="keteranganSurat" name="keteranganSurat" className="type-btn"
-                           value={formData.keteranganSurat} onChange={handleInputChange} required/>
+                    <textarea id="keteranganSurat" name="keteranganSurat" className="type-btn" rows={3}
+                              ref={keteranganRef} value={formData.keteranganSurat}
+                              onChange={handleInputChange} required/>
 
                     <label htmlFor="berkas">
                         {isEdit ? "Ganti Berkas" : "Upload Berkas"} (PDF, maks. {MAX_FILE_MB} MB)

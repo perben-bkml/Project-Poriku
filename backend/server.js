@@ -123,6 +123,112 @@ app.use(session({
     name: 'session_id' // Custom session name for better security
 }));
 
+// --- Authorisation ------------------------------------------------------------
+// Every route is gated here rather than one by one, so the whole policy reads as a
+// single block and a route added later is denied until it is listed. Every path in
+// this file is static, so an exact "METHOD /path" match is enough.
+// "master admin" is never listed - it passes everything, like canOpen on the frontend.
+
+const MASTER_ROLE = "master admin";
+const USER = ["user"];
+const ADMIN = ["admin"];
+const GAJI = ["admin_gaji"];
+const USER_ADMIN = ["user", "admin"];
+const ADMIN_GAJI = ["admin", "admin_gaji"];
+const ANY_ROLE = ["user", "admin", "admin_gaji"];
+
+// Reachable without a session: login itself, the public Layanan Gaji page, and the
+// Google redirect targets the browser lands on without passing through the app
+const PUBLIC_ROUTES = new Set([
+    "POST /login-auth",
+    "POST /logout",
+    "GET /check-auth",
+    "GET /bendahara/antrian-gaji",
+    "GET /auth/google/callback",
+    "GET /auth/google/verif/callback",
+    "GET /auth/google/gaji/callback",
+    "GET /auth/success",
+]);
+
+const ROUTE_ROLES = {
+    // Navbar and the Home landing page, so every signed in role needs them. The
+    // realisasi route scopes itself - role="user" only ever sees its own satker.
+    "GET /notification": ANY_ROLE,
+    "POST /notification/mark-read": ANY_ROLE,
+    "GET /verifikasi/realisasi-anggaran": ANY_ROLE,
+    // Buat-Pengajuan opens these in a popup when the Drive token has lapsed
+    "GET /auth/google": ANY_ROLE,
+    "GET /auth/google/verif": ANY_ROLE,
+    "GET /auth/google/gaji": ANY_ROLE,
+    "GET /auth/status": ANY_ROLE,
+
+    // Daftar Pengajuan, Buat Pengajuan, Lihat Antrian
+    "GET /bendahara/antrian": USER,
+    "GET /bendahara/filter-date": USER,
+    "POST /bendahara/buat-ajuan": USER,
+    "PATCH /bendahara/edit-table": USER,
+    "DELETE /bendahara/delete-ajuan": USER,
+
+    // SPM Bendahara is a shared menu, and these two are called from both sides:
+    // data-transaksi by Buat-Pengajuan and the three aksi screens, data-pjk by
+    // Monitor-PJK and Kelola-PJK
+    "GET /bendahara/spm-belum-bayar": USER_ADMIN,
+    "PATCH /bendahara/cari-spm": USER_ADMIN,
+    "POST /bendahara/cari-rincian": USER_ADMIN,
+    "GET /bendahara/data-transaksi": USER_ADMIN,
+    "GET /verifikasi/data-pjk": USER_ADMIN,
+
+    // Kelola Pengajuan, Monitoring DRPP
+    "GET /bendahara/kelola-ajuan": ADMIN,
+    "POST /bendahara/aksi-ajuan": ADMIN,
+    "GET /bendahara/get-ajuan": ADMIN,
+    "GET /bendahara/monitoring-drpp": ADMIN,
+    "GET /bendahara/cek-drpp": ADMIN,
+    "POST /bendahara/aksi-drpp": ADMIN,
+
+    // Pengujian PJK, Kelola PJK, Form Verifikasi, Realisasi
+    "GET /verifikasi/pengujian-pjk": ADMIN,
+    "GET /verifikasi/hasil-verif/pending": ADMIN,
+    "POST /verifikasi/aksi-pjk": ADMIN,
+    "GET /verifikasi/cari-spm": ADMIN,
+    "POST /verifikasi/verifikasi-form": ADMIN,
+    "PATCH /verifikasi/code-anggaran": ADMIN,
+    "POST /verifikasi/generate-pdf": ADMIN,
+
+    // Monitor Data Gaji is read-only for admin; only admin_gaji may write
+    "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
+    "POST /dokumen-gaji/kirim": GAJI,
+
+    "GET /bendahara/pembayaran-bp/options": ADMIN_GAJI,
+    "GET /bendahara/pembayaran-bp": ADMIN_GAJI,
+    "POST /bendahara/pembayaran-bp": ADMIN,
+    "PATCH /bendahara/pembayaran-bp": ADMIN,
+    "POST /bendahara/pembayaran-bp/upload": ADMIN,
+
+    // Clears the Google credentials the whole process shares
+    "POST /auth/logout": [],
+};
+
+app.use((req, res, next) => {
+    // Query string is already stripped from req.path; drop a trailing slash so
+    // /bendahara/antrian/ cannot slip past the table
+    const path = req.path.length > 1 ? req.path.replace(/\/$/, "") : req.path;
+    const key = `${req.method} ${path}`;
+    if (req.method === "OPTIONS" || PUBLIC_ROUTES.has(key)) return next();
+
+    let viewer;
+    try {
+        viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
+    } catch {
+        return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
+    }
+    if (viewer.role !== MASTER_ROLE && !(ROUTE_ROLES[key] || []).includes(viewer.role)) {
+        return res.status(403).json({ message: "Akses ditolak." });
+    }
+    req.viewer = viewer;
+    next();
+});
+
 // Setting Up Postgres
 const sql = postgres(process.env.DATABASE_URL, {
     ssl: 'require',
@@ -3743,12 +3849,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
 
             // Signed in name, not a client supplied one, so the document credits whoever
             // actually saved this revision. Read now, while the request is still around.
-            let operator = "";
-            try {
-                operator = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET).name || "";
-            } catch {
-                console.warn("Sesi tidak terbaca - PDF hasil verifikasi dibuat tanpa nama operator.");
-            }
+            const operator = req.viewer.name || "";
 
             // Deliberately not awaited - the verdict is already on the sheet, so half a
             // dozen Drive/Docs round trips have no business holding up the save. Tracked
@@ -3838,7 +3939,10 @@ app.post("/verifikasi/generate-pdf", async (req, res) => {
 app.get('/notification', async (req, res) => {
     try{
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 30, name, role } = req.query;
+        const { page = 1, limit = 30 } = req.query;
+        // Audience comes from the verified token, never the query string - otherwise
+        // anyone could read another user's notifications by editing the URL
+        const { name, role } = req.viewer;
 
         // Filter by user role and admin division
         let findByWhat = role === 'user' ? name : (name.includes('Annisa' || 'Ardi' || 'Anggun') ? 'Bendahara' : 'Verifikasi' )
@@ -4386,12 +4490,7 @@ function addToFundTotals(target, fund, nominal) {
 // and who still has to fill a ceiling in. Pass ?detail=1 to also get the raw SPM rows.
 app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
     try {
-        let viewer;
-        try {
-            viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
-        } catch {
-            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
-        }
+        const viewer = req.viewer;
 
         const spreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
         // Only the year suffixed key exists, there is no bare SPREADSHEET_ID_VERIFSPM
@@ -4640,18 +4739,6 @@ function parseBudgetInput(value, label) {
 // want to change - the other one keeps whatever the sheet already holds.
 app.patch("/verifikasi/code-anggaran", async (req, res) => {
     try {
-        // This route moves money figures, so it checks the JWT itself. Every other
-        // route trusts the UI, which would let any signed in user post a ceiling.
-        let role = "";
-        try {
-            role = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET).role || "";
-        } catch {
-            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
-        }
-        if (role !== "admin" && role !== "master admin") {
-            return res.status(403).json({ message: "Akses ditolak, hanya admin yang bisa mengubah anggaran." });
-        }
-
         const { satker } = req.body;
         if (!satker || String(satker).trim() === "") {
             return res.status(400).json({ message: "Nama satker wajib diisi." });
@@ -4727,8 +4814,6 @@ const PEMBAYARAN_BP_SHEET = "Pembayaran BP";
 const PEMBAYARAN_BP_FIRST_ROW = 3;
 const PEMBAYARAN_BP_LAST_COLUMN = "O";
 const PEMBAYARAN_BP_MAX_ROWS = 200;
-const PEMBAYARAN_BP_VIEW_ROLES = ["admin", "master admin", "admin_gaji"];
-const PEMBAYARAN_BP_EDIT_ROLES = ["admin", "master admin"];
 
 const STATUS_BAYAR_BP_OPTIONS = ["Belum Bayar", "Sudah Bayar"];
 const STATUS_PAJAK_BP_OPTIONS = ["Belum Setor", "Sudah Setor"];
@@ -4893,22 +4978,6 @@ function pembayaranBpToRecord(row, rowNumber) {
 const pembayaranBpRow = (no, timestamp, cells) =>
     [no, timestamp, ...PEMBAYARAN_BP_EDITABLE.map(column => cells[column.key])];
 
-function requirePembayaranBpRole(roles) {
-    return (req, res, next) => {
-        let viewer;
-        try {
-            viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
-        } catch {
-            return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
-        }
-        if (!roles.includes(viewer.role)) {
-            return res.status(403).json({ message: "Akses ditolak." });
-        }
-        req.viewer = viewer;
-        next();
-    };
-}
-
 function pembayaranBpSpreadsheet(req, res) {
     const spreadsheetId = getSpreadsheetId(req, 'PEMBAYARAN_BP');
     if (!spreadsheetId) {
@@ -4949,7 +5018,7 @@ function readPembayaranBpBody(req, res) {
     return rows;
 }
 
-app.get("/bendahara/pembayaran-bp/options", requirePembayaranBpRole(PEMBAYARAN_BP_VIEW_ROLES), (req, res) => {
+app.get("/bendahara/pembayaran-bp/options", (req, res) => {
     return res.status(200).json({
         unitKerja: UNIT_KERJA_BP_OPTIONS,
         statusBayarPenerima: STATUS_BAYAR_BP_OPTIONS,
@@ -4960,7 +5029,7 @@ app.get("/bendahara/pembayaran-bp/options", requirePembayaranBpRole(PEMBAYARAN_B
     });
 });
 
-app.get("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_VIEW_ROLES), async (req, res) => {
+app.get("/bendahara/pembayaran-bp", async (req, res) => {
     try {
         const spreadsheetId = pembayaranBpSpreadsheet(req, res);
         if (!spreadsheetId) return;
@@ -4986,7 +5055,7 @@ app.get("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_VIEW_R
     }
 });
 
-app.post("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES), async (req, res) => {
+app.post("/bendahara/pembayaran-bp", async (req, res) => {
     try {
         const spreadsheetId = pembayaranBpSpreadsheet(req, res);
         if (!spreadsheetId) return;
@@ -5028,7 +5097,7 @@ app.post("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_
     }
 });
 
-app.patch("/bendahara/pembayaran-bp", requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES), async (req, res) => {
+app.patch("/bendahara/pembayaran-bp", async (req, res) => {
     try {
         const spreadsheetId = pembayaranBpSpreadsheet(req, res);
         if (!spreadsheetId) return;
@@ -5100,7 +5169,6 @@ const driveFolderIdPembayaranBp = process.env.DRIVE_FOLDER_ID_PEMBAYARAN_BP;
 
 app.post(
     "/bendahara/pembayaran-bp/upload",
-    requirePembayaranBpRole(PEMBAYARAN_BP_EDIT_ROLES),
     handleDokumenGajiUpload,
     async (req, res) => {
         try {

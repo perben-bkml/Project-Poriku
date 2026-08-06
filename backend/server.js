@@ -3462,17 +3462,34 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const verifFlow = AJUAN_FLOWS.verif;
 
+        // The gup antrian rides along so each mirror row can be labelled with the id of the
+        // 'Write Antrian' row that produced it - two ranges, still one request
         const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
+            return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
-                range: `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
+                ranges: [
+                    `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
+                    `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
+                ],
             });
         });
 
+        const sourceIdByKey = new Map();
+        for (const row of response.data.valueRanges[1].values || []) {
+            sourceIdByKey.set(mirrorRowKey(row?.[1], row?.[2]), row?.[0] ?? "");
+        }
+        // Only GUP/PTUP have a mirror; matching every row risks a native verifikasi row
+        // borrowing an id off a same-second, same-name collision
+        const sourceId = row => resolveJenis(row[3])?.flow === "gup"
+            ? sourceIdByKey.get(mirrorRowKey(row[1], row[2])) || ""
+            : "";
+
+        // Index 15, appended past the sheet's own columns
         const width = 15;
-        const rows = (response.data.values || [])
+        const rows = (response.data.valueRanges[0].values || [])
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => Array.from({ length: width }, (_, i) => row[i] ?? ""))
+            .map(row => [...row, sourceId(row)])
             .reverse();
 
         const isVerified = value => PJK_VERIFIED_VALUES.includes(String(value).trim());

@@ -10,6 +10,8 @@ const FIELD = {
     no: 0, timestamp: 1, nama: 2, jenis: 3, nominal: 4, spp: 6,
     unitKerja: 8, substansi: 9, kelengkapan: 10,
     mulaiVerif: 11, selesaiVerif: 12, catatan: 13, lampiran: 14,
+    // Appended by the backend: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
+    sourceId: 15,
 };
 
 function AksiVerifPJK(props) {
@@ -27,9 +29,13 @@ function AksiVerifPJK(props) {
         lampiran: "",
     });
 
+    // A GUP/PTUP block is the full table; every other jenis stores the cropped one
+    const sourceId = props.fulldata[FIELD.sourceId];
     const tableHeader = useMemo(
-        () => ringkasColumns.map(index => ({...columns[index], label: ringkasLabels[index] || columns[index].label})),
-        []
+        () => sourceId
+            ? columns
+            : ringkasColumns.map(index => ({...columns[index], label: ringkasLabels[index] || columns[index].label})),
+        [sourceId]
     );
 
     useEffect(() => {
@@ -46,8 +52,11 @@ function AksiVerifPJK(props) {
 
         (async () => {
             try {
+                // A mirror row's block lives on the gup table sheet under the id it came from
                 const response = await apiClient.get('/bendahara/data-transaksi', {
-                    params: { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif" },
+                    params: sourceId
+                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup" }
+                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif" },
                 });
                 if (response.status === 200) setTableData(response.data.data || []);
             } catch {
@@ -81,6 +90,7 @@ function AksiVerifPJK(props) {
 
     const infoTableData = [
         props.fulldata[FIELD.no],
+        sourceId || "-",
         <b key="spp">{formatNomorSpp(props.fulldata[FIELD.spp])}</b>,
         props.fulldata[FIELD.nama],
         props.fulldata[FIELD.jenis],

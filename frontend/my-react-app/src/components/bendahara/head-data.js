@@ -83,9 +83,10 @@ const headDataPjk = [...headData2.slice(0, 9), "Substansi", "Kelengkapan", ...he
 const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Satker", "Nominal", "Tgl. Request"]
 
 //For Pengujian-PJK.jsx & Aksi-Verif-PJK.jsx
-const pjkHeadData = ["No.", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
+// ID GUP is the 'Write Antrian' id a GUP/PTUP mirror row came from, blank for every other jenis
+const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
 const pjkHeadDataMulai = [...pjkHeadData, "Tgl. Mulai Verifikasi"];
-const pjkInfoHeadData = ["No. Antri", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
+const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
 
 // Mirrors the backend: 5 digit zero padding, non-numeric values left as they are.
 // Rows written before the padding existed still display padded.

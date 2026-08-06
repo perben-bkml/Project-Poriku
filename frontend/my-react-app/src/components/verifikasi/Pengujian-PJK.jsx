@@ -4,8 +4,9 @@ import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
 import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp } from '../bendahara/head-data.js';
 
-// Column indices on 'Write Antrian Verif'
-const INFO_COLUMNS = [0, 1, 6, 2, 3, 4, 8, 9, 10];
+// Column indices on 'Write Antrian Verif'; 15 is the source id the backend appends
+const SOURCE_ID = 15;
+const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
 const SUBSTANSI = 9, KELENGKAPAN = 10;
@@ -16,6 +17,7 @@ const ditolak = row => [row[SUBSTANSI], row[KELENGKAPAN]]
 
 function PengujianPJK(props) {
     const [sections, setSections] = useState([[], [], []]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
@@ -24,12 +26,17 @@ function PengujianPJK(props) {
                 if (response.status === 200) setSections(response.data.data);
             } catch (error) {
                 console.error("Error fetching PJK data", error);
+            } finally {
+                setIsLoading(false);
             }
         })();
     }, []);
 
-    const project = (rows, columns) => rows.map(row =>
-        columns.map(index => index === SPP ? formatNomorSpp(row[index]) : row[index]));
+    const project = (rows, columns) => rows.map(row => columns.map(index => {
+        if (index === SPP) return formatNomorSpp(row[index]);
+        if (index === SOURCE_ID) return row[index] || "-";
+        return row[index];
+    }));
 
     const tables = [
         {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0]},
@@ -45,7 +52,7 @@ function PengujianPJK(props) {
                     aksiLabel="Verif" aksiTarget="aksi-verif-PJK"
                     tableHead={table.head}
                     tableContent={project(table.rows, table.columns)}
-                    fullContent={table.rows}
+                    fullContent={table.rows} loading={isLoading}
                     changeComponent={props.changeComponent} aksiData={props.aksiData}/>
             ))}
         </div>

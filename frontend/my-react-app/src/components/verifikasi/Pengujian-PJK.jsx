@@ -6,8 +6,13 @@ import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp } from '../bendahara/head
 
 // Column indices on 'Write Antrian Verif'
 const INFO_COLUMNS = [0, 1, 6, 2, 3, 4, 8, 9, 10];
-const MULAI_VERIF = 11;
+const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
+const SUBSTANSI = 9, KELENGKAPAN = 10;
+
+// A rejected verdict parks the row until the verifikator revisits it
+const ditolak = row => [row[SUBSTANSI], row[KELENGKAPAN]]
+    .some(value => String(value ?? "").trim() === "Ditolak");
 
 function PengujianPJK(props) {
     const [sections, setSections] = useState([[], [], []]);
@@ -28,7 +33,8 @@ function PengujianPJK(props) {
 
     const tables = [
         {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0]},
-        {title: "Sedang Di Verifikasi", head: pjkHeadDataMulai, columns: [...INFO_COLUMNS, MULAI_VERIF], rows: sections[1]},
+        {title: "Sedang Di Verifikasi", head: pjkHeadDataMulai, columns: MULAI_COLUMNS, rows: sections[1].filter(row => !ditolak(row))},
+        {title: "Pengajuan Bermasalah", head: pjkHeadDataMulai, columns: MULAI_COLUMNS, rows: sections[1].filter(ditolak)},
         {title: "Sudah Verifikasi", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[2]},
     ];
 

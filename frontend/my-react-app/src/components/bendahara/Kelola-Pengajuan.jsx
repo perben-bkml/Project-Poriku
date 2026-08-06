@@ -5,12 +5,20 @@ import { Card, WideTableCard } from '../../ui/cards.jsx';
 import { headData1, headData2, headData3, headData4, headDataPjk } from './head-data.js';
 import PropTypes from "prop-types";
 
+// Pajak (12) or Anggaran (13) answered with anything but OK - the bendahara flagged
+// something, so the row waits here instead of among the ones still being verified
+const bermasalah = row => [row[12], row[13]]
+    .map(value => String(value ?? "").trim())
+    .some(value => value !== "" && value !== "OK");
+
 // source picks the section out of the response; columns are indices on the 'Write Antrian' row
 const SECTIONS = [
     {card: "Dalam Antrian", title: "Pengajuan Belum Verifikasi", head: headData1,
         source: data => data[0], columns: [0, 1, 2, 3, 4, 5, 11, 7]},
     {card: "Sedang di Verifikasi", title: "Sedang Verifikasi Bendahara", head: headData2,
-        source: data => data[1], columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7]},
+        source: data => (data[1] || []).filter(row => !bermasalah(row)), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7]},
+    {card: "Bermasalah", title: "Pengajuan Bermasalah", head: headData2,
+        source: data => (data[1] || []).filter(bermasalah), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7]},
     {card: "Menunggu Verifikator PJK", title: "Menunggu Diuji Verifikator PJK", head: headDataPjk,
         source: data => data[6], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 20, 21, 11]},
     {card: "Sudah di Verifikasi", title: "Sudah Verifikasi", head: headData2,
@@ -23,6 +31,7 @@ const SECTIONS = [
 
 function KelolaPengajuan(props) {
     const [data, setData] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
@@ -31,6 +40,8 @@ function KelolaPengajuan(props) {
                 if (response.status === 200) setData(response.data.data);
             } catch (error) {
                 console.log(error)
+            } finally {
+                setIsLoading(false);
             }
         })();
     }, [])
@@ -47,7 +58,7 @@ function KelolaPengajuan(props) {
             {sections.map(section => (
                 <WideTableCard key={section.title} title={section.title} tableHead={section.head}
                     tableContent={section.rows.map(row => section.columns.map(index => row[index]))}
-                    fullContent={section.rows}
+                    fullContent={section.rows} loading={isLoading}
                     changeComponent={props.changeComponent} aksiData={props.aksiData}/>
             ))}
         </div>

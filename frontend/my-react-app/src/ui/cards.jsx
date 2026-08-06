@@ -21,7 +21,7 @@ export function WideTableCard(props) {
             <div className="wide-card-content">
                 <TableKelola type="kelola"
                     feature={props.feature !== undefined ? props.feature : (title === "Sudah Verifikasi" ? "SudahVerif" : undefined)}
-                    aksiLabel={props.aksiLabel} aksiTarget={props.aksiTarget}
+                    aksiLabel={props.aksiLabel} aksiTarget={props.aksiTarget} loading={props.loading}
                     header={props.tableHead} content={props.tableContent} fullContent={props.fullContent}
                     changeComponent={props.changeComponent} aksiData={props.aksiData}/>
             </div>

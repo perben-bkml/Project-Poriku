@@ -84,7 +84,6 @@ export function TableSpmBendahara(props) {
 export function TableKelola(props) {
     //State
     const [tableType, setTableType] = useState("")
-    const [isLoading, setIsLoading] = useState(true)
     const [page, setPage] = useState(0)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const [sudahVerifSum, setSudahVerifSum] = useState("0");
@@ -97,12 +96,6 @@ export function TableKelola(props) {
         setTableType(props.type);
     }, [props.type])
 
-
-    useEffect(() => {
-        if (props.content && props.fullContent) {
-            setIsLoading(false);
-        }
-    }, [props.content, props.fullContent]);
 
     // Reset checkboxes and sum when clicking outside the table for aksi-drpp
     useEffect(() => {
@@ -126,10 +119,10 @@ export function TableKelola(props) {
         };
     }, [tableType, checkedItems.size]);
 
-    if (isLoading) {
+    // Only the caller knows whether an empty content means "still fetching" or "nothing to show"
+    if (props.loading) {
         return <LoadingAnimate />
     }
-
 
     if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
         return null

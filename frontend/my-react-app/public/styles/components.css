@@ -406,6 +406,24 @@
     padding-left: 20px;
 }
 
+/* Detail view only - the Catatan fields make five to six items compete for one row */
+.pengajuan-desc-info {
+    gap: 36px;
+    overflow: hidden;
+}
+.pengajuan-desc-info p {
+    margin-right: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+/* Free text of any length: give up width before the fixed fields do, full text on hover */
+.pengajuan-desc-info .desc-catatan {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Styling Lihat-Antrian */
 .lihat-antri-table {
     margin: auto;

@@ -188,6 +188,8 @@ function DaftarPengajuan(props){
                     flow={data[20]}
                     pjkLink={data[21]}
                     spp={data[9]}
+                    catatan={data[16]}
+                    pjkCatatan={data[22]}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />

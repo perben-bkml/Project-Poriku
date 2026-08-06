@@ -871,6 +871,20 @@ const ANTRIAN_FLOW_INDEX = ANTRIAN_ROW_WIDTH;
 // A GUP/PTUP pengajuan keeps its Bupot on its own row but its PJK on the mirror row,
 // so the mirror's lampiran is carried across for the daftar to show
 const ANTRIAN_PJK_INDEX = ANTRIAN_ROW_WIDTH + 1;
+// The verifikator writes their note on the mirror row, the bendahara theirs on the
+// original, and the user needs to read both
+const ANTRIAN_PJK_CATATAN_INDEX = ANTRIAN_ROW_WIDTH + 2;
+
+// GUP/PTUP are verified twice and independently - Pajak/Anggaran by the bendahara on
+// 'Write Antrian', Substansi/Kelengkapan by the verifikator on the mirror. Either side
+// finishing first would otherwise show the user a status the other side contradicts, so
+// a problem or an open verification outranks the other row's optimistic status.
+function antrianStatusRank(status) {
+    const value = String(status ?? "").toLowerCase();
+    if (value.includes("masalah")) return 2;
+    if (value.includes("sedang di verifikasi")) return 1;
+    return 0;
+}
 
 // The mirror row carries its own id, so timestamp + nama is the only link back to the
 // 'Write Antrian' row that produced it. Both are written in the same batch, so they match
@@ -928,9 +942,10 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         });
     });
 
-    // The mirrors are dropped from the list itself, but their lampiran is the only copy of
-    // the PJK a GUP/PTUP pengajuan uploaded, so it is indexed on the way past
-    const mirrorPjkByKey = new Map();
+    // The mirrors are dropped from the list itself, but they hold the only copy of the PJK
+    // lampiran, the verifikator's note and the PJK-side status, so they are indexed on the
+    // way past
+    const mirrorByKey = new Map();
     const merged = [];
     flows.forEach((flow, index) => {
         const rows = response.data.valueRanges?.[index]?.values || [];
@@ -939,7 +954,7 @@ async function fetchMergedAntrianRows(spreadsheetId) {
             if (flow.key === "verif") {
                 const jenis = resolveJenis(canonical[ANTRIAN_JENIS_INDEX]);
                 if (jenis?.flow === "gup") { // mirror of a 'Write Antrian' row
-                    mirrorPjkByKey.set(mirrorRowKey(canonical[1], canonical[2]), canonical[19]);
+                    mirrorByKey.set(mirrorRowKey(canonical[1], canonical[2]), canonical);
                     continue;
                 }
             }
@@ -949,11 +964,14 @@ async function fetchMergedAntrianRows(spreadsheetId) {
     });
 
     for (const row of merged) {
-        if (row[ANTRIAN_FLOW_INDEX] === "gup") {
-            row[ANTRIAN_PJK_INDEX] = mirrorPjkByKey.get(mirrorRowKey(row[1], row[2])) || "";
-        } else {
+        if (row[ANTRIAN_FLOW_INDEX] !== "gup") {
             row[ANTRIAN_PJK_INDEX] = row[19]; // its own lampiran already is the PJK
+            continue;
         }
+        const mirror = mirrorByKey.get(mirrorRowKey(row[1], row[2]));
+        row[ANTRIAN_PJK_INDEX] = mirror?.[19] || "";
+        row[ANTRIAN_PJK_CATATAN_INDEX] = mirror?.[16] || "";
+        if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
     }
     return merged;
 }
@@ -3708,11 +3726,15 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             });
         });
 
-        // Only a changed verdict is worth a document - opening a row and saving it
-        // untouched must not mint another revision
-        const changed = (before, after) => String(before ?? "").trim() !== String(after ?? "").trim();
-        if (changed(previousRow[PJK_COLUMN.substansi], substansi)
-            || changed(previousRow[PJK_COLUMN.kelengkapan], kelengkapan)) {
+        // Only a changed verdict or note is worth a document - opening a row and saving
+        // it untouched must not mint another revision
+        const documentFieldChanged = [
+            [previousRow[PJK_COLUMN.substansi], substansi],
+            [previousRow[PJK_COLUMN.kelengkapan], kelengkapan],
+            [previousRow[PJK_COLUMN.catatan], catatan],
+        ].some(([before, after]) => String(before ?? "").trim() !== String(after ?? "").trim());
+
+        if (documentFieldChanged) {
             const savedRow = [...previousRow];
             savedRow[PJK_COLUMN.substansi] = substansi ?? "";
             savedRow[PJK_COLUMN.kelengkapan] = kelengkapan ?? "";

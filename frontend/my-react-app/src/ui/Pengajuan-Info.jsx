@@ -21,6 +21,8 @@ function Pengajuan(props) {
         flow: props.flow,
         pjkLink: props.pjkLink,
         spp: props.spp,
+        catatan: props.catatan,
+        pjkCatatan: props.pjkCatatan,
     }
 
     return (

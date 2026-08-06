@@ -16,6 +16,7 @@ function Home() {
 
     //State
     const [realisasi, setRealisasi] = useState(null);
+    const [dashboard, setDashboard] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [monthFilter, setMonthFilter] = useState(() => {
         const saved = localStorage.getItem('home-realisasi-month');
@@ -51,8 +52,18 @@ function Home() {
         }
     }
 
+    async function fetchDashboard() {
+        try {
+            const response = await apiClient.get('/home/dashboard');
+            if (response.status === 200) setDashboard(response.data);
+        } catch (error) {
+            console.error("Error fetching dashboard.", error);
+        }
+    }
+
     useEffect(() => {
         fetchRealisasi();
+        fetchDashboard();
     }, [])
 
     function handleMonthChange(event) {
@@ -76,6 +87,19 @@ function Home() {
             kosong: realisasi.summary.length === 0,
         };
     }, [realisasi, monthFilter]);
+
+    const dashboardSections = useMemo(() => dashboard ? [
+        {title: "Data Pengajuan", cards: [
+            {label: "Belum", value: dashboard.pengajuan.belum},
+            {label: "Sedang Verif", value: dashboard.pengajuan.sedang},
+            {label: "Sudah Verif", value: dashboard.pengajuan.sudah},
+        ]},
+        {title: "Data SPM", cards: [
+            {label: "Total", value: dashboard.spm.total},
+            {label: "UP", value: dashboard.spm.up},
+            {label: "LS", value: dashboard.spm.ls},
+        ]},
+    ] : [], [dashboard]);
 
 
     return (
@@ -138,8 +162,21 @@ function Home() {
                     </div>
                 </div>
                 <div className="home-dashboard-right">
-                    <h3 className={"dashboard-title"} style={{fontStyle: "italic", fontSize: "1.9rem", opacity:"0.3"}}>
-                        Nantikan dashboard terbaru...</h3>
+                    {!dashboard ? <LoadingAnimate /> :
+                        dashboardSections.map(section => (
+                            <div key={section.title} className="dashboard-counts">
+                                <h3 className="dashboard-title">{section.title}</h3>
+                                <div className="dashboard-counts-row">
+                                    {section.cards.map(card => (
+                                        <div key={card.label} className="dashboard-count-card">
+                                            <span className="dashboard-count-value">{card.value}</span>
+                                            <span className="dashboard-count-label">{card.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))
+                    }
                 </div>
             </div>
         </div>

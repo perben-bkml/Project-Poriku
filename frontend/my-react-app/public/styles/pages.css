@@ -475,6 +475,47 @@
     height: 100%;
 }
 
+.dashboard-counts {
+    width: 88%;
+    margin-bottom: 10px;
+}
+
+.dashboard-counts .dashboard-title {
+    margin-bottom: 14px;
+}
+
+.dashboard-counts-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+}
+
+.dashboard-count-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 18px 10px;
+    background-color: white;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 15px;
+    box-shadow: 0px 2px 10px rgba(0, 32, 74, 0.08);
+}
+
+.dashboard-count-value {
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1;
+    color: #00449C;
+}
+
+.dashboard-count-label {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #00204A;
+}
+
 .dashboard-status-pjk {
     width: 80%;
     height: 70%;

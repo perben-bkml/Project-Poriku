@@ -156,6 +156,7 @@ const ROUTE_ROLES = {
     "GET /notification": ANY_ROLE,
     "POST /notification/mark-read": ANY_ROLE,
     "GET /verifikasi/realisasi-anggaran": ANY_ROLE,
+    "GET /home/dashboard": ANY_ROLE,
     // Buat-Pengajuan opens these in a popup when the Drive token has lapsed
     "GET /auth/google": ANY_ROLE,
     "GET /auth/google/verif": ANY_ROLE,
@@ -2217,15 +2218,20 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         //Handling Write Antrian Sheet update with backoff
         // A:N so the pre-update satker (L) and pajak/anggaran status (M/N) are
-        // available for the notification check below - no extra API call.
+        // available for the notification check below - no extra API call. The verif
+        // antrian rides along so the mirror row can be found without a second read.
         const getAntrianResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
+            return await sheets.spreadsheets.values.batchGet({
                 spreadsheetId,
-                range: "'Write Antrian'!A:N"
+                ranges: [
+                    "'Write Antrian'!A:N",
+                    `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
+                ],
             });
         });
 
-        const allRows = getAntrianResponse.data.values || [];
+        const allRows = getAntrianResponse.data.valueRanges[0].values || [];
+        const mirrorRows = getAntrianResponse.data.valueRanges[1].values || [];
         let rowIndex = null;
 
         // Find the matching row based on no_antri
@@ -2255,6 +2261,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             tgl_verifikasi === "" ? [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue]  : null, // Condition for column O
         ].filter(item => item !== null); //filter null to exclude it from the array
 
+
         // Apply backoff for batch update
         await withBackoff(async () => {
             return await sheets.spreadsheets.values.batchUpdate({
@@ -2268,6 +2275,22 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                 }
             });
         });
+
+        // GUP/PTUP keep their Nomor SPP only here, so the mirror the PJK screen reads
+        // shows it blank without this. Written RAW and on its own - USER_ENTERED above
+        // would parse "00041" down to 41.
+        const mirrorMatch = matchMirrorAntrianRow(mirrorRows, allRows[rowIndex - 1], "update");
+        if (mirrorMatch) {
+            const { antrianSheet, pjk } = AJUAN_FLOWS.verif;
+            await withBackoff(async () => {
+                return await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `'${antrianSheet}'!${pjk.spp}${mirrorMatch.row}`,
+                    valueInputOption: "RAW",
+                    requestBody: { values: [[formatNomorSpp(spp)]] },
+                });
+            });
+        }
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {
@@ -4485,6 +4508,82 @@ function addToFundTotals(target, fund, nominal) {
     target[fund] += nominal;
     target.total += nominal;
 }
+
+// Home dashboard counters. Both sheets each need one batchGet - the antrian pair and
+// 'Database SPM' live in different spreadsheets behind different service accounts.
+const SPM_UP_JENIS = ["GUP", "GUP-KKP", "PTUP"];
+const SPM_NON_LS_JENIS = [...SPM_UP_JENIS, "PEMBAYARAN RPATA", "UP", "TUP", "GUP NIHIL"];
+
+app.get("/home/dashboard", async (req, res) => {
+    try {
+        const viewer = req.viewer;
+        const isAdminViewer = ["admin", "master admin", "admin_gaji"].includes(viewer.role);
+        const viewerKey = normalizeSatker(viewer.name);
+
+        const verifFlow = AJUAN_FLOWS.verif;
+        const spmSpreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
+
+        const [antrianResponse, spmResponse] = await Promise.all([
+            withBackoff(async () => sheets.spreadsheets.values.batchGet({
+                spreadsheetId: getSpreadsheetId(req, 'AJUAN'),
+                ranges: [
+                    `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
+                    `'${AJUAN_FLOWS.gup.antrianSheet}'!A:${AJUAN_FLOWS.gup.antrianLastColumn}`,
+                ],
+            })),
+            spmSpreadsheetId
+                ? withBackoff(async () => sheets2.spreadsheets.values.get({
+                    spreadsheetId: spmSpreadsheetId,
+                    range: `'${DATABASE_SPM_SHEET}'!A2:Q`,
+                }))
+                : null,
+        ]);
+
+        const filled = value => String(value ?? "").trim() !== "";
+
+        // GUP/PTUP carry a second verification on their 'Write Antrian' original, so the
+        // mirror alone does not say whether the pengajuan is done
+        const gupByKey = new Map();
+        for (const row of antrianResponse.data.valueRanges[1].values || []) {
+            gupByKey.set(mirrorRowKey(row?.[1], row?.[2]), row);
+        }
+
+        const pengajuan = { belum: 0, sedang: 0, sudah: 0 };
+        for (const row of antrianResponse.data.valueRanges[0].values || []) {
+            if (!filled(row?.[0])) continue;
+            if (!isAdminViewer && normalizeSatker(row[verifFlow.antrianMap[ANTRIAN_UNIT_KERJA_INDEX]]) !== viewerKey) continue;
+
+            const mulai = [row[PJK_COLUMN.mulaiVerif]];
+            const selesai = [row[PJK_COLUMN.selesaiVerif]];
+            if (resolveJenis(row[3])?.flow === "gup") {
+                const origin = gupByKey.get(mirrorRowKey(row[1], row[2]));
+                mulai.push(origin?.[14]);
+                selesai.push(origin?.[15]);
+            }
+
+            if (selesai.every(filled)) pengajuan.sudah++;
+            else if (mulai.some(filled)) pengajuan.sedang++;
+            else pengajuan.belum++;
+        }
+
+        const spm = { total: 0, up: 0, ls: 0 };
+        for (const row of spmResponse?.data.values || []) {
+            const jenis = normalizeSatker(row?.[SPM_COLUMN.jenisSpm]);
+            if (jenis === "") continue;
+            if (!isAdminViewer && resolveSatkerKey(row?.[SPM_COLUMN.unitKerja]) !== viewerKey) continue;
+
+            spm.total++;
+            if (SPM_UP_JENIS.includes(jenis)) spm.up++;
+            else if (!SPM_NON_LS_JENIS.includes(jenis)) spm.ls++;
+        }
+
+        return res.status(200).json({ pengajuan, spm });
+
+    } catch (error) {
+        console.error("Error in /home/dashboard:", error);
+        return res.status(500).json({ error: "Failed to fetch dashboard data." });
+    }
+})
 
 // Realisasi Anggaran - budget ceilings, spending aggregated per satker per month,
 // and who still has to fill a ceiling in. Pass ?detail=1 to also get the raw SPM rows.

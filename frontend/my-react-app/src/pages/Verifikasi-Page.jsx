@@ -18,7 +18,27 @@ import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import {NavLink, Navigate} from "react-router-dom";
+import {NavLink} from "react-router-dom";
+
+// Single source of truth for both the sidebar and the access check, so the two cannot
+// drift. "master admin" is never listed - it opens everything.
+const MENU_ROLES = {
+    "monitor-PJK": ["user"],
+    "realisasi": ["admin", "admin_gaji"],
+    "kelola-PJK": ["admin"],
+    "pengujian-PJK": ["admin"],
+    "aksi-verif-PJK": ["admin"],
+    "form-verifikasi": ["admin"],
+};
+
+// Sidebar entries in display order. Menus reached from a parent screen are absent.
+const MENU_BUTTONS = [
+    {name: "realisasi", label: "Realisasi", Icon: PaymentsIcon},
+    {name: "kelola-PJK", label: "Kelola PJK", Icon: DashboardIcon},
+    {name: "pengujian-PJK", label: "Pengujian PJK", Icon: FactCheckIcon},
+    {name: "form-verifikasi", label: "Form Verifikasi", Icon: ChecklistRtlIcon},
+    {name: "monitor-PJK", label: "Monitor PJK", Icon: ScreenSearchDesktopIcon},
+];
 
 function VerifikasiPage(props) {
     const whatMenu = props.menu;
@@ -31,26 +51,14 @@ function VerifikasiPage(props) {
     const [pjkData, setPjkData] = useState([]);
 
 
-    // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["realisasi", "kelola-PJK", "pengujian-PJK", "aksi-verif-PJK", "form-verifikasi"];
-    const isAdmin = user.role === "admin" || user.role === "master admin";
-    const canOpen = (menu) => isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
+    const canOpen = (menu) => user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role);
+    const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 
     // Set buttonSelect when page renders
     useEffect(() => {
-        //Get locally saved storage saved button
-        const storedButton = localStorage.getItem("selectedButtonVerif");
         // A stored menu can outlive the session that set it, so re-check the role
-        if (storedButton && canOpen(storedButton)) {
-            setButtonSelect(storedButton);
-        } else {
-            if (isAdmin) {
-                setButtonSelect("kelola-PJK");
-            }
-            if (user.role === "user") {
-                setButtonSelect("monitor-PJK")
-            }
-        }
+        const storedButton = localStorage.getItem("selectedButtonVerif");
+        setButtonSelect(storedButton && canOpen(storedButton) ? storedButton : (visibleButtons[0]?.name || ""));
     }, [])
 
     // Enable scrolling for this page
@@ -62,17 +70,10 @@ function VerifikasiPage(props) {
         };
     }, []);
 
-    // Dash button add and remove class to make it selected
-    function handleButtonClick(event) {
-        const allButton = document.querySelectorAll(".dash-content button");
-        allButton.forEach((btn) => btn.classList.remove("btn-selected"));
-        const detectButton = document.getElementsByName(event.name)[0];
-        detectButton.classList.add("btn-selected")
-
-        setButtonSelect(event.name)
+    function handleButtonClick(name) {
+        setButtonSelect(name);
         //Store button select locally
-        localStorage.setItem("selectedButtonVerif", event.name);
-        formatText(event.name)
+        localStorage.setItem("selectedButtonVerif", name);
     }
     //Just converting into title name
     function formatText(input) {
@@ -85,10 +86,8 @@ function VerifikasiPage(props) {
 
     // Rendering Components
     function renderComponent() {
-        // Never render an admin menu for a role="user", however buttonSelect got set
-        if (!canOpen(buttonSelect)) {
-            return <MonitorPJK />;
-        }
+        // Never render a menu the role is not allowed to open, however buttonSelect got set
+        if (!canOpen(buttonSelect)) return null;
         switch (buttonSelect) {
             case "realisasi":
                 return <Realisasi />;
@@ -106,12 +105,6 @@ function VerifikasiPage(props) {
                 return null;
         }
     }
-    // role="admin_gaji" has no business here - typing the URL bounces back to Bendahara.
-    // Checked after the hooks above so the hook order stays the same on every render.
-    if (user.role === "admin_gaji") {
-        return <Navigate to="/menu-bendahara" replace />;
-    }
-
     return (
         <div className="main-page">
             <div className={"main-page-navbar"}>
@@ -129,7 +122,7 @@ function VerifikasiPage(props) {
             <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
                 <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
                     <div className="dash-title">
-                        <h2>Menu<br /> {whatMenu}</h2>
+                        <h2>{whatMenu}</h2>
                         {/* Button inside dash-title when sidebar is open */}
                         <button 
                             className="toggle-sidebar-btn inside-sidebar" 
@@ -138,21 +131,12 @@ function VerifikasiPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "realisasi" ? "btn-selected" : "hidden"}`} name="realisasi" onClick={(e)=> handleButtonClick(e.target)}><PaymentsIcon fontSize="small"/><span className="padd-span-bend"/>Realisasi</button>
-                        : null}
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "kelola-PJK" ? "btn-selected" : "hidden"}`} name="kelola-PJK" onClick={(e)=> handleButtonClick(e.target)}><DashboardIcon fontSize="small"/><span className="padd-span-bend"/>Kelola PJK</button>
-                        : null}
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "pengujian-PJK" ? "btn-selected" : "hidden"}`} name="pengujian-PJK" onClick={(e)=> handleButtonClick(e.target)}><FactCheckIcon fontSize="small"/><span className="padd-span-bend"/>Pengujian PJK</button>
-                        : null}
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "form-verifikasi" ? "btn-selected" : "hidden"}`} name="form-verifikasi" onClick={(e)=> handleButtonClick(e.target)}><ChecklistRtlIcon fontSize="small"/><span className="padd-span-bend"/>Form Verifikasi</button>
-                        : null}
-                        { user.role === "user" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "monitor-PJK" ? "btn-selected" : "hidden"}`} name="monitor-PJK" onClick={(e)=> handleButtonClick(e.target)}><ScreenSearchDesktopIcon fontSize="small"/><span className="padd-span-bend"/>Monitor PJK</button>
-                        : null}
+                        {visibleButtons.map(({name, label, Icon}) => (
+                            <button key={name} name={name} onClick={() => handleButtonClick(name)}
+                                    className={`dash-button ${buttonSelect === name ? "btn-selected" : ""}`}>
+                                <Icon fontSize="small"/><span className="padd-span-bend"/>{label}
+                            </button>
+                        ))}
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />

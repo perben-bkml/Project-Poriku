@@ -627,6 +627,15 @@ input[type="number"]::-webkit-inner-spin-button {
     justify-content: center;
     font-size: 1rem;
 }
+/* Mirrors .bg-card's width and side margins so the action lines up with the right
+   edge of the cards below instead of the window */
+.pjk-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    width: 94%;
+    margin: 0 50px 10px 50px;
+}
+
 .wide-card {
     margin-top: 40px;
     margin-bottom: 40px;
@@ -925,6 +934,11 @@ input[type="number"]::-webkit-inner-spin-button {
         height: auto;
         margin: 5px 30px 20px 30px;
         padding-bottom: 20px;
+    }
+
+    .pjk-toolbar {
+        max-width: 1280px;
+        margin: 0 30px 10px 30px;
     }
 
     /* Styling Pengajuan-info */

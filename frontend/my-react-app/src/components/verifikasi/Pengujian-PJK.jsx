@@ -84,7 +84,7 @@ function PengujianPJK(props) {
 
     return (
         <div className='kelola-container'>
-            <div style={{display: 'flex', justifyContent: 'flex-end', marginBottom: '10px'}}>
+            <div className="pjk-toolbar">
                 <input className="btn-aksi btn-aksi-wide" type="button" value={isLoading ? "Memuat..." : "Muat Ulang"}
                        disabled={isLoading} onClick={() => fetchPjk()}
                        style={{cursor: isLoading ? 'wait' : 'pointer'}}/>

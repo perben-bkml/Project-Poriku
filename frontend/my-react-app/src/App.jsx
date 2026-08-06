@@ -31,7 +31,7 @@ function App() {
             <Route path="/home" element={<ProtectedRoute> <Home /> </ProtectedRoute>} />
             <Route path="/menu-bendahara" element={
               <ProtectedRoute>
-                <BendaharaPage menu="Bendahara"/>
+                <BendaharaPage menu="Pengajuan"/>
               </ProtectedRoute>} />
             <Route path="/menu-verifikasi" element={
               <ProtectedRoute>

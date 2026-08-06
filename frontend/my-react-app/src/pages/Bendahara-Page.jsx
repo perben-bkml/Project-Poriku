@@ -26,6 +26,35 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import PaymentsIcon from '@mui/icons-material/Payments';
 
+// Single source of truth for both the sidebar and the access check, so the two cannot
+// drift. "master admin" is never listed - it opens everything.
+const MENU_ROLES = {
+    "daftar-pengajuan": ["user"],
+    "buat-pengajuan": ["user"],
+    "detail-pengajuan": ["user"],
+    "edit-pengajuan": ["user"],
+    "lihat-antrian": ["user"],
+    "SPM-bendahara": ["user", "admin"],
+    "kelola-pengajuan": ["admin"],
+    "aksi-pengajuan": ["admin"],
+    "monitoring-drpp": ["admin"],
+    "aksi-drpp": ["admin"],
+    "monitor-data-gaji": ["admin", "admin_gaji"],
+    // Writing dokumen gaji stays with the roles the backend lets write it
+    "input-dokumen-gaji": ["admin_gaji"],
+};
+
+// Sidebar entries in display order. Menus reached from a parent screen are absent.
+const MENU_BUTTONS = [
+    {name: "kelola-pengajuan", label: "Kelola Pengajuan", Icon: MenuBookIcon},
+    {name: "monitoring-drpp", label: "Monitoring DRPP", Icon: MonitorIcon},
+    {name: "daftar-pengajuan", label: "Daftar Pengajuan", Icon: AssignmentIcon},
+    {name: "buat-pengajuan", label: "Buat Pengajuan", Icon: AddCircleOutlinedIcon},
+    {name: "lihat-antrian", label: "Lihat Antrian", Icon: ChecklistIcon},
+    {name: "SPM-bendahara", label: "SPM Bendahara", Icon: FindInPageIcon},
+    {name: "monitor-data-gaji", label: "Monitor Data Gaji", Icon: PaymentsIcon},
+];
+
 function BendaharaPage(props) {
     const whatMenu = props.menu;
 
@@ -41,34 +70,14 @@ function BendaharaPage(props) {
     const [drppData, setDrppData] = useState([]);
 
 
-    // Menus a role="user" must never reach
-    const ADMIN_ONLY_MENUS = ["kelola-pengajuan", "aksi-pengajuan", "monitoring-drpp", "aksi-drpp", "monitor-data-gaji", "input-dokumen-gaji"];
-    // The only menus a role="admin_gaji" may reach - it is an allow-list, not a deny-list
-    const GAJI_ONLY_MENUS = ["monitor-data-gaji", "input-dokumen-gaji"];
-    const isAdmin = user.role === "admin" || user.role === "master admin";
-    const isAdminGaji = user.role === "admin_gaji";
-    const canOpen = (menu) => isAdminGaji
-        ? GAJI_ONLY_MENUS.includes(menu)
-        : isAdmin || !ADMIN_ONLY_MENUS.includes(menu);
+    const canOpen = (menu) => user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role);
+    const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 
     // Set buttonSelect when page renders
     useEffect(() => {
-        //Get locally saved storage saved button
-        const storedButton = localStorage.getItem("selectedButtonBendahara");
         // A stored menu can outlive the session that set it, so re-check the role
-        if (storedButton && canOpen(storedButton)) {
-            setButtonSelect(storedButton);
-        } else {
-            if (isAdmin) {
-                setButtonSelect("kelola-pengajuan");
-            }
-            if (isAdminGaji) {
-                setButtonSelect("monitor-data-gaji")
-            }
-            if (user.role === "user") {
-                setButtonSelect("daftar-pengajuan")
-            }
-        }
+        const storedButton = localStorage.getItem("selectedButtonBendahara");
+        setButtonSelect(storedButton && canOpen(storedButton) ? storedButton : (visibleButtons[0]?.name || ""));
     }, [])
 
     // Enable scrolling for this page
@@ -80,17 +89,10 @@ function BendaharaPage(props) {
         };
     }, []);
 
-    // Dash button add and remove class to make it selected
-    function handleButtonClick(event) {
-        const allButton = document.querySelectorAll(".dash-content button");
-        allButton.forEach((btn) => btn.classList.remove("btn-selected"));
-        const detectButton = document.getElementsByName(event.name)[0];
-        detectButton.classList.add("btn-selected")
-
-        setButtonSelect(event.name)
+    function handleButtonClick(name) {
+        setButtonSelect(name);
         //Store button select locally
-        localStorage.setItem("selectedButtonBendahara", event.name);
-        formatText(event.name)
+        localStorage.setItem("selectedButtonBendahara", name);
         setSavedPagination(null);
         setAlertMessage("");
     }
@@ -122,11 +124,7 @@ function BendaharaPage(props) {
     // Rendering Components
     function renderComponent() {
         // Never render a menu the role is not allowed to open, however buttonSelect got set
-        if (!canOpen(buttonSelect)) {
-            return isAdminGaji
-                ? <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} />
-                : <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
-        }
+        if (!canOpen(buttonSelect)) return null;
         switch (buttonSelect) {
             case "kelola-pengajuan":
                 return <KelolaPengajuan changeComponent={setButtonSelect} aksiData={setAksiData} />
@@ -173,7 +171,7 @@ function BendaharaPage(props) {
             <div className={`bendahara-home ${isSidebarOpen ? "" : "sidebar-hidden"}`}>
                 <div className={`dash-tab ${isSidebarOpen ? "" : "hidden-sidebar"}`}>
                     <div className="dash-title">
-                        <h2>Menu<br /> {whatMenu}</h2>
+                        <h2>{whatMenu}</h2>
                         {/* Button inside dash-title when sidebar is open */}
                         <button 
                             className="toggle-sidebar-btn inside-sidebar" 
@@ -182,21 +180,12 @@ function BendaharaPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "kelola-pengajuan" ? "btn-selected" : "hidden"}`} name="kelola-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><MenuBookIcon fontSize="small"/><span className="padd-span-bend"/>Kelola Pengajuan</button>
-                        : null}
-                        { user.role === "admin" || user.role === "master admin" ?
-                        <button className={`dash-button ${buttonSelect === "monitoring-drpp" ? "btn-selected" : "hidden"}`} name="monitoring-drpp" onClick={(e)=> handleButtonClick(e.target)}><MonitorIcon fontSize="small"/><span className="padd-span-bend"/>Monitoring DRPP</button>
-                        : null}
-                        { !isAdminGaji ? <>
-                        <button className={`dash-button ${buttonSelect === "daftar-pengajuan" ? "btn-selected" : ""}`} name="daftar-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AssignmentIcon fontSize="small"/><span className="padd-span-bend"/>Daftar Pengajuan</button>
-                        <button className={`dash-button ${buttonSelect === "buat-pengajuan" ? "btn-selected" : ""}`} name="buat-pengajuan" onClick={(e)=> handleButtonClick(e.target)}><AddCircleOutlinedIcon fontSize="small" /><span className="padd-span-bend"/>Buat Pengajuan</button>
-                        <button className={`dash-button ${buttonSelect === "lihat-antrian" ? "btn-selected" : ""}`} name="lihat-antrian" onClick={(e)=> handleButtonClick(e.target)}><ChecklistIcon fontSize="small"/><span className="padd-span-bend"/>Lihat Antrian</button>
-                        <button className={`dash-button ${buttonSelect === "SPM-bendahara" ? "btn-selected" : ""}`} name="SPM-bendahara" onClick={(e)=> handleButtonClick(e.target)}><FindInPageIcon fontSize="small"/><span className="padd-span-bend"/>SPM Bendahara</button>
-                        </> : null}
-                        { isAdmin || isAdminGaji ?
-                        <button className={`dash-button ${buttonSelect === "monitor-data-gaji" ? "btn-selected" : ""}`} name="monitor-data-gaji" onClick={(e)=> handleButtonClick(e.target)}><PaymentsIcon fontSize="small"/><span className="padd-span-bend"/>Monitor Data Gaji</button>
-                        : null}
+                        {visibleButtons.map(({name, label, Icon}) => (
+                            <button key={name} name={name} onClick={() => handleButtonClick(name)}
+                                    className={`dash-button ${buttonSelect === name ? "btn-selected" : ""}`}>
+                                <Icon fontSize="small"/><span className="padd-span-bend"/>{label}
+                            </button>
+                        ))}
                     </div>
                     <div className="dash-user">
                         <Avatar sx={{width: 40, height: 40}} alt="bakamla-logo" src="/assets/bakamla_logo.svg" />

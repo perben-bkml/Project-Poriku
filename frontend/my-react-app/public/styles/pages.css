@@ -456,6 +456,12 @@
     justify-items: center;
 }
 
+/* Pilot hold: with the right hand dashboard hidden the realisasi panel is the only
+   child left, so it takes the whole row instead of sitting in a half width column */
+.home-dashboard-solo {
+    grid-template-columns: 1fr;
+}
+
 .dashboard-title {
     font-size: 2rem;
     font-weight: 500;

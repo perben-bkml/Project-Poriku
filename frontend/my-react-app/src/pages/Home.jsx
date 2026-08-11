@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useMemo, useState} from "react"
 import { AuthContext } from "../lib/AuthContext";
 import {monthNames} from "../components/verifikasi/head-data.js";
 import apiClient from "../lib/apiClient";
+import { PILOT } from "../lib/pilot.js";
 import LoadingAnimate from "../ui/loading.jsx"
 import { NewNavbar } from "../ui/Navbar.jsx"
 import { RealisasiCircle } from "../ui/cards.jsx"
@@ -13,6 +14,10 @@ function Home() {
     const satkerName = user.name;
     const userRole = user.role;
     const isAdmin = ["admin", "master admin", "admin_gaji"].includes(userRole);
+    // Pilot hold: the counters are only shown to the admin roles for now. The route stays
+    // open to role="user" and scopes itself to their own satker, so flipping the flag off
+    // is all that is needed to hand the dashboard back.
+    const showDashboard = isAdmin || !PILOT.hideHomeDashboardFromUser;
 
     //State
     const [realisasi, setRealisasi] = useState(null);
@@ -63,8 +68,8 @@ function Home() {
 
     useEffect(() => {
         fetchRealisasi();
-        fetchDashboard();
-    }, [])
+        if (showDashboard) fetchDashboard();
+    }, [showDashboard])
 
     function handleMonthChange(event) {
         setMonthFilter(event.target.value);
@@ -133,7 +138,7 @@ function Home() {
                         : "Admin PPK Unit Kerja"}</h3>
 
             </div>
-            <div className="home-dashboard">
+            <div className={`home-dashboard${showDashboard ? "" : " home-dashboard-solo"}`}>
                 <div className="home-dashboard-left">
                     <h3 className={"dashboard-title"}>
                         {isAdmin ? "Realisasi Anggaran" : `Realisasi Anggaran ${satkerName}`}
@@ -161,7 +166,7 @@ function Home() {
                         }
                     </div>
                 </div>
-                <div className="home-dashboard-right">
+                {showDashboard && <div className="home-dashboard-right">
                     {!dashboard ? <LoadingAnimate /> :
                         dashboardSections.map(section => (
                             <div key={section.title} className="dashboard-counts">
@@ -177,7 +182,7 @@ function Home() {
                             </div>
                         ))
                     }
-                </div>
+                </div>}
             </div>
         </div>
     )

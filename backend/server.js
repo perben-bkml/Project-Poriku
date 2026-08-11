@@ -137,6 +137,22 @@ const USER_ADMIN = ["user", "admin"];
 const ADMIN_GAJI = ["admin", "admin_gaji"];
 const ANY_ROLE = ["user", "admin", "admin_gaji"];
 
+// --- Pilot switches -----------------------------------------------------------
+// There is no staging server, so a couple of finished features are held back on the live
+// one while they are trialled. Nothing behind these flags is removed - each is a temporary
+// hold, and setting it to false restores the behaviour the code already had.
+// PILOT_SKIP_MENUNGGU_PJK has a twin on the frontend (hideMenungguPjkSection in
+// src/lib/pilot.js) that hides the card this flag empties; flip the two together.
+
+// Non-GUP/PTUP jenis are master admin only, matching the option list Buat-Pengajuan.jsx
+// offers. Rows submitted before the hold still open, edit and verify normally.
+const PILOT_JENIS_MASTER_ADMIN_ONLY = true;
+const PILOT_JENIS_ALLOWED = ["gup", "ptup"];
+// Kelola-Pengajuan stops parking a GUP/PTUP row on the verifikator PJK: once the bendahara
+// has set Pajak, Anggaran and the Tanggal Selesai Verifikasi the row moves straight on to
+// Sudah Verifikasi. The PJK verification itself is untouched and still runs on the mirror.
+const PILOT_SKIP_MENUNGGU_PJK = true;
+
 // Reachable without a session: login itself, the public Layanan Gaji page, and the
 // Google redirect targets the browser lands on without passing through the app
 const PUBLIC_ROUTES = new Set([
@@ -1229,9 +1245,16 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
 
             const [namaPengisi, jenisKey, jumlahAjuan, tanggalAjuan, nomorSpp = ""] = textdata;
-            const jenis = JENIS_PENGAJUAN[String(jenisKey || "").trim()];
+            const jenisSlug = String(jenisKey || "").trim();
+            const jenis = JENIS_PENGAJUAN[jenisSlug];
             if (!jenis) {
                 return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
+            }
+            // Pilot hold: the option list in Buat-Pengajuan.jsx already stops at GUP/PTUP for
+            // everyone else, this is the same rule where it cannot be edited around
+            if (PILOT_JENIS_MASTER_ADMIN_ONLY && req.viewer?.role !== MASTER_ROLE
+                && !PILOT_JENIS_ALLOWED.includes(jenisSlug)) {
+                return res.status(403).json({ message: "Jenis pengajuan ini belum tersedia." });
             }
             const flow = AJUAN_FLOWS[jenis.flow];
             const hasTable = jenis.hasTable && Array.isArray(tabledata) && tabledata.length > 0;
@@ -2176,6 +2199,9 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // has no PJK to wait on, so it stays where it was.
         const isOk = value => String(value ?? "").trim() === "OK";
         const waitingPjk = (row) => {
+            // Pilot hold: nothing waits on the verifikator, so every row falls through to the
+            // section its own status column puts it in, the way it did before the PJK step
+            if (PILOT_SKIP_MENUNGGU_PJK) return false;
             const pjk = pjkByKey.get(mirrorRowKey(row[1], row[2]));
             return !!pjk && isOk(row[12]) && isOk(row[13])
                 && !(PJK_VERIFIED_VALUES.includes(String(pjk[0] ?? "").trim())

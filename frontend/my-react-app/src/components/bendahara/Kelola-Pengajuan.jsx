@@ -3,6 +3,7 @@ import apiClient from '../../lib/apiClient';
 //Import components
 import { Card, WideTableCard } from '../../ui/cards.jsx';
 import { headData1, headData2, headData3, headData4, headDataPjk } from './head-data.js';
+import { PILOT } from '../../lib/pilot.js';
 import PropTypes from "prop-types";
 
 // Pajak (12) or Anggaran (13) answered with anything but OK - the bendahara flagged
@@ -46,7 +47,12 @@ function KelolaPengajuan(props) {
         })();
     }, [])
 
-    const sections = SECTIONS.map(section => ({...section, rows: section.source(data) || []}));
+    // Pilot hold: with PILOT_SKIP_MENUNGGU_PJK on, the backend never parks a row on the
+    // verifikator, so this section would sit at zero for the whole pilot - drop it rather
+    // than show an empty card. Turning both flags back off restores it as it was.
+    const sections = SECTIONS
+        .filter(section => !(PILOT.hideMenungguPjkSection && section.card === "Menunggu Verifikator PJK"))
+        .map(section => ({...section, rows: section.source(data) || []}));
 
     return (
         <div className='kelola-container'>

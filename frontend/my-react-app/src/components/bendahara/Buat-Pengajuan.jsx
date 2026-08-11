@@ -5,6 +5,7 @@ import apiClient from "../../lib/apiClient";
 // Import Components
 import Popup from "../../ui/Popup.jsx";
 import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel } from "./head-data.js";
+import { PILOT, PILOT_JENIS_ALLOWED } from "../../lib/pilot.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
@@ -102,6 +103,23 @@ function BuatPengajuan(props) {
         () => (isTabelPenuh ? columns.map((_, index) => index) : ringkasColumns),
         [isTabelPenuh]
     );
+
+    // Pilot hold: the verifikasi jenis are being trialled on the live server, so everyone
+    // but "master admin" composes GUP/PTUP only. Reopened rows are untouched - their select
+    // below is already fixed to the flow the row lives on, so an LS pengajuan submitted
+    // before the hold still opens and edits normally.
+    const jenisOptions = useMemo(() => (
+        PILOT.jenisPengajuanMasterAdminOnly && user?.role !== "master admin"
+            ? jenisPengajuan.filter(jenis => PILOT_JENIS_ALLOWED.includes(jenis.value))
+            : jenisPengajuan
+    ), [user?.role]);
+
+    // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
+    // left over from a reopened row can outlive the switch to composing. Snap it back to a
+    // jenis that is actually on offer, or the select would show one thing and submit another.
+    useEffect(() => {
+        if (isBuat && !jenisOptions.some(jenis => jenis.value === ajuan)) setAjuan(jenisOptions[0].value);
+    }, [isBuat, jenisOptions, ajuan]);
 
     // The verifikasi table is a single row, and its sheet has no Request Tanggal column.
     // Only applies while composing - a reopened row already arrives in its own shape.
@@ -1121,7 +1139,7 @@ function BuatPengajuan(props) {
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
                         <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)}>
-                            {jenisPengajuan.map((jenis) => (
+                            {jenisOptions.map((jenis) => (
                                 <option key={jenis.value} value={jenis.value}>{jenis.label}</option>
                             ))}
                         </select>

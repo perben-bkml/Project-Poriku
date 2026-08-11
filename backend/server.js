@@ -90,6 +90,31 @@ async function withBackoff(apiCallFn, options = {}) {
   }
 }
 
+// REFACTOR: string helpers that were redefined inline in several routes
+const trimmed = (value) => String(value ?? "").trim();
+const filled = (value) => trimmed(value) !== "";
+// Drive rejects "/" in a file name, and both jenis labels and Status Pegawai can carry one
+const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
+
+// REFACTOR: every Sheets call went through the same five line
+// withBackoff(async () => { return await client.spreadsheets.values.X({...}) }) wrapper.
+// These keep the backoff and the argument shape identical, just without the repetition.
+const readRange = (client, spreadsheetId, range) =>
+    withBackoff(async () => client.spreadsheets.values.get({ spreadsheetId, range }));
+
+const readRanges = (client, spreadsheetId, ranges) =>
+    withBackoff(async () => client.spreadsheets.values.batchGet({ spreadsheetId, ranges }));
+
+const writeRange = (client, spreadsheetId, range, values, valueInputOption = "RAW") =>
+    withBackoff(async () => client.spreadsheets.values.update({
+        spreadsheetId, range, valueInputOption, requestBody: { values },
+    }));
+
+const writeRanges = (client, spreadsheetId, data, valueInputOption = "RAW") =>
+    withBackoff(async () => client.spreadsheets.values.batchUpdate({
+        spreadsheetId, requestBody: { valueInputOption, data },
+    }));
+
 // Allowing CORS to get request and cookies from frontend
 const corsOption = {
     origin: process.env.FRONTEND_ORIGIN,
@@ -349,12 +374,7 @@ async function writeNotification(spreadsheetId, recipientName, title, descriptio
         return { ok: false, reason: "missing-args" };
     }
 
-    const headerResponse = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: "'Notifikasi'!A1:CB1",
-        });
-    });
+    const headerResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A1:CB1");
     const headerRow = headerResponse.data.values?.[0] || [];
     const columnIndex = findNotificationColumnIndex(headerRow, recipient);
     if (columnIndex === -1) {
@@ -367,26 +387,22 @@ async function writeNotification(spreadsheetId, recipientName, title, descriptio
 
     // Sheets trims trailing empty rows but returns interior ones as [], so `length`
     // is the offset of the last populated row - an interior gap cannot shift it.
-    const blockResponse = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `'Notifikasi'!${idColumnLetter}3:${statusColumnLetter}`,
-        });
-    });
+    const blockResponse = await readRange(
+        sheets,
+        spreadsheetId,
+        `'Notifikasi'!${idColumnLetter}3:${statusColumnLetter}`,
+    );
     const blockRows = blockResponse.data.values || [];
     const newRow = 3 + blockRows.length;
     const newId = newRow - 2;
 
-    await withBackoff(async () => {
-        return await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `'Notifikasi'!${idColumnLetter}${newRow}:${statusColumnLetter}${newRow}`,
-            valueInputOption: "RAW",
-            requestBody: {
-                values: [[newId, title, description || "", 'no']]
-            }
-        });
-    });
+    await writeRange(
+        sheets,
+        spreadsheetId,
+        `'Notifikasi'!${idColumnLetter}${newRow}:${statusColumnLetter}${newRow}`,
+        [[newId, title, description || "", 'no']],
+        "RAW",
+    );
 
     console.log(`[notifikasi] "${recipient}" <- id ${newId} baris ${newRow}: ${title}`);
     return { ok: true, id: newId, row: newRow };
@@ -804,12 +820,7 @@ app.get("/bendahara/antrian-gaji", async (req, res) => {
         });
 
         //Get filtered values
-        const valueResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdGaji,
-                range: `'Sheet1'!A:C`,
-            });
-        });
+        const valueResponse = await readRange(sheets, spreadsheetIdGaji, `'Sheet1'!A:C`);
 
         const visibleRows = valueResponse.data.values.filter(
             (_, idx) => !hiddenRowIdx.has(idx)
@@ -1056,12 +1067,11 @@ function matchMirrorAntrianRow(mirrorRows, antrianRowValues, purpose = "update")
 
 async function findMirrorAntrianRow(spreadsheetId, antrianRowValues, purpose = "update") {
     const verifFlow = AJUAN_FLOWS.verif;
-    const response = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
-        });
-    });
+    const response = await readRange(
+        sheets,
+        spreadsheetId,
+        `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
+    );
     return matchMirrorAntrianRow(response.data.values, antrianRowValues, purpose);
 }
 
@@ -1075,12 +1085,11 @@ function sortAntrianLatestFirst(rows) {
 // the authoritative one and carries the columns the mirror does not have.
 async function fetchMergedAntrianRows(spreadsheetId) {
     const flows = [AJUAN_FLOWS.gup, AJUAN_FLOWS.verif];
-    const response = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.batchGet({
-            spreadsheetId,
-            ranges: flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.antrianLastColumn}`),
-        });
-    });
+    const response = await readRanges(
+        sheets,
+        spreadsheetId,
+        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.antrianLastColumn}`),
+    );
 
     // The mirrors are dropped from the list itself, but they hold the only copy of the PJK
     // lampiran, the verifikator's note and the PJK-side status, so they are indexed on the
@@ -1133,7 +1142,7 @@ const JENIS_PENGAJUAN = {
 // Nomor SPP is stored zero padded to 5 digits. Anything not purely numeric is left alone
 // rather than mangled, and the sheet write must stay RAW to keep the leading zeros.
 const formatNomorSpp = (value) => {
-    const text = String(value ?? "").trim();
+    const text = trimmed(value);
     return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
 };
 
@@ -1297,13 +1306,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 ranges.push(`'${mirrorFlow.antrianSheet}'!A:A`, `'${mirrorFlow.antrianSheet}'!${mirrorFlow.counterCell}`);
             }
 
-            // Apply backoff strategy for batch data fetch
-            const allRequest = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.batchGet({
-                    spreadsheetId,
-                    ranges: ranges
-                });
-            });
+            const allRequest = await readRanges(sheets, spreadsheetId, ranges);
 
             const responseAntrian = allRequest.data.valueRanges[0].values || [];
             const responseTable = allRequest.data.valueRanges[1].values || [];
@@ -1330,15 +1333,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
 
             if (bupotFile || pjkFile) {
                 // Dedicated uploader account, not the shared /auth/google token
-                const uploaderReady = await ensureGajiDriveReady();
-                if (!uploaderReady) {
-                    console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
-                    return res.status(401).json({
-                        error: "Google Drive authentication required. Please authenticate first.",
-                        authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
-                        redirectToAuth: true
-                    });
-                }
+                if (!await requireGajiDriveAuth(req, res)) return;
                 if (pjkFile && !driveFolderIdVerifPjk) {
                     console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
                     return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
@@ -1405,13 +1400,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 });
             }
 
-            // Apply backoff strategy for batch update
-            await withBackoff(async () => {
-                return await sheets.spreadsheets.values.batchUpdate({
-                    spreadsheetId,
-                    resource: { data, valueInputOption: "RAW" },
-                });
-            });
+            await writeRanges(sheets, spreadsheetId, data, "RAW");
 
             if (!hasTable) {
                 return res.status(200).json({message: "Data sent successfully."});
@@ -1510,12 +1499,7 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         const matchRange = `'${flowConfig.tableSheet}'!X:Y`;
 
         // Apply backoff strategy for finding keyword match
-        const matchResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({ 
-                spreadsheetId, 
-                range: matchRange 
-            });
-        });
+        const matchResponse = await readRange(sheets, spreadsheetId, matchRange);
 
         const matchResponseRows = matchResponse.data.values || [];
         // Matching range with user inputted keyword
@@ -1595,15 +1579,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         // Removing a PJK deletes the file too, so it needs the same Drive access as uploading
         if (bupotFile || pjkFile || removePjk) {
             // Dedicated uploader account, not the shared /auth/google token
-            const uploaderReady = await ensureGajiDriveReady();
-            if (!uploaderReady) {
-                console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
-                return res.status(401).json({
-                    error: "Google Drive authentication required. Please authenticate first.",
-                    authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
-                    redirectToAuth: true
-                });
-            }
+            if (!await requireGajiDriveAuth(req, res)) return;
             if (pjkFile && !driveFolderIdVerifPjk) {
                 console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
                 return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
@@ -1630,12 +1606,11 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         // The whole row, not just A - the mirror is matched on the timestamp and nama this row
         // still holds, and the lampiran is the only handle on the file it currently points at.
         // Both are about to be overwritten.
-        const antriResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${flowConfig.antrianSheet}'!A3:${flowConfig.antrianLastColumn}`
-            });
-        });
+        const antriResponse = await readRange(
+            sheets,
+            spreadsheetId,
+            `'${flowConfig.antrianSheet}'!A3:${flowConfig.antrianLastColumn}`,
+        );
 
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
@@ -1819,15 +1794,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         }
 
         // Execute batch data update with backoff (preserves text format)
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId,
-                resource: {
-                    data: batchDataUpdates,
-                    valueInputOption: "RAW" // Prevents auto-conversion of text like "100.000" to 100
-                }
-            });
-        });
+        await writeRanges(sheets, spreadsheetId, batchDataUpdates, "RAW");
 
         console.log("✅ Update successful!");
 
@@ -1872,12 +1839,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
          // The sheet ids are needed either way, so that lookup runs alongside the read
          // rather than after it
          const [matchResponse, sheetInfo] = await Promise.all([
-             withBackoff(async () => {
-                 return await sheets.spreadsheets.values.batchGet({
-                     spreadsheetId,
-                     ranges: matchRange
-                 });
-             }),
+             readRanges(sheets, spreadsheetId, matchRange),
              withBackoff(async () => {
                  return await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(sheetId,title)" });
              }),
@@ -2013,14 +1975,7 @@ app.patch("/bendahara/cari-spm", async (req, res) => {
         const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
 
         // Apply backoff for updating cell
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId: spreadsheetIdCariSPM,
-                range: cariRange,
-                valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-                resource: { values: [[data]] },
-            });
-        });
+        await writeRange(sheets, spreadsheetIdCariSPM, cariRange, [[data]], "RAW");
 
         res.status(200).json({ message: "Data updated successfully." });
     } catch (error) {
@@ -2036,12 +1991,7 @@ app.get("/bendahara/spm-belum-bayar", async (req, res) => {
         const range = "'MACHINE DB'!AE3:AM"
 
         // Apply backoff for getting SPM data
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdCariSPM,
-                range,
-            });
-        });
+        const response = await readRange(sheets, spreadsheetIdCariSPM, range);
 
         const result = (response.data.values || []).map(row => {
             while (row.length < 9) {
@@ -2105,12 +2055,7 @@ app.post("/bendahara/cari-rincian", async (req, res) => {
 
         try {
             // Apply backoff for getting results
-            const getResponse = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({ 
-                    spreadsheetId: spreadsheetIdCariSPM, 
-                    range: "'MACHINE DB'!AT3:BD",
-                });
-            });
+            const getResponse = await readRange(sheets, spreadsheetIdCariSPM, "'MACHINE DB'!AT3:BD");
 
             let result = getResponse.data.values;
             // Add empty rows to generate max 11 columns
@@ -2145,20 +2090,16 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const isHistoricalYear = selectedYear !== currentYear;
 
         // Column B drives the date filter; the verifikasi antrian rides alongside it so the
-        // PJK status of each mirror row costs no extra round trip
+        // PJK status of each mirror row costs no extra round trip.
+        // REFACTOR: while PILOT_SKIP_MENUNGGU_PJK holds, nothing reads that PJK status, so
+        // the whole mirror sheet was being fetched and thrown away on every page load.
         const [response, mirrorResponse] = await Promise.all([
-            withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: "'Write Antrian'!B:B",
-                });
-            }),
-            withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
-                });
-            }),
+            readRange(sheets, spreadsheetId, "'Write Antrian'!B:B"),
+            PILOT_SKIP_MENUNGGU_PJK ? null : readRange(
+                sheets,
+                spreadsheetId,
+                `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
+            ),
         ]);
 
         // Get all rows
@@ -2190,12 +2131,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const minRow = Math.min(...rowIndices);
         const maxRow = Math.max(...rowIndices);
 
-        const batchGetResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'Write Antrian'!A${minRow}:T${maxRow}`,
-            });
-        });
+        const batchGetResponse = await readRange(sheets, spreadsheetId, `'Write Antrian'!A${minRow}:T${maxRow}`);
 
         const allRowsData = batchGetResponse.data.values || [];
 
@@ -2219,13 +2155,13 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 
         // PJK status of each mirror row, keyed the same way delete and edit pair them
         const pjkByKey = new Map();
-        for (const row of mirrorResponse.data.values || []) {
+        for (const row of mirrorResponse?.data.values || []) {
             pjkByKey.set(mirrorRowKey(row?.[1], row?.[2]), [row?.[PJK_COLUMN.substansi], row?.[PJK_COLUMN.kelengkapan]]);
         }
 
         // Bendahara is done but the verifikator has not signed off yet. A row with no mirror
         // has no PJK to wait on, so it stays where it was.
-        const isOk = value => String(value ?? "").trim() === "OK";
+        const isOk = value => trimmed(value) === "OK";
         const waitingPjk = (row) => {
             // Pilot hold: nothing waits on the verifikator, so every row falls through to the
             // section its own status column puts it in, the way it did before the PJK step
@@ -2274,15 +2210,14 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         // A:N so the pre-update satker (L) and pajak/anggaran status (M/N) are
         // available for the notification check below - no extra API call. The verif
         // antrian rides along so the mirror row can be found without a second read.
-        const getAntrianResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: [
-                    "'Write Antrian'!A:N",
-                    `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
-                ],
-            });
-        });
+        const getAntrianResponse = await readRanges(
+            sheets,
+            spreadsheetId,
+            [
+                "'Write Antrian'!A:N",
+                `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
+            ],
+        );
 
         const allRows = getAntrianResponse.data.valueRanges[0].values || [];
         const mirrorRows = getAntrianResponse.data.valueRanges[1].values || [];
@@ -2316,19 +2251,15 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         ].filter(item => item !== null); //filter null to exclude it from the array
 
 
-        // Apply backoff for batch update
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                    valueInputOption: "USER_ENTERED",
-                    data: updateData.map(([range, value]) => ({
-                        range,
-                        values: [[value]]
-                    }))
-                }
-            });
-        });
+        await writeRanges(
+            sheets,
+            spreadsheetId,
+            updateData.map(([range, value]) => ({
+                range,
+                values: [[value]]
+            })),
+            "USER_ENTERED",
+        );
 
         // GUP/PTUP keep their Nomor SPP only here, so the mirror the PJK screen reads
         // shows it blank without this. Written RAW and on its own - USER_ENTERED above
@@ -2336,14 +2267,13 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         const mirrorMatch = matchMirrorAntrianRow(mirrorRows, allRows[rowIndex - 1], "update");
         if (mirrorMatch) {
             const { antrianSheet, pjk } = AJUAN_FLOWS.verif;
-            await withBackoff(async () => {
-                return await sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: `'${antrianSheet}'!${pjk.spp}${mirrorMatch.row}`,
-                    valueInputOption: "RAW",
-                    requestBody: { values: [[formatNomorSpp(spp)]] },
-                });
-            });
+            await writeRange(
+                sheets,
+                spreadsheetId,
+                `'${antrianSheet}'!${pjk.spp}${mirrorMatch.row}`,
+                [[formatNomorSpp(spp)]],
+                "RAW",
+            );
         }
 
         // Handling Monitoring DRPP Sheet update
@@ -2360,12 +2290,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             }
 
             // Apply backoff for getting monitoring data
-            const getMonitoringResponse = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: "'Monitoring DRPP'!B:I"
-                });
-            });
+            const getMonitoringResponse = await readRange(sheets, spreadsheetId, "'Monitoring DRPP'!B:I");
 
             const monitoringRows = getMonitoringResponse.data.values || [];
             let existingStartRow = null;
@@ -2484,27 +2409,13 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
                 // Update the rows with backoff
                 const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
-                await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.update({
-                        spreadsheetId,
-                        range: targetRange,
-                        valueInputOption: "RAW",
-                        resource: { values: rowsToWrite }
-                    });
-                });
+                await writeRange(sheets, spreadsheetId, targetRange, rowsToWrite, "RAW");
 
             } else {
                 // If trans_id doesn't exist, append new rows with backoff
                 const lastFilledRow = monitoringRows.length + 1;
                 const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
-                await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.update({
-                        spreadsheetId,
-                        range: targetRange,
-                        valueInputOption: "RAW",
-                        resource: { values: rowsToWrite }
-                    });
-                });
+                await writeRange(sheets, spreadsheetId, targetRange, rowsToWrite, "RAW");
             }
         }
 
@@ -2559,12 +2470,7 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         // Fetch the relevant columns with backoff
         const range = "Monitoring DRPP!B2:G";
-        const sheetResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range,
-            });
-        });
+        const sheetResponse = await readRange(sheets, spreadsheetId, range);
 
         const rows = sheetResponse.data.values || [];
         if (rows.length === 0) {
@@ -2622,12 +2528,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         }
 
         // Fetch total rows based on A column with backoff
-        const getAllRowsResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Monitoring DRPP'!A:K",
-            });
-        });
+        const getAllRowsResponse = await readRange(sheets, spreadsheetId, "'Monitoring DRPP'!A:K");
 
         const totalRows = getAllRowsResponse.data.values || [];
         const totalRowCount = totalRows.length;
@@ -2664,12 +2565,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 
         //Get Total count of pajak status
         // Get column H and I from row 3 downward
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Monitoring DRPP'!H:I", // Columns H and I
-            });
-        });
+        const response = await readRange(sheets, spreadsheetId, "'Monitoring DRPP'!H:I");
 
         const rows = response.data.values || [];
 
@@ -2744,12 +2640,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 }
             } else if (parsedCariNomor.spby && parsedCariNomor.spby !== "") {
                 // Get all data from column D
-                const getAllSpby = await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.get({
-                        spreadsheetId,
-                        range: "'Write Table'!D:D",
-                    });
-                });
+                const getAllSpby = await readRange(sheets, spreadsheetId, "'Write Table'!D:D");
 
                 const spbyRows = getAllSpby.data.values || [];
                 const spbyValue = parsedCariNomor.spby;
@@ -2779,12 +2670,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 
                 // Get both column D and X data for the search range in one request
                 const searchRange = `'Write Table'!D${searchStartRow}:X${searchEndRow}`;
-                const searchResponse = await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.get({
-                        spreadsheetId,
-                        range: searchRange,
-                    });
-                });
+                const searchResponse = await readRange(sheets, spreadsheetId, searchRange);
 
                 const searchData = searchResponse.data.values || [];
                 let nomorSpbyRowPosition = -1;
@@ -2911,12 +2797,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 }
             } else if (parsedCariNomor.bupot && parsedCariNomor.bupot !== "") {
                 // Search for Bupot/Faktur in col I and Q
-                const getAllBupot = await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.get({
-                        spreadsheetId,
-                        range: "'Write Table'!I:Q",
-                    });
-                });
+                const getAllBupot = await readRange(sheets, spreadsheetId, "'Write Table'!I:Q");
 
                 const bupotRows = getAllBupot.data.values || [];
                 const bupotValue = parsedCariNomor.bupot;
@@ -2956,12 +2837,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
 
                 // Get both column D and X data for the search range in one request
                 const searchRange = `'Write Table'!D${searchStartRow}:X${searchEndRow}`;
-                const searchResponse = await withBackoff(async () => {
-                    return await sheets.spreadsheets.values.get({
-                        spreadsheetId,
-                        range: searchRange,
-                    });
-                });
+                const searchResponse = await readRange(sheets, spreadsheetId, searchRange);
 
                 const searchData = searchResponse.data.values || [];
                 let nomorBupotRowPosition = -1;
@@ -3062,12 +2938,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             const maxRow = Math.max(...rowIndices);
 
             // Fetch continuous range with backoff
-            const getDRPPResponses = await withBackoff(async () => {
-                return await sheets.spreadsheets.values.get({
-                    spreadsheetId,
-                    range: `'Monitoring DRPP'!A${minRow}:K${maxRow}`,
-                });
-            });
+            const getDRPPResponses = await readRange(sheets, spreadsheetId, `'Monitoring DRPP'!A${minRow}:K${maxRow}`);
 
             const allRowsData = getDRPPResponses.data.values || [];
 
@@ -3102,12 +2973,7 @@ app.get("/bendahara/cek-drpp", async (req, res) => {
         const range = `'Write Table'!W${colorStartRow}:W${tablePos.endRow}`;
 
         // Apply backoff for getting color status
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({ 
-                spreadsheetId, 
-                range,
-            });
-        });
+        const response = await readRange(sheets, spreadsheetId, range);
 
         let result = response.data.values || [];
 
@@ -3132,17 +2998,15 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
     const {numbers, pajakStatus, colorData} = req.body;
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        // Apply backoff for batch get
-        const getDrppRows = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: [
-                    "'Monitoring DRPP'!A3:I",   // Range to update DRPP status. A3:I so satker (D) and the pre-update pungut/setor (H/I) are available for the notification check
-                    "'Write Table'!X:X",        // Range to update colored row status
-                    "'Monitoring DRPP'!F3:F"    // Range to get SPM numbers
-                ],
-            });
-        });
+        const getDrppRows = await readRanges(
+            sheets,
+            spreadsheetId,
+            [
+                "'Monitoring DRPP'!A3:I",   // Range to update DRPP status. A3:I so satker (D) and the pre-update pungut/setor (H/I) are available for the notification check
+                "'Write Table'!X:X",        // Range to update colored row status
+                "'Monitoring DRPP'!F3:F"    // Range to get SPM numbers
+            ],
+        );
 
         const totalRows = getDrppRows.data.valueRanges[0].values || [];
         const colorRows = getDrppRows.data.valueRanges[1].values || [];
@@ -3213,16 +3077,7 @@ app.post("/bendahara/aksi-drpp", async (req, res) => {
             });
         }
 
-        // Apply backoff for batch update
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                    valueInputOption: "RAW",
-                    data: updateData
-                }
-            });
-        });
+        await writeRanges(sheets, spreadsheetId, updateData, "RAW");
 
         // Notify the satker. Isolated, same as aksi-ajuan.
         try {
@@ -3268,12 +3123,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         const { satkerPrefix = "", filterKeyword = "", page = 1, limit = 10, searchKeyword = "", monthKeyword = "" } = req.query;
 
         //Get all data from range A
-        const response = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdVerif,
-                range: "'Daftar SPM'!A:H"
-            });
-        });
+        const response = await readRange(sheets2, spreadsheetIdVerif, "'Daftar SPM'!A:H");
         let allRows = response.data.values || [];
 
         //Format setup
@@ -3346,12 +3196,7 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 
             //Fetch Rows with pagination
             const rowRanges = paginatedRows.map(row => `'Daftar SPM'!A${row.rowIndex}:J${row.rowIndex}`);
-            const batchGetResponse = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.batchGet({
-                    spreadsheetId: spreadsheetIdVerif,
-                    ranges: rowRanges,
-                })
-            })
+            const batchGetResponse = await readRanges(sheets2, spreadsheetIdVerif, rowRanges)
             rowData = batchGetResponse.data.valueRanges.map(row => {
                 const rowValues = row.values[0] || [];
                 // Ensure each row has 10 columns by filling blanks with ""
@@ -3384,31 +3229,12 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
         if (satkerPrefix === "") {
             // Write month to G4 if monthKeyword exists, or reset to empty if not
             const monthValue = (monthKeyword !== "" && monthAbbr !== "") ? monthAbbr : "";
-            await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.update({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Sheet Coding'!G4`,
-                    valueInputOption: 'RAW',
-                    resource: {
-                        values: [[monthValue]]
-                    }
-                });
-            });
+            await writeRange(sheets2, spreadsheetIdVerif, `'Sheet Coding'!G4`, [[monthValue]], 'RAW');
 
-            const countResponse = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Sheet Coding'!A4:E4`,
-                })
-            })
+            const countResponse = await readRange(sheets2, spreadsheetIdVerif, `'Sheet Coding'!A4:E4`)
             countData = countResponse.data.values[0] || [];
         } else {
-            const allKeyword = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Sheet Coding'!A:A`
-                })
-            })
+            const allKeyword = await readRange(sheets2, spreadsheetIdVerif, `'Sheet Coding'!A:A`)
 
             const allrows = allKeyword.data.values || [];
             let foundRow = null;
@@ -3423,23 +3249,9 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
                 // Write month to G cell (2 rows below foundRow) if monthKeyword exists, or reset to empty if not
                 const monthCellRow = foundRow;
                 const monthValue = (monthKeyword !== "" && monthAbbr !== "") ? monthAbbr : "";
-                await withBackoff(async () => {
-                    return await sheets2.spreadsheets.values.update({
-                        spreadsheetId: spreadsheetIdVerif,
-                        range: `'Sheet Coding'!G${monthCellRow}`,
-                        valueInputOption: 'RAW',
-                        resource: {
-                            values: [[monthValue]]
-                        }
-                    });
-                });
+                await writeRange(sheets2, spreadsheetIdVerif, `'Sheet Coding'!G${monthCellRow}`, [[monthValue]], 'RAW');
 
-                const countResponse = await withBackoff(async () => {
-                    return await sheets2.spreadsheets.values.get({
-                        spreadsheetId: spreadsheetIdVerif,
-                        range: `'Sheet Coding'!A${foundRow}:E${foundRow}`,
-                    })
-                })
+                const countResponse = await readRange(sheets2, spreadsheetIdVerif, `'Sheet Coding'!A${foundRow}:E${foundRow}`)
                 countData = countResponse.data.values[0] || [];
             }
         }
@@ -3595,23 +3407,17 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
             data.push(pdfFileLink)
 
             //Directly write into the row
-            const writeResponse = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.update({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Data'!A${rowPosition}:H${rowPosition}`,
-                    valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-                    resource: { values: [data] }
-                })
-            })
+            const writeResponse = await writeRange(
+                sheets2,
+                spreadsheetIdVerif,
+                `'Data'!A${rowPosition}:H${rowPosition}`,
+                [data],
+                "RAW",
+            )
 
         } else {
             //Get all row information
-            const getAllRowsResponse = await withBackoff(async () => {
-                return await sheets2.spreadsheets.values.get({
-                    spreadsheetId: spreadsheetIdVerif,
-                    range: `'Data'!A:A`
-                })
-            })
+            const getAllRowsResponse = await readRange(sheets2, spreadsheetIdVerif, `'Data'!A:A`)
 
             const getAllRows = getAllRowsResponse.data.values || [];
             
@@ -3641,14 +3447,13 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
 
                 data.push(pdfFileLink)
 
-                const writeResponse = await withBackoff(async () => {
-                    return await sheets2.spreadsheets.values.update({
-                        spreadsheetId: spreadsheetIdVerif,
-                        range: `'Data'!A${nextRow}:H${nextRow}`,
-                        valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-                        resource: { values: [data] }
-                    })
-                })
+                const writeResponse = await writeRange(
+                    sheets2,
+                    spreadsheetIdVerif,
+                    `'Data'!A${nextRow}:H${nextRow}`,
+                    [data],
+                    "RAW",
+                )
             }
 
         }
@@ -3668,17 +3473,16 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
 
         // The gup antrian rides along so each mirror row can be labelled with the id of the
         // 'Write Antrian' row that produced it - two ranges, still one request
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: [
-                    // Through P, not antrianLastColumn: the Dok. Verifikasi link sits past
-                    // the columns the antrian write path knows about
-                    `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.dokVerif}`,
-                    `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
-                ],
-            });
-        });
+        const response = await readRanges(
+            sheets,
+            spreadsheetId,
+            [
+                // Through P, not antrianLastColumn: the Dok. Verifikasi link sits past
+                // the columns the antrian write path knows about
+                `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.dokVerif}`,
+                `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
+            ],
+        );
 
         const sourceIdByKey = new Map();
         for (const row of response.data.valueRanges[1].values || []) {
@@ -3698,8 +3502,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             .map(row => [...row, sourceId(row)])
             .reverse();
 
-        const isVerified = value => PJK_VERIFIED_VALUES.includes(String(value).trim());
-        const filled = value => String(value ?? "").trim() !== "";
+        const isVerified = value => PJK_VERIFIED_VALUES.includes(trimmed(value));
 
         // A row belongs to one section only, tested furthest stage first so it moves along
         // as it progresses and settles in Sudah Verifikasi
@@ -3792,7 +3595,6 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
         Operator: operator,
     };
 
-    const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
     const { fullDateFormat, fullDateTimeFormat } = getFormattedDate();
     const [year, month, day] = fullDateFormat.split("-");
     const stamp = `${day}-${month}-${year} ${fullDateTimeFormat.slice(11, 16)}`;
@@ -3840,14 +3642,13 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
         // The cell always points at the newest revision - earlier PDFs stay in Drive
         // under their own #N rather than being replaced
         const viewLink = pdfFile.data.webViewLink || "";
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${AJUAN_FLOWS.verif.antrianSheet}'!${AJUAN_FLOWS.verif.pjk.dokVerif}${rowIndex}`,
-                valueInputOption: "RAW",
-                requestBody: { values: [[viewLink]] },
-            });
-        });
+        await writeRange(
+            sheets,
+            spreadsheetId,
+            `'${AJUAN_FLOWS.verif.antrianSheet}'!${AJUAN_FLOWS.verif.pjk.dokVerif}${rowIndex}`,
+            [[viewLink]],
+            "RAW",
+        );
 
         console.log(`PDF hasil verifikasi dibuat: ${fileName}.pdf`);
         return { fileName: `${fileName}.pdf`, viewLink };
@@ -3871,12 +3672,11 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
 
         // The whole row, not just column A: the pre-update verdicts decide whether a PDF
         // is due, and the rest of the row fills the template
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
-            });
-        });
+        const response = await readRange(
+            sheets,
+            spreadsheetId,
+            `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
+        );
 
         const rows = response.data.values || [];
         const rowIndex = rows.findIndex(row => String(row?.[0] ?? "") === String(no_antri)) + 1;
@@ -3896,18 +3696,15 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             selesaiValue === "" ? [`${pjk.mulaiVerif}${rowIndex}`, mulaiValue] : null,
         ].filter(Boolean);
 
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                    valueInputOption: "USER_ENTERED",
-                    data: updates.map(([cell, value]) => ({
-                        range: `'${verifFlow.antrianSheet}'!${cell}`,
-                        values: [[value ?? ""]],
-                    })),
-                },
-            });
-        });
+        await writeRanges(
+            sheets,
+            spreadsheetId,
+            updates.map(([cell, value]) => ({
+                range: `'${verifFlow.antrianSheet}'!${cell}`,
+                values: [[value ?? ""]],
+            })),
+            "USER_ENTERED",
+        );
 
         // Only a changed verdict or note is worth a document - opening a row and saving
         // it untouched must not mint another revision
@@ -3935,12 +3732,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
                 // Only GUP/PTUP need the mirrored id, so this read stays off the common path
                 let sourceId = "";
                 if (resolveJenis(savedRow[3])?.flow === "gup") {
-                    const gupResponse = await withBackoff(async () => {
-                        return await sheets.spreadsheets.values.get({
-                            spreadsheetId,
-                            range: `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
-                        });
-                    });
+                    const gupResponse = await readRange(sheets, spreadsheetId, `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`);
                     const key = mirrorRowKey(savedRow[1], savedRow[2]);
                     sourceId = (gupResponse.data.values || [])
                         .find(row => mirrorRowKey(row?.[1], row?.[2]) === key)?.[0] ?? "";
@@ -3960,12 +3752,7 @@ app.get("/verifikasi/cari-spm", async (req,res) => {
     const { searchValue } = req.query;
     try {
         const spreadsheetIdVerif = getSpreadsheetId(req, 'VERIF');
-        const response = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdVerif,
-                range: `'Data'!A:A`
-            })
-        })
+        const response = await readRange(sheets2, spreadsheetIdVerif, `'Data'!A:A`)
         const allRows = response.data.values || [];
         //Row index
         const rowIndex = allRows.findIndex(row => row[0].includes(searchValue));
@@ -3975,12 +3762,7 @@ app.get("/verifikasi/cari-spm", async (req,res) => {
         const targetRowNumber = rowIndex + 1 //Gsheet 1 indexed
 
         //Fetch target row
-        const result = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.get({
-                spreadsheetId: spreadsheetIdVerif,
-                range: `'Data'!A${targetRowNumber}:G${targetRowNumber}`
-            })
-        })
+        const result = await readRange(sheets2, spreadsheetIdVerif, `'Data'!A${targetRowNumber}:G${targetRowNumber}`)
         const targetRow = result.data.values[0] || [];
         res.json({ data: targetRow, rowNumber: targetRowNumber});
 
@@ -4026,12 +3808,7 @@ app.get('/notification', async (req, res) => {
         if (role === 'master admin') { findByWhat = 'Bendahara'; }
 
         // Find the correct notification column index first
-        const getTypeRowsResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: "'Notifikasi'!A:CB",
-            });
-        });
+        const getTypeRowsResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A:CB");
         let typeRow = await getTypeRowsResponse.data.values || [];
         const headerRow = typeRow.length > 0 ? typeRow[0] : [];
         const columnIndex = headerRow.findIndex(columnName => columnName.includes(findByWhat));
@@ -4084,12 +3861,11 @@ app.get('/notification', async (req, res) => {
         const nextOffsetColumnLetter = getOffsetColumnLetter(columnLetter, 3);
 
         // Get selected column data
-        const getColumnResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'Notifikasi'!${columnLetter}3:${nextOffsetColumnLetter}`,
-            });
-        });
+        const getColumnResponse = await readRange(
+            sheets,
+            spreadsheetId,
+            `'Notifikasi'!${columnLetter}3:${nextOffsetColumnLetter}`,
+        );
         let columnData = getColumnResponse.data.values || [];
         const columnRows = columnData.length;
 
@@ -4120,16 +3896,13 @@ app.post('/notification/mark-read', async (req, res) => {
         }
 
         const rowNumber = Number(notifId) + 2;
-        const updateStatus = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'Notifikasi'!${statusColPosition}${rowNumber}`,
-                valueInputOption: "RAW",
-                requestBody: {
-                    values: [['yes']]
-                }
-            });
-        });
+        const updateStatus = await writeRange(
+            sheets,
+            spreadsheetId,
+            `'Notifikasi'!${statusColPosition}${rowNumber}`,
+            [['yes']],
+            "RAW",
+        );
 
         if (updateStatus.status === 200) {
             return res.status(200).json({ message: "Notification status updated successfully." });
@@ -4209,6 +3982,28 @@ async function ensureGajiDriveReady() {
     return true;
 }
 
+// REFACTOR: the readiness check plus its response was repeated across six routes. Both
+// answer the request themselves and return false when the caller must stop, matching
+// allowDokumenGajiWrite. The two differ in what the caller can do about it: the upload
+// routes hand the browser a URL to re-authorise with, the rest just report unavailable.
+async function requireGajiDriveAuth(req, res) {
+    if (await ensureGajiDriveReady()) return true;
+    console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
+    res.status(401).json({
+        error: "Google Drive authentication required. Please authenticate first.",
+        authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
+        redirectToAuth: true
+    });
+    return false;
+}
+
+async function requireGajiDriveReady(res, tokenName = "Token uploader") {
+    if (await ensureGajiDriveReady()) return true;
+    console.error(`${tokenName} belum ada - buka /auth/google/gaji dengan akun yang dituju.`);
+    res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
+    return false;
+}
+
 // Authorise once, signed in as the intended account. Needs full `drive` scope:
 // `drive.file` only ever sees files this app itself created, not existing folders.
 app.get("/auth/google/gaji", (req, res) => {
@@ -4245,7 +4040,6 @@ const STATUS_PEGAWAI_OPTIONS = ["PNS", "PPPK", "TNI/POLRI"];
 // three fields has to rename the file as well. Drive rejects "/" in names, and Status
 // Pegawai "TNI/POLRI" can appear inside Keterangan.
 function dokumenGajiFileName(nomorSurat, keteranganSurat, namaTercantum) {
-    const safePart = (value) => String(value).replace(/[\\/]/g, "-").trim();
     return `${safePart(nomorSurat)} - ${safePart(keteranganSurat)} - ${safePart(namaTercantum)}.pdf`;
 }
 
@@ -4271,7 +4065,7 @@ function toDateInputValue(value) {
         return new Date(Math.round(value * 86400000) + Date.UTC(1899, 11, 30))
             .toISOString().slice(0, 10);
     }
-    return String(value ?? "").trim();
+    return trimmed(value);
 }
 
 // Only the roles that may open the input form may change or remove a document.
@@ -4382,11 +4176,7 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
             return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
         }
 
-        const gajiDriveReady = await ensureGajiDriveReady();
-        if (!gajiDriveReady) {
-            console.error("Token Dokumen Gaji belum ada - buka /auth/google/gaji dengan akun yang dituju.");
-            return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
-        }
+        if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
 
         const fileName = dokumenGajiFileName(nomorSurat, keteranganSurat, namaTercantum);
 
@@ -4403,35 +4193,31 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
 
         // Next free row / running No. Sheets trims trailing empty rows, so the
         // length of column A is the offset of the last populated row from row 3.
-        const existingResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
-            });
-        });
+        const existingResponse = await readRange(
+            sheets,
+            spreadsheetId,
+            `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
+        );
         const existingRows = existingResponse.data.values || [];
         const targetRow = DOKUMEN_GAJI_FIRST_ROW + existingRows.length;
         const nextId = existingRows.length + 1;
 
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${DOKUMEN_GAJI_SHEET}'!A${targetRow}:H${targetRow}`,
-                valueInputOption: "USER_ENTERED",
-                requestBody: {
-                    values: [[
-                        nextId,
-                        getFormattedDate().fullDateTimeFormat,
-                        tanggalSurat,
-                        nomorSurat,
-                        namaTercantum,
-                        statusPegawai,
-                        keteranganSurat,
-                        fileLink,
-                    ]]
-                }
-            });
-        });
+        await writeRange(
+            sheets,
+            spreadsheetId,
+            `'${DOKUMEN_GAJI_SHEET}'!A${targetRow}:H${targetRow}`,
+            [[
+                nextId,
+                getFormattedDate().fullDateTimeFormat,
+                tanggalSurat,
+                nomorSurat,
+                namaTercantum,
+                statusPegawai,
+                keteranganSurat,
+                fileLink,
+            ]],
+            "USER_ENTERED",
+        );
 
         return res.status(200).json({ message: "Dokumen Berhasil Dikirim" });
 
@@ -4450,12 +4236,7 @@ app.get("/bendahara/monitor-perubahan-gaji", async (req, res) => {
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         const rowsPerPage = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 25);
 
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:H`,
-            });
-        });
+        const response = await readRange(sheets, spreadsheetId, `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:H`);
         const rows = response.data.values || [];
 
         // Pad to 8 cells so the table never sees undefined. Index 8 is the sheet row
@@ -4549,11 +4330,7 @@ app.put("/dokumen-gaji/:rowNumber", handleDokumenGajiUpload, async (req, res) =>
         if (!target) return;
         const { rowNumber, row } = target;
 
-        const gajiDriveReady = await ensureGajiDriveReady();
-        if (!gajiDriveReady) {
-            console.error("Token Dokumen Gaji belum ada - buka /auth/google/gaji dengan akun yang dituju.");
-            return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
-        }
+        if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
 
         const fileName = dokumenGajiFileName(nomorSurat, keteranganSurat, namaTercantum);
         const media = req.file
@@ -4599,23 +4376,20 @@ app.put("/dokumen-gaji/:rowNumber", handleDokumenGajiUpload, async (req, res) =>
         }
 
         // A No. (column A) and Tanggal Terima (column B) are not the user's to change
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${DOKUMEN_GAJI_SHEET}'!C${rowNumber}:H${rowNumber}`,
-                valueInputOption: "USER_ENTERED",
-                requestBody: {
-                    values: [[
-                        tanggalSurat,
-                        nomorSurat,
-                        namaTercantum,
-                        statusPegawai,
-                        keteranganSurat,
-                        fileLink,
-                    ]]
-                }
-            });
-        });
+        await writeRange(
+            sheets,
+            spreadsheetId,
+            `'${DOKUMEN_GAJI_SHEET}'!C${rowNumber}:H${rowNumber}`,
+            [[
+                tanggalSurat,
+                nomorSurat,
+                namaTercantum,
+                statusPegawai,
+                keteranganSurat,
+                fileLink,
+            ]],
+            "USER_ENTERED",
+        );
 
         return res.status(200).json({ message: "Dokumen Berhasil Diperbarui" });
 
@@ -4638,11 +4412,7 @@ app.delete("/dokumen-gaji/:rowNumber", async (req, res) => {
 
         const fileId = extractDriveFileId(row[7]);
         if (fileId) {
-            const gajiDriveReady = await ensureGajiDriveReady();
-            if (!gajiDriveReady) {
-                console.error("Token Dokumen Gaji belum ada - buka /auth/google/gaji dengan akun yang dituju.");
-                return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
-            }
+            if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
             try {
                 await driveGaji.files.delete({ fileId, supportsAllDrives: true });
             } catch (error) {
@@ -4681,24 +4451,20 @@ app.delete("/dokumen-gaji/:rowNumber", async (req, res) => {
 
         // Column A is a running counter and /dokumen-gaji/kirim derives the next No. from
         // how many rows it finds, so the numbering has to close up behind the deleted row
-        const remainingResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
-            });
-        });
+        const remainingResponse = await readRange(
+            sheets,
+            spreadsheetId,
+            `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
+        );
         const remainingCount = (remainingResponse.data.values || []).length;
         if (remainingCount > 0) {
-            await withBackoff(async () => {
-                return await sheets.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A${DOKUMEN_GAJI_FIRST_ROW + remainingCount - 1}`,
-                    valueInputOption: "RAW",
-                    requestBody: {
-                        values: Array.from({ length: remainingCount }, (_, i) => [i + 1])
-                    }
-                });
-            });
+            await writeRange(
+                sheets,
+                spreadsheetId,
+                `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A${DOKUMEN_GAJI_FIRST_ROW + remainingCount - 1}`,
+                Array.from({ length: remainingCount }, (_, i) => [i + 1]),
+                "RAW",
+            );
         }
 
         return res.status(200).json({ message: "Dokumen Berhasil Dihapus" });
@@ -4880,22 +4646,18 @@ app.get("/home/dashboard", async (req, res) => {
         const spmSpreadsheetId = getSpreadsheetId(req, 'VERIFSPM');
 
         const [antrianResponse, spmResponse] = await Promise.all([
-            withBackoff(async () => sheets.spreadsheets.values.batchGet({
-                spreadsheetId: getSpreadsheetId(req, 'AJUAN'),
-                ranges: [
+            readRanges(
+                sheets,
+                getSpreadsheetId(req, 'AJUAN'),
+                [
                     `'${verifFlow.antrianSheet}'!A3:${verifFlow.antrianLastColumn}`,
                     `'${AJUAN_FLOWS.gup.antrianSheet}'!A:${AJUAN_FLOWS.gup.antrianLastColumn}`,
                 ],
-            })),
+            ),
             spmSpreadsheetId
-                ? withBackoff(async () => sheets2.spreadsheets.values.get({
-                    spreadsheetId: spmSpreadsheetId,
-                    range: `'${DATABASE_SPM_SHEET}'!A2:Q`,
-                }))
+                ? readRange(sheets2, spmSpreadsheetId, `'${DATABASE_SPM_SHEET}'!A2:Q`)
                 : null,
         ]);
-
-        const filled = value => String(value ?? "").trim() !== "";
 
         // GUP/PTUP carry a second verification on their 'Write Antrian' original, so the
         // mirror alone does not say whether the pengajuan is done
@@ -4954,15 +4716,14 @@ app.get("/verifikasi/realisasi-anggaran", async (req, res) => {
             return res.status(400).json({ message: "Spreadsheet SPM untuk tahun ini belum dikonfigurasi." });
         }
 
-        const response = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.batchGet({
-                spreadsheetId,
-                ranges: [
-                    `'${DATABASE_SPM_SHEET}'!A2:Q`,
-                    `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:${CODE_ANGGARAN_LAST_COLUMN}`,
-                ],
-            });
-        });
+        const response = await readRanges(
+            sheets2,
+            spreadsheetId,
+            [
+                `'${DATABASE_SPM_SHEET}'!A2:Q`,
+                `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:${CODE_ANGGARAN_LAST_COLUMN}`,
+            ],
+        );
 
         const spmRows = response.data.valueRanges[0].values || [];
         const anggaranRows = response.data.valueRanges[1].values || [];
@@ -5219,12 +4980,11 @@ app.patch("/verifikasi/code-anggaran", async (req, res) => {
 
         // Read first - the row number of a satker is not knowable up front, and the
         // fund that was not sent has to keep its current value
-        const response = await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:C`,
-            });
-        });
+        const response = await readRange(
+            sheets2,
+            spreadsheetId,
+            `'${CODE_ANGGARAN_SHEET}'!A${CODE_ANGGARAN_FIRST_ROW}:C`,
+        );
 
         const { budgetBySatker } = mapCodeAnggaran(response.data.values || []);
         const budget = budgetBySatker.get(normalizeSatker(satker));
@@ -5236,14 +4996,13 @@ app.patch("/verifikasi/code-anggaran", async (req, res) => {
         // not sent keeps the value just read back.
         const nextValues = FUND_KEYS.map(fund => parsedFunds[fund] !== undefined ? String(parsedFunds[fund]) : budget[fund]);
 
-        await withBackoff(async () => {
-            return await sheets2.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${CODE_ANGGARAN_SHEET}'!B${budget.rowNumber}:${CODE_ANGGARAN_LAST_COLUMN}${budget.rowNumber}`,
-                valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-                resource: { values: [nextValues] },
-            });
-        });
+        await writeRange(
+            sheets2,
+            spreadsheetId,
+            `'${CODE_ANGGARAN_SHEET}'!B${budget.rowNumber}:${CODE_ANGGARAN_LAST_COLUMN}${budget.rowNumber}`,
+            [nextValues],
+            "RAW",
+        );
 
         return res.status(200).json({
             message: "Anggaran berhasil disimpan.",
@@ -5446,12 +5205,7 @@ function pembayaranBpSpreadsheet(req, res) {
 // last populated row. Next No comes off the max rather than the count, so a row
 // deleted from the sheet cannot make a new entry reuse an existing id.
 async function readPembayaranBpIds(spreadsheetId) {
-    const response = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:A`,
-        });
-    });
+    const response = await readRange(sheets, spreadsheetId, `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:A`);
     const ids = (response.data.values || []).map(row => String(row?.[0] ?? "").trim());
     return {
         ids,
@@ -5489,12 +5243,11 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
         const spreadsheetId = pembayaranBpSpreadsheet(req, res);
         if (!spreadsheetId) return;
 
-        const response = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:${PEMBAYARAN_BP_LAST_COLUMN}`,
-            });
-        });
+        const response = await readRange(
+            sheets,
+            spreadsheetId,
+            `'${PEMBAYARAN_BP_SHEET}'!A${PEMBAYARAN_BP_FIRST_ROW}:${PEMBAYARAN_BP_LAST_COLUMN}`,
+        );
 
         const data = (response.data.values || [])
             .map((row, index) => pembayaranBpToRecord(row, PEMBAYARAN_BP_FIRST_ROW + index))
@@ -5533,14 +5286,13 @@ app.post("/bendahara/pembayaran-bp", async (req, res) => {
 
         // RAW keeps "1-Jan-2026" as the text the rest of the app parses, while a JS
         // number still lands as a real number cell
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${PEMBAYARAN_BP_SHEET}'!A${nextRow}:${PEMBAYARAN_BP_LAST_COLUMN}${endRow}`,
-                valueInputOption: "RAW",
-                requestBody: { values },
-            });
-        });
+        await writeRange(
+            sheets,
+            spreadsheetId,
+            `'${PEMBAYARAN_BP_SHEET}'!A${nextRow}:${PEMBAYARAN_BP_LAST_COLUMN}${endRow}`,
+            values,
+            "RAW",
+        );
 
         return res.status(201).json({
             message: `${values.length} baris berhasil disimpan.`,
@@ -5601,12 +5353,7 @@ app.patch("/bendahara/pembayaran-bp", async (req, res) => {
             values: [[timestamp, ...PEMBAYARAN_BP_EDITABLE.map(column => item.cells[column.key])]],
         }));
 
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId,
-                requestBody: { valueInputOption: "RAW", data },
-            });
-        });
+        await writeRanges(sheets, spreadsheetId, data, "RAW");
 
         return res.status(200).json({
             message: `${data.length} baris berhasil diperbarui.`,
@@ -5632,12 +5379,8 @@ app.post(
                 console.error("DRIVE_FOLDER_ID_PEMBAYARAN_BP belum diatur - upload dibatalkan.");
                 return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
             }
-            if (!await ensureGajiDriveReady()) {
-                console.error("Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.");
-                return res.status(503).json({ message: "Layanan penyimpanan berkas belum siap. Hubungi admin." });
-            }
+            if (!await requireGajiDriveReady(res)) return;
 
-            const safePart = (value) => String(value || "").replace(/[\\/]/g, "-").trim();
             const jenis = safePart(req.body.jenis).toLowerCase() === "pajak" ? "Deposit Pajak" : "Bukti Bayar";
             const nomorSpm = safePart(req.body.nomorSpm) || "Tanpa Nomor SPM";
 

@@ -226,6 +226,23 @@ const ROUTE_ROLES = {
     "POST /auth/logout": [],
 };
 
+// Routes carrying a path parameter cannot be matched by an exact key, so they are listed
+// by prefix instead. Kept apart from the table above so that stays a plain lookup, and
+// checked only after it misses - an exact entry always wins.
+// A prefix must end in "/" so that "/dokumen-gaji/12" matches but a longer sibling route
+// such as "/dokumen-gaji-arsip" cannot.
+const ROUTE_ROLES_PREFIX = [
+    // Reading a Dokumen Gaji row follows Monitor Data Gaji, which admin may read; writing
+    // and deleting follow POST /dokumen-gaji/kirim, which only admin_gaji may do
+    { method: "GET", prefix: "/dokumen-gaji/", roles: ADMIN_GAJI },
+    { method: "PUT", prefix: "/dokumen-gaji/", roles: GAJI },
+    { method: "DELETE", prefix: "/dokumen-gaji/", roles: GAJI },
+];
+
+const rolesForRoute = (method, path) => ROUTE_ROLES[`${method} ${path}`]
+    || ROUTE_ROLES_PREFIX.find(route => route.method === method && path.startsWith(route.prefix))?.roles
+    || [];
+
 app.use((req, res, next) => {
     // Query string is already stripped from req.path; drop a trailing slash so
     // /bendahara/antrian/ cannot slip past the table
@@ -239,7 +256,7 @@ app.use((req, res, next) => {
     } catch {
         return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
     }
-    if (viewer.role !== MASTER_ROLE && !(ROUTE_ROLES[key] || []).includes(viewer.role)) {
+    if (viewer.role !== MASTER_ROLE && !rolesForRoute(req.method, path).includes(viewer.role)) {
         return res.status(403).json({ message: "Akses ditolak." });
     }
     req.viewer = viewer;

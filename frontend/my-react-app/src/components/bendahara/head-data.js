@@ -42,6 +42,31 @@ const columns2 = [
     { id:"tgl-selesai", label: "Tgl. Selesai Verif", minWidth: 40 },
 ]
 
+//For Buat-Pengajuan.jsx - sorted alphabetically by label
+const jenisPengajuan = [
+    { value: "gup", label: "GUP" },
+    { value: "gup-kkp", label: "GUP KKP" },
+    { value: "ls-bendahara", label: "LS Bendahara" },
+    { value: "ls-kontraktual", label: "LS Kontraktual" },
+    { value: "ls-pegawai", label: "LS Pegawai" },
+    { value: "ls-platform", label: "LS Platform Pembayaran Pemerintah" },
+    { value: "ptup", label: "PTUP" },
+];
+
+// GUP/PTUP keep the full table and the Request Tanggal input. Everything else is
+// a verifikasi flow: a one row table cropped from the full one, or no table at all.
+const jenisTabelPenuh = ["gup", "ptup"];
+const jenisTanpaTabel = ["ls-pegawai", "ls-platform"];
+const ringkasColumns = [0, 1, 2, 4];
+const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
+
+// The antrian sheets store the Jenis as a label, not the slug the form works in. GUP/PTUP
+// store theirs lowercased, so the comparison is case-insensitive on both sides.
+const jenisValueFromLabel = (label) => {
+    const target = String(label ?? "").trim().toLowerCase();
+    return jenisPengajuan.find(jenis => jenis.label.toLowerCase() === target)?.value || null;
+};
+
 //For SPM-Bend.jsx
 const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
 const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
@@ -51,9 +76,34 @@ const headData1 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Req. Tanggal
 const headData2 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Tanggal Verifikasi", "Tanggal Acc.", "Pajak", "Anggaran", "Unit Kerja", "Status"];
 const headData3 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "Status"];
 const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "DRPP", "SPP", "SPM"];
+// headData2 plus the PJK verdicts after Anggaran, minus the trailing Status
+const headDataPjk = [...headData2.slice(0, 9), "Substansi", "Kelengkapan", ...headData2.slice(9, -1)];
 
 //For Aksi-Pengajuan.jsx
 const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Satker", "Nominal", "Tgl. Request"]
+
+//For Pengujian-PJK.jsx & Aksi-Verif-PJK.jsx
+// ID GUP is the 'Write Antrian' id a GUP/PTUP mirror row came from, blank for every other jenis
+const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
+const pjkHeadDataMulai = [...pjkHeadData, "Tgl. Mulai Verifikasi"];
+const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
+
+// Mirrors the backend: 5 digit zero padding, non-numeric values left as they are.
+// Rows written before the padding existed still display padded.
+const formatNomorSpp = (value) => {
+    const text = String(value ?? "").trim();
+    return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
+};
+const pjkStatusOptions = [
+    {label: "Belum", color: "white", textcolor: "#00204A"},
+    {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
+    {label: "OK Catatan", color: "#FFE39F", textcolor: "#8A6100"},
+    {label: "Ditolak", color: "#EB2727", textcolor: "#EEC6C6"},
+];
+const pjkKelengkapanOptions = [
+    {...pjkStatusOptions[0], label: "Belum Verif"},
+    ...pjkStatusOptions.slice(1),
+];
 
 //For Aksi-Drpp.jsx
 const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
@@ -109,5 +159,5 @@ const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Su
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 
-export { columns, columns2, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
 

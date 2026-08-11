@@ -41,10 +41,13 @@ function DaftarPengajuan(props){
 
     // Fetching antrian data from Google Sheets
     const rowsPerPage = 5;
-    async function fetchAntrianData (page) {
+    // quiet skips the blank-and-spinner, for refreshes that only resync a list already on screen
+    async function fetchAntrianData (page, { quiet = false } = {}) {
         try {
-            setAntrianData([]);
-            setIsLoading(true);
+            if (!quiet) {
+                setAntrianData([]);
+                setIsLoading(true);
+            }
             const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: user.name }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
@@ -54,6 +57,7 @@ function DaftarPengajuan(props){
             }
         } catch (error) {
             console.error("Error fetching data.", error);
+            setIsLoading(false); // otherwise a failed fetch leaves the spinner up for good
         }
     }
     useEffect(() => {
@@ -78,20 +82,34 @@ function DaftarPengajuan(props){
     async function handleDelPengajuan(){
         // Closing delete popup
         handleDelPopup();
+        const removed = delData;
+
+        // Drop the row on the spot so the list reacts immediately, then let the request and
+        // the resync happen behind it. Blanking the whole list and waiting made a delete feel
+        // like a page load.
+        setAntrianData(prev => prev.filter(row =>
+            !(String(row[0]) === String(removed.keyword) && row[20] === removed.flow)
+        ));
+
         // Send data to backend to be deleted
         try {
-            setAntrianData([]);
-            setIsLoading(true);
-            const tableKeyword = delData.keyword
-            const response = await apiClient.delete('/bendahara/delete-ajuan', { params: { tableKeyword } })
+            // Ids are numbered per sheet, so the flow has to say which sheet to delete from
+            const response = await apiClient.delete('/bendahara/delete-ajuan', { params: { tableKeyword: removed.keyword, flow: removed.flow } })
             if (response.status === 200){
-                fetchAntrianData(currentPage);
+                // The rows go even if their Drive files did not - do not call that a clean success
                 setIsAlert(true);
-                setAlertMessage({message: "Pengajuan berhasil dihapus.", severity: "success"});
+                setAlertMessage(response.data?.warning
+                    ? {message: response.data.message, severity: "warning"}
+                    : {message: "Pengajuan berhasil dihapus.", severity: "success"});
                 setTimeout(() => setIsAlert(false), 3000);
             }
+            fetchAntrianData(currentPage, { quiet: true });
         } catch (error) {
             console.log("Failed to send data.", error)
+            setIsAlert(true);
+            setAlertMessage({message: "Pengajuan gagal dihapus.", severity: "error"});
+            setTimeout(() => setIsAlert(false), 3000);
+            fetchAntrianData(currentPage, { quiet: true }); // puts the row back
         }
 
     }
@@ -110,7 +128,7 @@ function DaftarPengajuan(props){
         try {
             setAntrianData([]);
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/filter-date', { params:{ datePrefix, page: 1, limit: rowsPerPage }});
+            const response = await apiClient.get('/bendahara/filter-date', { params:{ datePrefix, page: 1, limit: rowsPerPage, username: user.name }});
             if (response.status === 200){
                 const { data: rowData, totalPages } = response.data;
                 setAntrianData(rowData);
@@ -167,6 +185,11 @@ function DaftarPengajuan(props){
                     antriDate={data[5]}
                     handleDelPopup={handleDelPopup}
                     fileLink={data[19]}
+                    flow={data[20]}
+                    pjkLink={data[21]}
+                    spp={data[9]}
+                    catatan={data[16]}
+                    pjkCatatan={data[22]}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />

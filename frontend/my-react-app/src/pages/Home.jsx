@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useMemo, useState} from "react"
 import { AuthContext } from "../lib/AuthContext";
 import {monthNames} from "../components/verifikasi/head-data.js";
 import apiClient from "../lib/apiClient";
+import { PILOT } from "../lib/pilot.js";
 import LoadingAnimate from "../ui/loading.jsx"
 import { NewNavbar } from "../ui/Navbar.jsx"
 import { RealisasiCircle } from "../ui/cards.jsx"
@@ -13,9 +14,14 @@ function Home() {
     const satkerName = user.name;
     const userRole = user.role;
     const isAdmin = ["admin", "master admin", "admin_gaji"].includes(userRole);
+    // Pilot hold: the counters are only shown to the admin roles for now. The route stays
+    // open to role="user" and scopes itself to their own satker, so flipping the flag off
+    // is all that is needed to hand the dashboard back.
+    const showDashboard = isAdmin || !PILOT.hideHomeDashboardFromUser;
 
     //State
     const [realisasi, setRealisasi] = useState(null);
+    const [dashboard, setDashboard] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [monthFilter, setMonthFilter] = useState(() => {
         const saved = localStorage.getItem('home-realisasi-month');
@@ -51,9 +57,19 @@ function Home() {
         }
     }
 
+    async function fetchDashboard() {
+        try {
+            const response = await apiClient.get('/home/dashboard');
+            if (response.status === 200) setDashboard(response.data);
+        } catch (error) {
+            console.error("Error fetching dashboard.", error);
+        }
+    }
+
     useEffect(() => {
         fetchRealisasi();
-    }, [])
+        if (showDashboard) fetchDashboard();
+    }, [showDashboard])
 
     function handleMonthChange(event) {
         setMonthFilter(event.target.value);
@@ -76,6 +92,19 @@ function Home() {
             kosong: realisasi.summary.length === 0,
         };
     }, [realisasi, monthFilter]);
+
+    const dashboardSections = useMemo(() => dashboard ? [
+        {title: "Data Pengajuan", cards: [
+            {label: "Belum", value: dashboard.pengajuan.belum},
+            {label: "Sedang Verif", value: dashboard.pengajuan.sedang},
+            {label: "Sudah Verif", value: dashboard.pengajuan.sudah},
+        ]},
+        {title: "Data SPM", cards: [
+            {label: "Total", value: dashboard.spm.total},
+            {label: "UP", value: dashboard.spm.up},
+            {label: "LS", value: dashboard.spm.ls},
+        ]},
+    ] : [], [dashboard]);
 
 
     return (
@@ -109,7 +138,7 @@ function Home() {
                         : "Admin PPK Unit Kerja"}</h3>
 
             </div>
-            <div className="home-dashboard">
+            <div className={`home-dashboard${showDashboard ? "" : " home-dashboard-solo"}`}>
                 <div className="home-dashboard-left">
                     <h3 className={"dashboard-title"}>
                         {isAdmin ? "Realisasi Anggaran" : `Realisasi Anggaran ${satkerName}`}
@@ -137,10 +166,23 @@ function Home() {
                         }
                     </div>
                 </div>
-                <div className="home-dashboard-right">
-                    <h3 className={"dashboard-title"} style={{fontStyle: "italic", fontSize: "1.9rem", opacity:"0.3"}}>
-                        Nantikan dashboard terbaru...</h3>
-                </div>
+                {showDashboard && <div className="home-dashboard-right">
+                    {!dashboard ? <LoadingAnimate /> :
+                        dashboardSections.map(section => (
+                            <div key={section.title} className="dashboard-counts">
+                                <h3 className="dashboard-title">{section.title}</h3>
+                                <div className="dashboard-counts-row">
+                                    {section.cards.map(card => (
+                                        <div key={card.label} className="dashboard-count-card">
+                                            <span className="dashboard-count-value">{card.value}</span>
+                                            <span className="dashboard-count-label">{card.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))
+                    }
+                </div>}
             </div>
         </div>
     )

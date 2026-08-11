@@ -4,7 +4,6 @@ import {AuthContext} from "../lib/AuthContext.jsx";
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import {NotifPopup, useNotifications} from "./NotifPopup.jsx";
-import {PopupAlert} from "./Popup.jsx";
 
 export function NewNavbar(){
     // Auth Context
@@ -30,14 +29,6 @@ export function NewNavbar(){
         handleMarkAsRead,
     } = useNotifications(user);
     const [isNotifPopup, setIsNotifPopup] = useState(false);
-
-    // role="admin_gaji" may not enter Menu Verifikasi - the link becomes a dead button
-    const isAdminGaji = user?.role === "admin_gaji";
-    const [isDeniedAlert, setIsDeniedAlert] = useState(false);
-    function blockVerifikasi() {
-        setIsDeniedAlert(true);
-        setTimeout(() => setIsDeniedAlert(false), 3000);
-    }
 
     // Notification click handler
     function notifOnClick(){
@@ -69,11 +60,8 @@ export function NewNavbar(){
             </div>
             <div className={"home-navbar-content"}>
                 <NavLink to="/home"><button className={isActive('/home')}>Home Page</button></NavLink>
-                <NavLink to="/menu-bendahara"><button className={isActive('/menu-bendahara')}>Menu Bendahara</button></NavLink>
-                {isAdminGaji ?
-                    <button className="home-button" onClick={blockVerifikasi}>Menu Verifikasi</button> :
-                    <NavLink to="/menu-verifikasi"><button className={isActive('/menu-verifikasi')}>Menu Verifikasi</button></NavLink>
-                }
+                <NavLink to="/menu-bendahara"><button className={isActive('/menu-bendahara')}>Pengajuan</button></NavLink>
+                <NavLink to="/menu-verifikasi"><button className={isActive('/menu-verifikasi')}>Verifikasi</button></NavLink>
                 <a href={`${import.meta.env.VITE_LOGIN_SIPKU_URL}`} target="_blank" rel="noopener noreferrer">
                     <button className="home-button home-button-external">Login SIPKU</button>
                 </a>
@@ -82,8 +70,6 @@ export function NewNavbar(){
                 </a>
                 <button className='home-button home-button-logout' onClick={logout}>Log Out</button>
             </div>
-            {isDeniedAlert &&
-                <PopupAlert isAlert={isDeniedAlert} severity="error" message="Akses ditolak, anda tidak memiliki akses ke Menu Verifikasi."/>}
         </div>
 
     )

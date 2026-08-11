@@ -95,14 +95,18 @@
     background-color: #fdfdfd;
     margin: auto;
     margin-top: 20px;
-    height: 100px;
+    /* min-height, not height: a wrapped Jenis grows the row instead of spilling out of it */
+    min-height: 100px;
     width: 92%;
     border: 1px solid rgb(214, 214, 214);
     border-radius: 12px;
     padding-left: 10px;
     padding-right: 10px;
     display: grid;
-    grid-template-columns: 180px 100px repeat(4, 1fr) 1fr 0.5fr;
+    /* Jenis holds values up to "LS PLATFORM PEMBAYARAN PEMERINTAH" and Tgl. Ajuan a full
+       timestamp, so those two get the largest shares; the icons get a fixed track wide
+       enough for all three */
+    grid-template-columns: 180px minmax(150px, 1.45fr) 0.85fr 1.4fr 0.95fr 1.15fr 0.85fr 110px;
     column-gap: 5px;
     font-size: 1.1rem;
     font-weight: 600;
@@ -118,13 +122,20 @@
 
 .info-ubah {
     display: flex;
-    padding-right: 35px;
+    padding-right: 8px;
     align-items: center;
     justify-content: space-evenly;
 }
 
 .info p {
     margin-bottom: 0px;
+}
+
+/* Grid items default to min-width:auto, which makes a long Jenis widen its track and push
+   the whole row past the card. These let the cell shrink and wrap instead. */
+.info {
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .info.data {
@@ -216,7 +227,11 @@
     display: flex;
     align-items: center;
     height: 29px;
-    width: 194px;
+    /* Grows to fit the longest Jenis Pengajuan label instead of clipping it */
+    width: auto;
+    min-width: 194px;
+    max-width: 100%;
+    justify-self: start;
 }
 
 .pengajuan-form-tabledata {
@@ -389,6 +404,24 @@
 }
 .pengajuan-desc span {
     padding-left: 20px;
+}
+
+/* Detail view only - the Catatan fields make five to six items compete for one row */
+.pengajuan-desc-info {
+    gap: 36px;
+    overflow: hidden;
+}
+.pengajuan-desc-info p {
+    margin-right: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+/* Free text of any length: give up width before the fixed fields do, full text on hover */
+.pengajuan-desc-info .desc-catatan {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Styling Lihat-Antrian */
@@ -594,6 +627,15 @@ input[type="number"]::-webkit-inner-spin-button {
     justify-content: center;
     font-size: 1rem;
 }
+/* Mirrors .bg-card's width and side margins so the action lines up with the right
+   edge of the cards below instead of the window */
+.pjk-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    width: 94%;
+    margin: 0 50px 10px 50px;
+}
+
 .wide-card {
     margin-top: 40px;
     margin-bottom: 40px;
@@ -857,9 +899,20 @@ input[type="number"]::-webkit-inner-spin-button {
     height: 60px;
     align-items: center;
 }
+.upload-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    align-items: center;
+}
 .upload-name {
     font-size: 1.1rem;
     font-weight: 400;
+}
+.upload-error {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #c62828;
 }
 
 
@@ -883,13 +936,18 @@ input[type="number"]::-webkit-inner-spin-button {
         padding-bottom: 20px;
     }
 
+    .pjk-toolbar {
+        max-width: 1280px;
+        margin: 0 30px 10px 30px;
+    }
+
     /* Styling Pengajuan-info */
     .pengajuan-info {
-        height: 85px;
+        min-height: 85px;
         width: 90%;
         font-size: 0.9rem;
         padding-left: 5px;
-        grid-template-columns: 150px 70px repeat(4, 1fr) 0.7fr 0.5fr;
+        grid-template-columns: 150px minmax(120px, 1.45fr) 0.85fr 1.4fr 0.95fr 1.15fr 0.85fr 100px;
     }
 
     .info.data {
@@ -901,7 +959,7 @@ input[type="number"]::-webkit-inner-spin-button {
     }
 
     .info-ubah {
-        padding: 20px;
+        padding: 20px 5px;
     }
 
     /* Styling Buat-Pengajuan */

@@ -18,6 +18,11 @@ function Pengajuan(props) {
         accDate: props.accDate,
         status: props.status,
         fileLink: props.fileLink,
+        flow: props.flow,
+        pjkLink: props.pjkLink,
+        spp: props.spp,
+        catatan: props.catatan,
+        pjkCatatan: props.pjkCatatan,
     }
 
     return (

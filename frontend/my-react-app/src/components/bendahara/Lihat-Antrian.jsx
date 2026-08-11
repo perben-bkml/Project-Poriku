@@ -27,10 +27,10 @@ function LihatAntrian() {
     async function fetchAntrianData (page) {
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: null }});
+            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: null, flow: "gup" }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
-                setAntrianData(responseResult.map(row => row.slice(0, -4)));
+                setAntrianData(responseResult.map(row => row.slice(0, columns2.length)));
                 setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
             }
             setIsLoading(false);

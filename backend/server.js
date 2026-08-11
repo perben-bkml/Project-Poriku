@@ -1137,6 +1137,11 @@ const formatNomorSpp = (value) => {
     return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
 };
 
+const buildPjkFileName = (satker, jenisLabel, nomor, nominal) => [satker, jenisLabel, nomor, nominal]
+    .map(value => String(value ?? "").replace(/[\\/]/g, "-").trim())
+    .filter(Boolean)
+    .join("_") + ".pdf";
+
 // One antrian row plus the single cell writes that belong with it
 function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLink, nomorSpp = "") {
     const writes = [
@@ -1282,36 +1287,6 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             // layout the other jenis write, but never get a Write Table Verif block
             const mirrorFlow = jenis.flow === "gup" ? AJUAN_FLOWS.verif : null;
 
-            // File Upload Handling
-            let fileLink = "";    //Bupot, GUP/PTUP only
-            let pjkLink = "";     //PJK, verifikasi flow only
-            const bupotFile = req.files?.file?.[0];
-            const pjkFile = req.files?.filePjk?.[0];
-
-            if (bupotFile || pjkFile) {
-                // Dedicated uploader account, not the shared /auth/google token
-                const uploaderReady = await ensureGajiDriveReady();
-                if (!uploaderReady) {
-                    console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
-                    return res.status(401).json({
-                        error: "Google Drive authentication required. Please authenticate first.",
-                        authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
-                        redirectToAuth: true
-                    });
-                }
-                if (pjkFile && !driveFolderIdVerifPjk) {
-                    console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
-                    return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
-                }
-                if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
-                if (pjkFile) {
-                    // Drive rejects "/" in names, and a jenis label can carry one
-                    const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
-                    const pjkName = `${safePart(userdata)}_${safePart(jenis.verifValue || jenis.sheetValue)}_${safePart(jumlahAjuan)}.pdf`;
-                    pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk, pjkName);
-                }
-            }
-
             // Get textdata/input data antrian and tabledata
             const ranges = [
                 `'${flow.antrianSheet}'!A:A`,
@@ -1346,6 +1321,39 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 (rows || []).reduce((max, row) => Math.max(max, Number(row?.[0]) || 0), 0)
             ) + 1;
             const newIdCounter = nextAntrianId(responseAntrian, responseId);
+
+            // File Upload Handling
+            let fileLink = "";    //Bupot, GUP/PTUP only
+            let pjkLink = "";     //PJK, verifikasi flow only
+            const bupotFile = req.files?.file?.[0];
+            const pjkFile = req.files?.filePjk?.[0];
+
+            if (bupotFile || pjkFile) {
+                // Dedicated uploader account, not the shared /auth/google token
+                const uploaderReady = await ensureGajiDriveReady();
+                if (!uploaderReady) {
+                    console.error('Token uploader belum ada - buka /auth/google/gaji dengan akun yang dituju.');
+                    return res.status(401).json({
+                        error: "Google Drive authentication required. Please authenticate first.",
+                        authUrl: `${req.protocol}://${req.get('host')}/auth/google/gaji`,
+                        redirectToAuth: true
+                    });
+                }
+                if (pjkFile && !driveFolderIdVerifPjk) {
+                    console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
+                    return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
+                }
+                if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
+                if (pjkFile) {
+                    const pjkName = buildPjkFileName(
+                        req.viewer?.name,
+                        jenis.verifValue || jenis.sheetValue,
+                        jenis.flow === "gup" ? newIdCounter : formatNomorSpp(nomorSpp),
+                        jumlahAjuan
+                    );
+                    pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk, pjkName);
+                }
+            }
 
             // The verifikasi sheet has no Request Tanggal column, so its row stops at Nominal
             const antrianValues = jenis.flow === "gup"
@@ -1646,9 +1654,12 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         }
 
         if (pjkFile) {
-            // Drive rejects "/" in names, and a jenis label can carry one
-            const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
-            const pjkName = `${safePart(textdata[1])}_${safePart(editJenis.verifValue || editJenis.sheetValue)}_${safePart(textdata[3])}.pdf`;
+            const pjkName = buildPjkFileName(
+                req.viewer?.name,
+                editJenis.verifValue || editJenis.sheetValue,
+                flowConfig.key === "gup" ? currentAntrianValues[0] : formatNomorSpp(req.body.nomorSpp),
+                textdata[3]
+            );
             pjkLink = await uploadToDriveFolder(pjkFile, driveFolderIdVerifPjk, pjkName);
         }
         // Setting table data range

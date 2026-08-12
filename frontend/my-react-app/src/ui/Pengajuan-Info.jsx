@@ -57,6 +57,16 @@ function Pengajuan(props) {
                 <p>DRPP:</p>
                 <p className="info data">{props.drpp}</p>
             </div>
+            <div className="info status">
+                <p>Hasil Verifikasi:</p>
+                <p className="info data">
+                    {props.hasilVerifPending
+                        ? <span style={{color: "#8A6100"}}>Sedang dibuat…</span>
+                        : props.hasilVerif
+                            ? <a href={props.hasilVerif} target="_blank" rel="noopener noreferrer">Lihat Dokumen</a>
+                            : "-"}
+                </p>
+            </div>
             <div className="info-ubah">
                 <RemoveRedEyeIcon sx={{fontSize: 30, color:"#00204A"}}  onClick={props.invisible("detail-pengajuan", passData)}/>
                 { props.drpp === "" ?

@@ -1126,14 +1126,9 @@ function BuatPengajuan(props) {
                 <p>Tanggal Pengajuan: <span/> {props.passedData[6]}</p>
                 <p>Tanggal Disetujui: <span/> {props.passedData[7]}</p>
                 <p>Status Pengajuan: <span/> {props.passedData[8]}</p>
-                {/* GUP/PTUP are verified twice, so the bendahara and the verifikator each leave their own note */}
                 {props.passedData[13] &&
                     <p className="desc-catatan" title={props.passedData[13]}>
                         {props.passedData[10] === "gup" ? "Catatan Bendahara:" : "Catatan Verifikasi:"} <span/> {props.passedData[13]}
-                    </p>}
-                {props.passedData[14] &&
-                    <p className="desc-catatan" title={props.passedData[14]}>
-                        Catatan Verifikasi: <span/> {props.passedData[14]}
                     </p>}
             </div>))
             }

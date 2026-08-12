@@ -106,7 +106,7 @@
     /* Jenis holds values up to "LS PLATFORM PEMBAYARAN PEMERINTAH" and Tgl. Ajuan a full
        timestamp, so those two get the largest shares; the icons get a fixed track wide
        enough for all three */
-    grid-template-columns: 180px minmax(150px, 1.45fr) 0.85fr 1.4fr 0.95fr 1.15fr 0.85fr 110px;
+    grid-template-columns: 170px minmax(0, 1.29fr) 1.35fr 1.55fr 1.57fr 1.32fr 1.36fr 1.26fr 100px;
     column-gap: 5px;
     font-size: 1.1rem;
     font-weight: 600;
@@ -149,7 +149,7 @@
 }
 
 .info.nomor {
-    padding-left: 35px;
+    padding-left: 24px;
 }
 
 /* Buat Pengajuan Style */
@@ -954,7 +954,7 @@ input[type="number"]::-webkit-inner-spin-button {
         width: 90%;
         font-size: 0.9rem;
         padding-left: 5px;
-        grid-template-columns: 150px minmax(120px, 1.45fr) 0.85fr 1.4fr 0.95fr 1.15fr 0.85fr 100px;
+        grid-template-columns: 150px minmax(0, 1.19fr) 1.1fr 1.25fr 1.27fr 1.33fr 1.1fr 1.04fr 100px;
     }
 
     .info.data {

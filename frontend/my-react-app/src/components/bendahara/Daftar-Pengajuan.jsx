@@ -12,12 +12,16 @@ import CircularProgress from '@mui/material/CircularProgress';
 import PropTypes from "prop-types";
 
 
+const POLL_INTERVAL_MS = 2000;
+const POLL_LIMIT = 15;
+
 function DaftarPengajuan(props){
     //Context
     const { user } = useContext(AuthContext)
 
     // States
     const [antrianData, setAntrianData] = useState([]);
+    const [pending, setPending] = useState(new Set());
     const [currentPage, setCurrentPage] = useState(props.userPagination || 1);
     const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("")
@@ -53,6 +57,7 @@ function DaftarPengajuan(props){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setIsLoading(false);
                 setAntrianData(responseResult.reverse());
+                setPending(new Set((response.data.pending || []).map(String)));
                 setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
             }
         } catch (error) {
@@ -63,6 +68,20 @@ function DaftarPengajuan(props){
     useEffect(() => {
         fetchAntrianData(currentPage);
     }, [currentPage]);
+
+    useEffect(() => {
+        if (!pending.size) return;
+        let attempts = 0;
+        const timer = setInterval(async () => {
+            if (++attempts > POLL_LIMIT) return clearInterval(timer);
+            try {
+                const { data } = await apiClient.get('/verifikasi/hasil-verif/pending');
+                const stillPending = new Set((data.pending || []).map(String));
+                if ([...pending].some(id => !stillPending.has(id))) fetchAntrianData(currentPage, { quiet: true });
+            } catch { /* keep waiting */ }
+        }, POLL_INTERVAL_MS);
+        return () => clearInterval(timer);
+    }, [pending, currentPage]);
 
     // Handling Pagination Change
     function handlePaginationChange(event, value) {
@@ -132,6 +151,7 @@ function DaftarPengajuan(props){
             if (response.status === 200){
                 const { data: rowData, totalPages } = response.data;
                 setAntrianData(rowData);
+                setPending(new Set((response.data.pending || []).map(String)));
                 setTotalPages(totalPages); //Calculate total page based on real data on gsheet
             }
             setIsLoading(false);
@@ -190,6 +210,8 @@ function DaftarPengajuan(props){
                     spp={data[9]}
                     catatan={data[16]}
                     pjkCatatan={data[22]}
+                    hasilVerif={data[23]}
+                    hasilVerifPending={pending.has(String(data[24]))}
                     />)}
             </div>
             <Pagination className="pagination" size="medium" count={totalPages} page={currentPage} onChange={handlePaginationChange} />

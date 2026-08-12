@@ -244,7 +244,7 @@ const ROUTE_ROLES = {
 
     // Pengujian PJK, Kelola PJK, Form Verifikasi, Realisasi
     "GET /verifikasi/pengujian-pjk": ADMIN,
-    "GET /verifikasi/hasil-verif/pending": ADMIN,
+    "GET /verifikasi/hasil-verif/pending": USER_ADMIN,
     "POST /verifikasi/aksi-pjk": ADMIN,
     "GET /verifikasi/cari-spm": ADMIN,
     "POST /verifikasi/verifikasi-form": ADMIN,
@@ -893,7 +893,7 @@ app.get("/bendahara/antrian", async (req, res) => {
         const paginatedRows = filteredRows.slice(startIndex, endIndex);
 
         // Rows are already ANTRIAN_ROW_WIDTH wide from the canonical projection
-        res.json({ data: paginatedRows, realAllAntrianRows: totalFiltered });
+        res.json({ data: paginatedRows, realAllAntrianRows: totalFiltered, pending: [...pendingHasilVerif.keys()] });
 
     } catch (error) {
         console.error("Error in /bendahara/antrian:", error);
@@ -938,7 +938,8 @@ app.get("/bendahara/filter-date", async (req, res) => {
         // Send paginated data and total rows count for pagination
         res.json({
             data: rowData,
-            totalPages
+            totalPages,
+            pending: [...pendingHasilVerif.keys()]
         });
 
     } catch (error) {
@@ -1039,6 +1040,8 @@ const ANTRIAN_PJK_INDEX = ANTRIAN_ROW_WIDTH + 1;
 // The verifikator writes their note on the mirror row, the bendahara theirs on the
 // original, and the user needs to read both
 const ANTRIAN_PJK_CATATAN_INDEX = ANTRIAN_ROW_WIDTH + 2;
+const ANTRIAN_DOK_VERIF_INDEX = ANTRIAN_ROW_WIDTH + 3;
+const ANTRIAN_HASIL_VERIF_ID_INDEX = ANTRIAN_ROW_WIDTH + 4;
 
 // GUP/PTUP are verified twice and independently - Pajak/Anggaran by the bendahara on
 // 'Write Antrian', Substansi/Kelengkapan by the verifikator on the mirror. Either side
@@ -1101,7 +1104,7 @@ async function fetchMergedAntrianRows(spreadsheetId) {
     const response = await readRanges(
         sheets,
         spreadsheetId,
-        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.antrianLastColumn}`),
+        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.pjk?.dokVerif || flow.antrianLastColumn}`),
     );
 
     // The mirrors are dropped from the list itself, but they hold the only copy of the PJK
@@ -1114,6 +1117,7 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         for (const row of rows) {
             const canonical = toCanonicalAntrianRow(row, flow);
             if (flow.key === "verif") {
+                canonical[ANTRIAN_DOK_VERIF_INDEX] = row?.[PJK_COLUMN.dokVerif] ?? "";
                 const jenis = resolveJenis(canonical[ANTRIAN_JENIS_INDEX]);
                 if (jenis?.flow === "gup") { // mirror of a 'Write Antrian' row
                     mirrorByKey.set(mirrorRowKey(canonical[1], canonical[2]), canonical);
@@ -1128,11 +1132,14 @@ async function fetchMergedAntrianRows(spreadsheetId) {
     for (const row of merged) {
         if (row[ANTRIAN_FLOW_INDEX] !== "gup") {
             row[ANTRIAN_PJK_INDEX] = row[19]; // its own lampiran already is the PJK
+            row[ANTRIAN_HASIL_VERIF_ID_INDEX] = row[0];
             continue;
         }
         const mirror = mirrorByKey.get(mirrorRowKey(row[1], row[2]));
         row[ANTRIAN_PJK_INDEX] = mirror?.[19] || "";
         row[ANTRIAN_PJK_CATATAN_INDEX] = mirror?.[16] || "";
+        row[ANTRIAN_DOK_VERIF_INDEX] = mirror?.[ANTRIAN_DOK_VERIF_INDEX] || "";
+        row[ANTRIAN_HASIL_VERIF_ID_INDEX] = mirror?.[0] || "";
         if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
     }
     return merged;

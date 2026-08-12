@@ -1057,14 +1057,14 @@ function antrianStatusRank(status) {
 const mirrorRowKey = (timestamp, nama) =>
     JSON.stringify([String(timestamp ?? "").trim(), String(nama ?? "").trim()]);
 
-// Picks the 'Write Antrian Verif' mirror of a 'Write Antrian' row out of that sheet's rows.
-// Returns { row, canonical } only when exactly one row matches - a duplicate or missing match
-// means we cannot tell which row is the mirror, and touching the wrong one is worse than
-// doing nothing. Takes the rows rather than fetching them so callers that already hold the
-// sheet do not pay for a second read.
-function matchMirrorAntrianRow(mirrorRows, antrianRowValues, purpose = "update") {
+// Every 'Write Antrian Verif' row that could be the mirror of the given 'Write Antrian' row.
+// Nothing found and several found are different problems - a GUP/PTUP submitted before the
+// mirror existed simply has none and one can be registered, whereas an ambiguous match must
+// be left alone - so callers that can tell them apart get the whole list. Takes the rows
+// rather than fetching them so callers that already hold the sheet do not pay for a second read.
+function findMirrorAntrianMatches(mirrorRows, antrianRowValues) {
     const key = mirrorRowKey(antrianRowValues?.[1], antrianRowValues?.[2]);
-    if (key === mirrorRowKey("", "")) return null; // nothing to match on
+    if (key === mirrorRowKey("", "")) return []; // nothing to match on
 
     const matches = [];
     (mirrorRows || []).forEach((row, index) => {
@@ -1072,21 +1072,20 @@ function matchMirrorAntrianRow(mirrorRows, antrianRowValues, purpose = "update")
             matches.push({ row: index + 1, canonical: toCanonicalAntrianRow(row, AJUAN_FLOWS.verif) });
         }
     });
+    return matches;
+}
+
+// Picks the mirror out of those matches. Returns { row, canonical } only when exactly one row
+// matches - a duplicate or missing match means we cannot tell which row is the mirror, and
+// touching the wrong one is worse than doing nothing.
+function matchMirrorAntrianRow(mirrorRows, antrianRowValues, purpose = "update") {
+    const matches = findMirrorAntrianMatches(mirrorRows, antrianRowValues);
     if (matches.length !== 1) {
+        const key = mirrorRowKey(antrianRowValues?.[1], antrianRowValues?.[2]);
         console.warn(`Mirror row for ${key}: ${matches.length} matches, skipping mirror ${purpose}.`);
         return null;
     }
     return matches[0];
-}
-
-async function findMirrorAntrianRow(spreadsheetId, antrianRowValues, purpose = "update") {
-    const verifFlow = AJUAN_FLOWS.verif;
-    const response = await readRange(
-        sheets,
-        spreadsheetId,
-        `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
-    );
-    return matchMirrorAntrianRow(response.data.values, antrianRowValues, purpose);
 }
 
 // Timestamps are 'yyyy-mm-dd hh:mm:ss', so a plain string compare orders them correctly
@@ -1164,6 +1163,13 @@ const buildPjkFileName = (satker, jenisLabel, nomor, nominal) => [satker, jenisL
     .map(value => String(value ?? "").replace(/[\\/]/g, "-").trim())
     .filter(Boolean)
     .join("_") + ".pdf";
+
+// The counter cell lags any row added to the sheet by hand, and handing out an id that
+// already exists makes TRANS_ID ambiguous. Never issue below the highest id actually present.
+const nextAntrianId = (rows, counter) => Math.max(
+    parseInt(counter) || 0,
+    (rows || []).reduce((max, row) => Math.max(max, Number(row?.[0]) || 0), 0)
+) + 1;
 
 // One antrian row plus the single cell writes that belong with it
 function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLink, nomorSpp = "") {
@@ -1333,13 +1339,6 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             const lastTableRows = responseTable.length || 0;
             const timestamp = getFormattedDate().fullDateTimeFormat;
 
-            // The counter cell lags any row added to the sheet by hand, and handing out
-            // an id that already exists makes TRANS_ID ambiguous. Never issue below the
-            // highest id actually present.
-            const nextAntrianId = (rows, counter) => Math.max(
-                parseInt(counter) || 0,
-                (rows || []).reduce((max, row) => Math.max(max, Number(row?.[0]) || 0), 0)
-            ) + 1;
             const newIdCounter = nextAntrianId(responseAntrian, responseId);
 
             // File Upload Handling
@@ -1636,11 +1635,14 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         let antriRow = null;
         let currentAntrianValues = null;
         let currentLampiran = "";
+        let currentUnitKerja = "";
         for (let i = 0; i < matchResult.length; i++) {
             if (String(matchResult[i][0]) === String(antriPosition)) {
                 antriRow = i + 1 + 2; //Convert to 1-based row index. +2 to exclude header and start from A3
                 currentAntrianValues = matchResult[i];
-                currentLampiran = toCanonicalAntrianRow(matchResult[i], flowConfig)[19];
+                const currentCanonical = toCanonicalAntrianRow(matchResult[i], flowConfig);
+                currentLampiran = currentCanonical[19];
+                currentUnitKerja = currentCanonical[ANTRIAN_UNIT_KERJA_INDEX];
                 break;
             }
         }
@@ -1779,21 +1781,51 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
             // The mirror row is matched on the values this row had before the edit, so it has
             // to be re-synced here or the two drift apart and can never be paired again.
             const mirrorFlow = AJUAN_FLOWS.verif;
-            const mirrorMatch = await findMirrorAntrianRow(spreadsheetId, currentAntrianValues, "update");
-            if (mirrorMatch) {
+            const mirrorResponse = await readRanges(sheets, spreadsheetId, [
+                `'${mirrorFlow.antrianSheet}'!A:${mirrorFlow.antrianLastColumn}`,
+                `'${mirrorFlow.antrianSheet}'!${mirrorFlow.counterCell}`,
+            ]);
+            const mirrorRows = mirrorResponse.data.valueRanges[0].values || [];
+            const mirrorMatches = findMirrorAntrianMatches(mirrorRows, currentAntrianValues);
+            // Same four columns the mirror was created with, jenis under its verif label
+            const mirrorValues = [textdata[0], textdata[1], editJenis.verifValue || editJenis.sheetValue, textdata[3]];
+
+            if (mirrorMatches.length === 1) {
+                const mirrorMatch = mirrorMatches[0];
                 batchDataUpdates.push({
-                    // Same four columns the mirror was created with, jenis under its verif label
                     range: `'${mirrorFlow.antrianSheet}'!B${mirrorMatch.row}:E${mirrorMatch.row}`,
-                    values: [[textdata[0], textdata[1], editJenis.verifValue || editJenis.sheetValue, textdata[3]]]
+                    values: [mirrorValues]
                 });
                 pjkTarget = { flow: mirrorFlow, row: mirrorMatch.row, currentLink: mirrorMatch.canonical[19] };
+            } else if (mirrorMatches.length === 0 && pjkLink) {
+                // GUP/PTUP only started registering a mirror when the PJK upload shipped, so
+                // rows submitted before that have no verifikasi row for the PJK to hang off.
+                // Register one now, exactly as buat-ajuan would have, rather than refusing an
+                // upload the user can never make succeed. Only when a PJK is actually being
+                // attached - a plain edit has no reason to move an old row into the PJK queue.
+                const mirrorRow = mirrorRows.length + 1;
+                const mirrorId = nextAntrianId(mirrorRows, mirrorResponse.data.valueRanges[1].values || []);
+                batchDataUpdates.push(...buildAntrianWrites(
+                    mirrorFlow,
+                    mirrorRow,
+                    [mirrorId, ...mirrorValues],
+                    currentUnitKerja || req.viewer?.name || "",
+                    pjkLink
+                ));
+                console.log(`Registered missing mirror row ${mirrorRow} for antrian ${antriPosition}.`);
+                pjkTarget = { flow: mirrorFlow, row: mirrorRow, currentLink: "" };
+            } else if (mirrorMatches.length > 1) {
+                // Cannot tell which row is the mirror; touching the wrong one is worse than nothing
+                console.warn(`Mirror row for antrian ${antriPosition}: ${mirrorMatches.length} matches, skipping mirror update.`);
             }
         } else {
             pjkTarget = { flow: flowConfig, row: antriRow, currentLink: currentLampiran };
         }
 
+        // A missing mirror is registered above, so what is left here is a mirror that cannot be
+        // identified - either several rows match, or there is nothing to remove the PJK from.
         if ((pjkLink || removePjk) && !pjkTarget) {
-            return res.status(409).json({ message: "Baris verifikasi untuk pengajuan ini tidak ditemukan, PJK tidak dapat diperbarui." });
+            return res.status(409).json({ message: "Baris verifikasi untuk pengajuan ini tidak dapat dipastikan, PJK tidak dapat diperbarui. Hubungi admin." });
         }
 
         // Whatever the lampiran cells stop pointing at gets removed from Drive, so replacing

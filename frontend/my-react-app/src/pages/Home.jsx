@@ -2,7 +2,7 @@ import React, {useContext, useEffect, useMemo, useState} from "react"
 import { AuthContext } from "../lib/AuthContext";
 import {monthNames} from "../components/verifikasi/head-data.js";
 import apiClient from "../lib/apiClient";
-import { PILOT } from "../lib/pilot.js";
+import { PILOT, isPilotUser } from "../lib/pilot.js";
 import LoadingAnimate from "../ui/loading.jsx"
 import { NewNavbar } from "../ui/Navbar.jsx"
 import { RealisasiCircle } from "../ui/cards.jsx"
@@ -14,10 +14,10 @@ function Home() {
     const satkerName = user.name;
     const userRole = user.role;
     const isAdmin = ["admin", "master admin", "admin_gaji"].includes(userRole);
-    // Pilot hold: the counters are only shown to the admin roles for now. The route stays
-    // open to role="user" and scopes itself to their own satker, so flipping the flag off
-    // is all that is needed to hand the dashboard back.
-    const showDashboard = isAdmin || !PILOT.hideHomeDashboardFromUser;
+    // Pilot hold: the counters are shown to the admin roles and to the pilot satker for
+    // now. The route stays open to role="user" and scopes itself to their own satker, so
+    // flipping the flag off is all that is needed to hand the dashboard back to everyone.
+    const showDashboard = isAdmin || isPilotUser(user) || !PILOT.hideHomeDashboardFromUser;
 
     //State
     const [realisasi, setRealisasi] = useState(null);

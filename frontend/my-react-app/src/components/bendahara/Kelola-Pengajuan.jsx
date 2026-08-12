@@ -47,9 +47,10 @@ function KelolaPengajuan(props) {
         })();
     }, [])
 
-    // Pilot hold: with PILOT_SKIP_MENUNGGU_PJK on, the backend never parks a row on the
-    // verifikator, so this section would sit at zero for the whole pilot - drop it rather
-    // than show an empty card. Turning both flags back off restores it as it was.
+    // Pilot hold: with PILOT_SKIP_MENUNGGU_PJK on, the backend parks a row on the
+    // verifikator only when it belongs to a pilot satker, so this section holds those rows
+    // and nobody else's. It is dropped rather than shown empty only when the pilot has no
+    // participants left. Turning both flags back off restores it as it was.
     const sections = SECTIONS
         .filter(section => !(PILOT.hideMenungguPjkSection && section.card === "Menunggu Verifikator PJK"))
         .map(section => ({...section, rows: section.source(data) || []}));

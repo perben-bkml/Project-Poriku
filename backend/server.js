@@ -167,16 +167,30 @@ const ANY_ROLE = ["user", "admin", "admin_gaji"];
 // one while they are trialled. Nothing behind these flags is removed - each is a temporary
 // hold, and setting it to false restores the behaviour the code already had.
 // PILOT_SKIP_MENUNGGU_PJK has a twin on the frontend (hideMenungguPjkSection in
-// src/lib/pilot.js) that hides the card this flag empties; flip the two together.
+// src/lib/pilot.js) that hides the card this flag would leave empty; flip the two together.
+// PILOT_SATKER is duplicated there too - a name added here has to be added there as well.
 
-// Non-GUP/PTUP jenis are master admin only, matching the option list Buat-Pengajuan.jsx
-// offers. Rows submitted before the hold still open, edit and verify normally.
-const PILOT_JENIS_MASTER_ADMIN_ONLY = true;
+// The satker taking part in the pilot, matched on the account name the JWT carries.
+// Comparison goes through normalizeSatker, so case and stray whitespace in poriku_users
+// cannot drop an account out of the pilot. Kept in sync with PILOT_SATKER in src/lib/pilot.js.
+const PILOT_SATKER = ["Biro Umum", "Biro Sarana dan Prasarana"];
+const isPilotSatker = (name) => PILOT_SATKER.some(satker => normalizeSatker(satker) === normalizeSatker(name));
+// The accounts the holds are lifted for: the pilot satker, plus "master admin", which has
+// passed every hold since the pilot started.
+const isPilotViewer = (viewer) => viewer?.role === MASTER_ROLE || isPilotSatker(viewer?.name);
+
+// Non-GUP/PTUP jenis are open to the pilot accounts only, matching the option list
+// Buat-Pengajuan.jsx offers. Rows submitted before the hold still open, edit and verify normally.
+const PILOT_JENIS_PILOT_ONLY = true;
 const PILOT_JENIS_ALLOWED = ["gup", "ptup"];
 // Kelola-Pengajuan stops parking a GUP/PTUP row on the verifikator PJK: once the bendahara
 // has set Pajak, Anggaran and the Tanggal Selesai Verifikasi the row moves straight on to
-// Sudah Verifikasi. The PJK verification itself is untouched and still runs on the mirror.
+// Sudah Verifikasi. Rows whose Unit Kerja is a pilot satker are exempt - they run the new
+// flow and do wait on the verifikator, so the card holds their rows and nobody else's. The
+// PJK verification itself is untouched and still runs on the mirror either way.
 const PILOT_SKIP_MENUNGGU_PJK = true;
+// Whether any row can still park on the PJK, and so whether the mirror sheet is worth reading
+const PILOT_ANY_MENUNGGU_PJK = !PILOT_SKIP_MENUNGGU_PJK || PILOT_SATKER.length > 0;
 
 // Reachable without a session: login itself, the public Layanan Gaji page, and the
 // Google redirect targets the browser lands on without passing through the app
@@ -1283,9 +1297,12 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             }
             // Pilot hold: the option list in Buat-Pengajuan.jsx already stops at GUP/PTUP for
             // everyone else, this is the same rule where it cannot be edited around
-            if (PILOT_JENIS_MASTER_ADMIN_ONLY && req.viewer?.role !== MASTER_ROLE
+            if (PILOT_JENIS_PILOT_ONLY && !isPilotViewer(req.viewer)
                 && !PILOT_JENIS_ALLOWED.includes(jenisSlug)) {
                 return res.status(403).json({ message: "Jenis pengajuan ini belum tersedia." });
+            }
+            if (jenis.flow === "verif" && trimmed(nomorSpp) === "") {
+                return res.status(400).json({ message: "Nomor SPP wajib diisi." });
             }
             const flow = AJUAN_FLOWS[jenis.flow];
             const hasTable = jenis.hasTable && Array.isArray(tabledata) && tabledata.length > 0;
@@ -1566,6 +1583,9 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
 
     if (!textdata || !tabledata || !antriPosition || (hasTable && (!tablePosition || !lastTableEndRow))) {
         return res.status(400).json({message: "Invalid Data."})
+    }
+    if (flowConfig.key === "verif" && trimmed(req.body.nomorSpp) === "") {
+        return res.status(400).json({ message: "Nomor SPP wajib diisi." });
     }
     try {
 
@@ -2091,15 +2111,15 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 
         // Column B drives the date filter; the verifikasi antrian rides alongside it so the
         // PJK status of each mirror row costs no extra round trip.
-        // REFACTOR: while PILOT_SKIP_MENUNGGU_PJK holds, nothing reads that PJK status, so
-        // the whole mirror sheet was being fetched and thrown away on every page load.
+        // REFACTOR: when no row at all can park on the PJK, nothing reads that PJK status,
+        // so the whole mirror sheet was being fetched and thrown away on every page load.
         const [response, mirrorResponse] = await Promise.all([
             readRange(sheets, spreadsheetId, "'Write Antrian'!B:B"),
-            PILOT_SKIP_MENUNGGU_PJK ? null : readRange(
+            PILOT_ANY_MENUNGGU_PJK ? readRange(
                 sheets,
                 spreadsheetId,
                 `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
-            ),
+            ) : null,
         ]);
 
         // Get all rows
@@ -2163,9 +2183,10 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // has no PJK to wait on, so it stays where it was.
         const isOk = value => trimmed(value) === "OK";
         const waitingPjk = (row) => {
-            // Pilot hold: nothing waits on the verifikator, so every row falls through to the
-            // section its own status column puts it in, the way it did before the PJK step
-            if (PILOT_SKIP_MENUNGGU_PJK) return false;
+            // Pilot hold: only a pilot satker's row waits on the verifikator. Everyone else
+            // falls through to the section its own status column puts it in, the way it did
+            // before the PJK step existed.
+            if (PILOT_SKIP_MENUNGGU_PJK && !isPilotSatker(row[ANTRIAN_UNIT_KERJA_INDEX])) return false;
             const pjk = pjkByKey.get(mirrorRowKey(row[1], row[2]));
             return !!pjk && isOk(row[12]) && isOk(row[13])
                 && !(PJK_VERIFIED_VALUES.includes(String(pjk[0] ?? "").trim())

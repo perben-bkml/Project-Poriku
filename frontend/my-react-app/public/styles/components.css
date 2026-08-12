@@ -234,6 +234,13 @@
     justify-self: start;
 }
 
+.pengajuan-form-error {
+    margin: -4px 35px 0 35px;
+    color: #BD1404;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
 .pengajuan-form-tabledata {
     display: grid;
     grid-template-rows: 50px 1fr;

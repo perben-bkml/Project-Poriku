@@ -5,7 +5,7 @@ import apiClient from "../../lib/apiClient";
 // Import Components
 import Popup from "../../ui/Popup.jsx";
 import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel } from "./head-data.js";
-import { PILOT, PILOT_JENIS_ALLOWED } from "../../lib/pilot.js";
+import { PILOT, PILOT_JENIS_ALLOWED, isPilotUser } from "../../lib/pilot.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
@@ -57,6 +57,8 @@ function BuatPengajuan(props) {
     ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
     const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
+    const [sppError, setSppError] = useState("");
+    const sppRef = useRef(null);
     const [tanggalAjuan, setTanggalAjuan] = useState("");
     const [lockRow, setLockRow] = useState(false);
 
@@ -93,6 +95,9 @@ function BuatPengajuan(props) {
     const isBuat = componentType === "buat";
     const isTabelPenuh = jenisTabelPenuh.includes(ajuan);
     const isTanpaTabel = jenisTanpaTabel.includes(ajuan);
+    const nomorSppRequired = !isTabelPenuh && componentType !== "lihat";
+    const canUploadPjk = isPilotUser(user) || String(user?.role ?? "").includes("admin");
+    const showUploadGroup = componentType !== "lihat" && (isTabelPenuh || canUploadPjk);
     // Which antrian/table sheet pair this pengajuan lives on
     const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
     // GUP/PTUP keep the Bupot on their own row and the PJK on the mirror row, which the
@@ -105,14 +110,14 @@ function BuatPengajuan(props) {
     );
 
     // Pilot hold: the verifikasi jenis are being trialled on the live server, so everyone
-    // but "master admin" composes GUP/PTUP only. Reopened rows are untouched - their select
+    // outside the pilot composes GUP/PTUP only. Reopened rows are untouched - their select
     // below is already fixed to the flow the row lives on, so an LS pengajuan submitted
     // before the hold still opens and edits normally.
     const jenisOptions = useMemo(() => (
-        PILOT.jenisPengajuanMasterAdminOnly && user?.role !== "master admin"
+        PILOT.jenisPengajuanPilotOnly && !isPilotUser(user)
             ? jenisPengajuan.filter(jenis => PILOT_JENIS_ALLOWED.includes(jenis.value))
             : jenisPengajuan
-    ), [user?.role]);
+    ), [user]);
 
     // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
     // left over from a reopened row can outlive the switch to composing. Snap it back to a
@@ -772,6 +777,11 @@ function BuatPengajuan(props) {
     // Handle Popups
     function handlePopup() {
         if (!isPopup) {
+            if (nomorSppRequired && nomorSpp.trim() === "") {
+                setSppError("Nomor SPP wajib diisi.");
+                sppRef.current?.focus();
+                return;
+            }
             setIsPopup(true);
         } else {
             setIsPopup(false);
@@ -1160,9 +1170,12 @@ function BuatPengajuan(props) {
                             required/>
                         {!isTabelPenuh && <>
                         <label htmlFor="aju-spp">Nomor SPP:</label>
-                        <input type="text" id="aju-spp" name="nomor-spp" value={nomorSpp}
+                        <input type="text" id="aju-spp" name="nomor-spp" value={nomorSpp} ref={sppRef}
                             readOnly={componentType === "lihat"}
-                            onChange={(e) => setNomorSpp(e.target.value)}/>
+                            onChange={(e) => { setNomorSpp(e.target.value); setSppError(""); }}
+                            aria-invalid={sppError ? "true" : undefined}
+                            aria-describedby={sppError ? "aju-spp-error" : undefined}
+                            required={nomorSppRequired}/>
                         </>}
                         {isTabelPenuh && <>
                         <label htmlFor="aju-date">Request Tanggal Pengajuan:</label>
@@ -1173,6 +1186,8 @@ function BuatPengajuan(props) {
                             defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
                         </>}
                     </div>
+                    {nomorSppRequired && sppError ?
+                        <p id="aju-spp-error" className="pengajuan-form-error" role="alert">{sppError}</p> : null}
                     <br/>
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
@@ -1207,12 +1222,12 @@ function BuatPengajuan(props) {
                                     {removePjk ? <p style={{color: "#BD1404"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
                                 </div> : null}
                         </div>
-                        {componentType === "lihat" ? null :
+                        {showUploadGroup &&
                             <div className="upload-btn-group">
                                 {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
                                 {/* Uploading again replaces the stored link - also on edit, where the
                                     PJK of a GUP/PTUP pengajuan lands on its mirror row */}
-                                <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>
+                                {canUploadPjk && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
                             </div>
                         }
                         {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}

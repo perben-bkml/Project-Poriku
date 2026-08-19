@@ -191,6 +191,13 @@ const PILOT_JENIS_ALLOWED = ["gup", "ptup"];
 const PILOT_SKIP_MENUNGGU_PJK = true;
 // Whether any row can still park on the PJK, and so whether the mirror sheet is worth reading
 const PILOT_ANY_MENUNGGU_PJK = !PILOT_SKIP_MENUNGGU_PJK || PILOT_SATKER.length > 0;
+// Which GUP/PTUP submissions register a mirror row on the verifikasi antrian. The mirror only
+// exists so the PJK step has a row to hang off, and while the hold is on no other satker's row
+// ever reaches that step - registering one would only put a row on the verifikator's screen that
+// nobody is meant to act on. A PJK actually being attached still forces one, since the mirror is
+// the only place that link can live. Turning PILOT_SKIP_MENUNGGU_PJK off mirrors everything again.
+const shouldMirrorAntrian = (viewer, hasPjkFile) =>
+    !PILOT_SKIP_MENUNGGU_PJK || isPilotViewer(viewer) || !!hasPjkFile;
 
 // Reachable without a session: login itself, the public Layanan Gaji page, and the
 // Google redirect targets the browser lands on without passing through the app
@@ -1322,9 +1329,17 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             if (jenis.hasTable && !hasTable) {
                 return res.status(400).json({ message: "Data tabel wajib diisi." });
             }
+            // Read here rather than at the upload below: whether a PJK is coming decides
+            // the mirror, which decides what this route has to read from the sheet
+            const bupotFile = req.files?.file?.[0];
+            const pjkFile = req.files?.filePjk?.[0];
+
             // GUP/PTUP also register in the verifikasi antrian, using the same short
-            // layout the other jenis write, but never get a Write Table Verif block
-            const mirrorFlow = jenis.flow === "gup" ? AJUAN_FLOWS.verif : null;
+            // layout the other jenis write, but never get a Write Table Verif block.
+            // Pilot hold: only rows that can actually reach the PJK step get one.
+            const mirrorFlow = jenis.flow === "gup" && shouldMirrorAntrian(req.viewer, pjkFile)
+                ? AJUAN_FLOWS.verif
+                : null;
 
             // Get textdata/input data antrian and tabledata
             const ranges = [
@@ -1351,8 +1366,6 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             // File Upload Handling
             let fileLink = "";    //Bupot, GUP/PTUP only
             let pjkLink = "";     //PJK, verifikasi flow only
-            const bupotFile = req.files?.file?.[0];
-            const pjkFile = req.files?.filePjk?.[0];
 
             if (bupotFile || pjkFile) {
                 // Dedicated uploader account, not the shared /auth/google token

@@ -893,3 +893,79 @@ export function TableRealisasiLite({anggaran, belanja, sisa, persen}) {
         </TableContainer>
     )
 }
+
+// Pembayaran-Bp.jsx. Without onEdit the table drops the Aksi column, as TableDokumenGaji
+// does for roles that may only look.
+export function TablePembayaranBp(props) {
+    const showActions = Boolean(props.onEdit || props.onDelete);
+    // Column order, matching pembayaranBpHeadData and PEMBAYARAN_BP_COLUMNS on the server
+    const keys = ["no", "tanggalSp2d", "nomorSpm", "jenis", "va", "unitKerja", "nilaiSp2d",
+        "kodeBniDirect", "buktiBayar", "statusBayarPenerima", "tanggalBayarPenerima",
+        "statusPajak", "tanggalTrxPajak", "buktiBayarDepositPajak"];
+    const linkKeys = new Set(["buktiBayar", "buktiBayarDepositPajak"]);
+    // First three columns are frozen; widths and offsets live in .bp-freeze-*
+    const freeze = (index) => index < 3 ? `bp-freeze bp-freeze-${index + 1}` : undefined;
+
+    // Attachment columns hold {nama, url}. Some cells are typed by hand ("WITHDRAWAL")
+    // and have no url, so the name still renders, just without a dead link.
+    function renderCell(row, key) {
+        if (!linkKeys.has(key)) return row[key] || "-";
+        const {nama, url} = row[key] || {};
+        if (!nama) return "-";
+        return url ? <a href={url} target="_blank" rel="noopener noreferrer">{nama}</a> : nama;
+    }
+
+    return (
+        <TableContainer className="table-scroll-x"
+                        sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <Table>
+                <TableHead>
+                    <TableRow sx={{backgroundColor: "#00449C"}}>
+                        {props.header.map((data, index) => (
+                            <TableCell key={index} className={freeze(index)}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C", whiteSpace: "nowrap"}}
+                                >{data}</TableCell>
+                        ))}
+                        {showActions &&
+                            <TableCell align="center"
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                >Aksi</TableCell>}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {props.content.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "#666"}}>
+                                Tidak ada data.
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        props.content.map((row) => (
+                            <TableRow key={row.rowNumber} hover>
+                                {keys.map((key, index) => (
+                                    <TableCell key={key} className={freeze(index)}
+                                               sx={{whiteSpace: "nowrap"}}>{renderCell(row, key)}</TableCell>
+                                ))}
+                                {showActions &&
+                                    <TableCell align="center" sx={{whiteSpace: "nowrap"}}>
+                                        {props.onEdit &&
+                                            <Tooltip title="Ubah">
+                                                <IconButton size="small" onClick={() => props.onEdit(row)}>
+                                                    <EditIcon sx={{fontSize: 24, color: "#edbd4d"}}/>
+                                                </IconButton>
+                                            </Tooltip>}
+                                        {props.onDelete &&
+                                            <Tooltip title="Hapus">
+                                                <IconButton size="small" onClick={() => props.onDelete(row)}>
+                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "#BD1404"}}/>
+                                                </IconButton>
+                                            </Tooltip>}
+                                    </TableCell>}
+                            </TableRow>
+                        ))
+                    )}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}

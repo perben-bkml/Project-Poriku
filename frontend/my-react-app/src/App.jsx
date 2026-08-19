@@ -12,6 +12,7 @@ import NotFound from './pages/NotFound.jsx'
 import Gaji from './pages/Gaji.jsx'
 //Lib Imports
 import { AuthProvider } from './lib/AuthContext'
+import { BackgroundTaskProvider } from './lib/BackgroundTasks'
 import ProtectedRoute from './lib/ProtectedRoute'
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
     <div>
       <Analytics />
       <AuthProvider>
+        <BackgroundTaskProvider>
         <BrowserRouter>
           <Routes>
             {/* Public Route */}
@@ -39,6 +41,7 @@ function App() {
               </ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
+        </BackgroundTaskProvider>
       </AuthProvider>
     </div>
   )

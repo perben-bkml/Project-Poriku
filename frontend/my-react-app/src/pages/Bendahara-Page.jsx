@@ -11,6 +11,7 @@ import MonitoringDrpp from "../components/bendahara/Monitoring-Drpp.jsx";
 import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
 import MonitorPerubahanGaji from "../components/bendahara/Monitor-Perubahan-Gaji.jsx";
 import KirimDokumenGaji from "../components/bendahara/Kirim-Dokumen-Gaji.jsx";
+import PembayaranBp from "../components/bendahara/Pembayaran-Bp.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -25,6 +26,7 @@ import FindInPageIcon from '@mui/icons-material/FindInPage';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 
 // Single source of truth for both the sidebar and the access check, so the two cannot
 // drift. "master admin" is never listed - it opens everything.
@@ -40,6 +42,7 @@ const MENU_ROLES = {
     "monitoring-drpp": ["admin"],
     "aksi-drpp": ["admin"],
     "monitor-data-gaji": ["admin", "admin_gaji"],
+    "pembayaran-bp": ["admin"],
     // Writing dokumen gaji stays with the roles the backend lets write it
     "input-dokumen-gaji": ["admin_gaji"],
     "edit-dokumen-gaji": ["admin_gaji"],
@@ -54,6 +57,7 @@ const MENU_BUTTONS = [
     {name: "lihat-antrian", label: "Lihat Antrian", Icon: ChecklistIcon},
     {name: "SPM-bendahara", label: "SPM Bendahara", Icon: FindInPageIcon},
     {name: "monitor-data-gaji", label: "Monitor Data Gaji", Icon: PaymentsIcon},
+    {name: "pembayaran-bp", label: "Pembayaran BP", Icon: ReceiptLongIcon},
 ];
 
 function BendaharaPage(props) {
@@ -153,6 +157,7 @@ function BendaharaPage(props) {
                 return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} />
             case "input-dokumen-gaji":
                 return <KirimDokumenGaji type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
+            case "pembayaran-bp":     return <PembayaranBp />
             case "edit-dokumen-gaji":
                 return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:

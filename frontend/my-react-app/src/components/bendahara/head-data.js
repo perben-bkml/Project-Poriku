@@ -159,5 +159,12 @@ const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Su
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions };
+//For Pembayaran-Bp.jsx - order must match PEMBAYARAN_BP_COLUMNS on the server. The
+//dropdown lists are absent on purpose: they come from the route, read off the sheet.
+const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA", "Unit Kerja",
+    "Nilai SP2D", "Kode BNI Direct", "Bukti Bayar", "Status Bayar Penerima",
+    "Tanggal Bayar Penerima", "Status Pajak", "Tanggal Trx Pajak", "Bukti Bayar Deposit Pajak"];
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData };
 

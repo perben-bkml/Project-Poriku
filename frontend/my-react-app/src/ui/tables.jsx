@@ -11,17 +11,27 @@ import TableFooter from '@mui/material/TableFooter';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { IconButton, TablePagination, Tooltip } from '@mui/material';
+import { CircularProgress, IconButton, TablePagination, Tooltip } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
 
 // SPM-Bend.jsx
+// Cells are plain strings except Bukti Bayar, which arrives as {nama, url}
+const spmCell = (cell) => {
+    if (!cell || typeof cell !== "object") return cell;
+    if (!cell.nama) return "-";
+    return cell.url
+        ? <a href={cell.url} target="_blank" rel="noopener noreferrer">{cell.nama}</a>
+        : cell.nama;
+};
+
 export function TableSpmBendahara(props) {
     // State for pagination
     const [page, setPage] = useState(0);
@@ -54,7 +64,7 @@ export function TableSpmBendahara(props) {
                             .map((row, rowIndex) => (
                                 <TableRow key={rowIndex}>
                                     {row.map((cell, cellIndex) => (
-                                        <TableCell className="table-cell" key={cellIndex}>{cell}</TableCell>
+                                        <TableCell className="table-cell" key={cellIndex}>{spmCell(cell)}</TableCell>
                                     ))}
                                 </TableRow>
                             ))}
@@ -964,6 +974,84 @@ export function TablePembayaranBp(props) {
                             </TableRow>
                         ))
                     )}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    )
+}
+
+// SPM-Bend.jsx. Twelve month columns of berkas; without onUpload the table is read only.
+// A cell whose bisaUnggah is false sits inside a merge it does not anchor, so the sheet
+// would not accept a write there.
+export function TableRekKoran(props) {
+    const fileInput = useRef(null);
+    const target = useRef(null);
+
+    function pick(row, month) {
+        target.current = { row, month };
+        // Cleared so picking the same file twice still fires onChange
+        fileInput.current.value = "";
+        fileInput.current.click();
+    }
+
+    function handlePicked(event) {
+        const file = event.target.files[0];
+        if (file && target.current) props.onUpload(target.current.row, target.current.month, file);
+    }
+
+    function renderBerkas(row, month) {
+        if (props.uploading === `${row.rowNumber}-${month}`) return <CircularProgress size={16}/>;
+        const berkas = row.berkas[month];
+        const canUpload = Boolean(props.onUpload) && berkas.bisaUnggah;
+        if (!berkas.nama) {
+            return canUpload
+                ? <Button size="small" startIcon={<UploadFileIcon/>} onClick={() => pick(row, month)}
+                          sx={{textTransform: "none"}}>Unggah</Button>
+                : "-";
+        }
+        return (
+            <>
+                {berkas.url
+                    ? <a href={berkas.url} target="_blank" rel="noopener noreferrer">{berkas.nama}</a>
+                    : berkas.nama}
+                {canUpload &&
+                    <Tooltip title="Ganti berkas">
+                        <IconButton size="small" onClick={() => pick(row, month)}>
+                            <UploadFileIcon sx={{fontSize: 18, color: "#00449C"}}/>
+                        </IconButton>
+                    </Tooltip>}
+            </>
+        );
+    }
+
+    return (
+        <TableContainer className="table-scroll-x"
+                        sx={{ maxWidth: "94%", margin: "auto", marginTop: "20px", marginBottom: "20px",
+                              borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <input type="file" accept="application/pdf" ref={fileInput} onChange={handlePicked} hidden/>
+            <Table>
+                <TableHead>
+                    <TableRow sx={{backgroundColor: "#00449C"}}>
+                        {["Satker", "Nama Rekening", ...props.months].map((label, index) => (
+                            <TableCell key={label} className={index < 2 ? `rk-freeze rk-freeze-${index + 1}` : undefined}
+                                       align={index < 2 ? "left" : "center"}
+                                       sx={{fontWeight: 550, color: "white", backgroundColor: "#00449C", whiteSpace: "nowrap"}}
+                                >{label}</TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {props.rows.map(row => (
+                        <TableRow key={row.rowNumber} hover>
+                            <TableCell className="rk-freeze rk-freeze-1" sx={{whiteSpace: "nowrap"}}>{row.satker}</TableCell>
+                            <TableCell className="rk-freeze rk-freeze-2" sx={{whiteSpace: "nowrap"}}>{row.namaRekening}</TableCell>
+                            {row.berkas.map((berkas, month) => (
+                                <TableCell key={month} align="center" sx={{whiteSpace: "nowrap"}}>
+                                    {renderBerkas(row, month)}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
                 </TableBody>
             </Table>
         </TableContainer>

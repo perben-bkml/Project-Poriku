@@ -1106,19 +1106,31 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* No, Tanggal SP2D and Nomor SPM stay put while the rest scrolls sideways. Widths are
    pinned because each column's offset is the sum of the ones before it. */
-.table-scroll-x .bp-freeze {
+.table-scroll-x .bp-freeze,
+.table-scroll-x .rk-freeze {
     position: sticky;
     background: white;
     box-sizing: border-box;
     z-index: 1;
 }
-.table-scroll-x thead .bp-freeze { background: #00449C; z-index: 3; }
-.table-scroll-x tbody tr:hover .bp-freeze { background: #F5F5F5; }
+.table-scroll-x thead .bp-freeze,
+.table-scroll-x thead .rk-freeze { background: #00449C; z-index: 3; }
+.table-scroll-x tbody tr:hover .bp-freeze,
+.table-scroll-x tbody tr:hover .rk-freeze { background: #F5F5F5; }
 .table-scroll-x .bp-freeze-1 { left: 0;     min-width: 80px;  max-width: 80px; }
 .table-scroll-x .bp-freeze-2 { left: 80px;  min-width: 150px; max-width: 150px; }
 .table-scroll-x .bp-freeze-3 {
     left: 230px;
     min-width: 130px;
     max-width: 130px;
+    box-shadow: inset -1px 0 0 #D8DEE8;
+}
+
+/* Satker and Nama Rekening stay put while the twelve month columns scroll sideways. */
+.table-scroll-x .rk-freeze-1 { left: 0;     min-width: 150px; max-width: 150px; }
+.table-scroll-x .rk-freeze-2 {
+    left: 150px;
+    min-width: 190px;
+    max-width: 190px;
     box-shadow: inset -1px 0 0 #D8DEE8;
 }

@@ -232,12 +232,8 @@ const ROUTE_ROLES = {
     "PATCH /bendahara/edit-table": USER,
     "DELETE /bendahara/delete-ajuan": USER,
 
-    // SPM Bendahara is a shared menu, and these two are called from both sides:
-    // data-transaksi by Buat-Pengajuan and the three aksi screens, data-pjk by
-    // Monitor-PJK and Kelola-PJK
-    "GET /bendahara/spm-belum-bayar": USER_ADMIN,
-    "PATCH /bendahara/cari-spm": USER_ADMIN,
-    "POST /bendahara/cari-rincian": USER_ADMIN,
+    // Called from both sides: data-transaksi by Buat-Pengajuan and the three aksi
+    // screens, data-pjk by Monitor-PJK and Kelola-PJK
     "GET /bendahara/data-transaksi": USER_ADMIN,
     "GET /verifikasi/data-pjk": USER_ADMIN,
 
@@ -262,8 +258,12 @@ const ROUTE_ROLES = {
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
 
-    "GET /bendahara/pembayaran-bp": ADMIN,
+    // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
+    "GET /bendahara/pembayaran-bp": USER_ADMIN,
     "GET /bendahara/pembayaran-bp/options": ADMIN,
+    "GET /bendahara/pembayaran-bp/cari": USER_ADMIN,
+    "GET /bendahara/pembayaran-bp/rek-koran": USER_ADMIN,
+    "PATCH /bendahara/pembayaran-bp/rek-koran": ADMIN,
     "POST /bendahara/pembayaran-bp": ADMIN,
     "PATCH /bendahara/pembayaran-bp": ADMIN,
     "DELETE /bendahara/pembayaran-bp": ADMIN,
@@ -2040,117 +2040,6 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     } catch (error) {
         console.error("Error in /bendahara/delete-ajuan:", error);
         res.status(500).json({ message: "Server error." });
-    }
-})
-
-// Handling interaction with PEMBAYARAN BP Sheet
-// Cari SPM
-app.patch("/bendahara/cari-spm", async (req, res) => {
-    try {
-        const { data } = req.body;
-        const cariRange = "'DASHBOARD'!D8"
-        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
-
-        // Apply backoff for updating cell
-        await writeRange(sheets, spreadsheetIdCariSPM, cariRange, [[data]], "RAW");
-
-        res.status(200).json({ message: "Data updated successfully." });
-    } catch (error) {
-        console.error("Error in /bendahara/cari-spm:", error);
-        res.status(500).json({error: "Failed to update cell." });
-    }
-})
-
-// SPM Belum Bayar
-app.get("/bendahara/spm-belum-bayar", async (req, res) => {
-    try {
-        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
-        const range = "'MACHINE DB'!AE3:AM"
-
-        // Apply backoff for getting SPM data
-        const response = await readRange(sheets, spreadsheetIdCariSPM, range);
-
-        const result = (response.data.values || []).map(row => {
-            while (row.length < 9) {
-                row.push("");
-            }
-            return row;
-        });
-
-        res.json({ data: result })
-    } catch (error) {
-        console.error("Error in /bendahara/spm-belum-bayar:", error);
-        res.status(500).json({error: "Failed to fetch data." });
-    }
-})
-
-// Find and Return Rincian SPM
-app.post("/bendahara/cari-rincian", async (req, res) => {
-    try {
-        const spreadsheetIdCariSPM = getSpreadsheetId(req, 'CARISPM');
-        const {startDate, endDate, selectJenis, selectStatus, satkerName} = req.body;
-        const cariRanges = [
-            "'DASHBOARD'!P17", //start date
-            "'DASHBOARD'!P19", //end date
-            "'DASHBOARD'!T17", //satkerName
-            "'DASHBOARD'!T19", //select jenis
-            "'DASHBOARD'!T21", //select status
-        ]
-        var resource = {
-            data: [
-                {
-                    range: cariRanges[0],
-                    values: [[startDate]],
-                },
-                {
-                    range: cariRanges[1],
-                    values: [[endDate]],
-                },
-                {
-                    range: cariRanges[2],
-                    values: [[satkerName]],
-                },
-                {
-                    range: cariRanges[3],
-                    values: [[selectJenis]],
-                },
-                {
-                    range: cariRanges[4],
-                    values: [[selectStatus]],
-                },
-            ],
-            valueInputOption: "RAW", // Preserves text format, prevents auto-conversion
-        }
-
-        // Apply backoff for batch update
-        const postResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId: spreadsheetIdCariSPM,
-                resource,
-            });
-        });
-
-        try {
-            // Apply backoff for getting results
-            const getResponse = await readRange(sheets, spreadsheetIdCariSPM, "'MACHINE DB'!AT3:BD");
-
-            let result = getResponse.data.values;
-            // Add empty rows to generate max 11 columns
-            const maxColumns = 11;
-            result = result.map(row => {
-                while (row.length < maxColumns) {
-                    row.push("");
-                }
-                return row;
-            })
-            res.json({ data: result })
-        } catch (error) {
-            console.error("Error fetching results in /bendahara/cari-rincian:", error);
-            res.status(500).json({error: "Failed fetching results." });
-        }
-    } catch (error) {
-        console.error("Error in /bendahara/cari-rincian:", error);
-        res.status(500).json({error: "Failed handling data." });
     }
 })
 
@@ -5170,29 +5059,36 @@ function pembayaranBpOptions(records) {
     };
 }
 
+// Grid data, not values.get: the only read carrying the hyperlinks in M and S. Not
+// trimmed like values.get either, so the blank tail is dropped on No.
+async function readPembayaranBpRecords(spreadsheetId, sheetName) {
+    const response = await withBackoff(() => sheets.spreadsheets.get({
+        spreadsheetId,
+        includeGridData: true,
+        ranges: [`'${sheetName}'!${PEMBAYARAN_BP_RANGE}`],
+        fields: "sheets(data(rowData(values(formattedValue,hyperlink))))",
+    }));
+    return (response.data.sheets?.[0]?.data?.[0]?.rowData || [])
+        .map((row, index) => pembayaranBpToRecord(row.values, PEMBAYARAN_BP_FIRST_ROW + index))
+        .filter(record => record.no !== "");
+}
+
 app.get("/bendahara/pembayaran-bp", async (req, res) => {
     const sheetName = pembayaranBpSheetName(req);
     try {
         const spreadsheetId = pembayaranBpSpreadsheet(req, res);
         if (!spreadsheetId) return;
 
-        const { page = 1, limit = 10, unitKerja = "", jenis = "", statusBayar = "", statusPajak = "", cari = "" } = req.query;
+        const { page = 1, limit = 10, unitKerja = "", jenis = "", statusBayar = "",
+            statusBayarNot = "", statusPajak = "", cari = "" } = req.query;
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+        // limit=all serves SPM Bendahara, whose watchlist is short and paginated in the
+        // browser: one read instead of one per page. The cap stays for the paged table.
+        const unpaged = limit === "all";
         const rowsPerPage = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 25);
 
-        // Grid data, not values.get: the only read carrying the hyperlinks in M and S
-        const response = await withBackoff(() => sheets.spreadsheets.get({
-            spreadsheetId,
-            includeGridData: true,
-            ranges: [`'${sheetName}'!${PEMBAYARAN_BP_RANGE}`],
-            fields: "sheets(data(rowData(values(formattedValue,hyperlink))))",
-        }));
-
-        // A grid read is not trimmed like values.get, so the blank tail is dropped on No.
-        const rowData = response.data.sheets?.[0]?.data?.[0]?.rowData || [];
-        const records = rowData
-            .map((row, index) => pembayaranBpToRecord(row.values, PEMBAYARAN_BP_FIRST_ROW + index))
-            .filter(record => record.no !== "");
+        const records = pembayaranBpVisibleTo(
+            await readPembayaranBpRecords(spreadsheetId, sheetName), req.viewer);
 
         const options = pembayaranBpOptions(records);
 
@@ -5206,6 +5102,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
             if (unitKerja && normalizeSatker(record.unitKerja) !== normalizeSatker(unitKerja)) return false;
             if (jenis && normalizeSatker(record.jenis) !== normalizeSatker(jenis)) return false;
             if (statusBayar && normalizeSatker(record.statusBayarPenerima) !== normalizeSatker(statusBayar)) return false;
+            if (statusBayarNot && normalizeSatker(record.statusBayarPenerima) === normalizeSatker(statusBayarNot)) return false;
             if (statusPajak && normalizeSatker(record.statusPajak) !== normalizeSatker(statusPajak)) return false;
             if (cari && !record.nomorSpm.toLowerCase().includes(String(cari).trim().toLowerCase())) return false;
             return true;
@@ -5224,9 +5121,9 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
         const startIndex = (pageNumber - 1) * rowsPerPage;
 
         return res.status(200).json({
-            data: filtered.slice(startIndex, startIndex + rowsPerPage),
+            data: unpaged ? filtered : filtered.slice(startIndex, startIndex + rowsPerPage),
             totalRows,
-            rowsPerPage,
+            rowsPerPage: unpaged ? totalRows : rowsPerPage,
             bulan,
             options,
         });
@@ -5291,11 +5188,11 @@ function toSheetSerial(value) {
 const PEMBAYARAN_BP_CACHE_TTL_MS = 5 * 60 * 1000;
 const pembayaranBpCache = new Map();
 
-function cached(key, produce) {
+function cached(key, produce, ttl = PEMBAYARAN_BP_CACHE_TTL_MS) {
     const hit = pembayaranBpCache.get(key);
     if (hit && hit.expires > Date.now()) return hit.value;
     const value = produce();
-    pembayaranBpCache.set(key, { value, expires: Date.now() + PEMBAYARAN_BP_CACHE_TTL_MS });
+    pembayaranBpCache.set(key, { value, expires: Date.now() + ttl });
     // Never remember a rejection, or one blip poisons the cache for 5 minutes
     Promise.resolve(value).catch(() => pembayaranBpCache.delete(key));
     return value;
@@ -5464,20 +5361,21 @@ const uploadPembayaranBp = multer({
     },
 });
 
-function handlePembayaranBpUpload(req, res, next) {
-    uploadPembayaranBp.fields([
-        { name: "buktiBayar", maxCount: 1 },
-        { name: "buktiBayarDepositPajak", maxCount: 1 },
-    ])(req, res, (err) => {
-        if (err) {
-            const message = err.code === "LIMIT_FILE_SIZE"
-                ? `Ukuran berkas melebihi ${PEMBAYARAN_BP_MAX_FILE_MB} MB.`
-                : (err.message || "Berkas tidak valid.");
-            return res.status(400).json({ message });
-        }
-        next();
-    });
-}
+const pembayaranBpUploadError = (err) => err.code === "LIMIT_FILE_SIZE"
+    ? `Ukuran berkas melebihi ${PEMBAYARAN_BP_MAX_FILE_MB} MB.`
+    : (err.message || "Berkas tidak valid.");
+
+const runPembayaranBpUpload = (accept) => (req, res, next) => accept(req, res, (err) => {
+    if (err) return res.status(400).json({ message: pembayaranBpUploadError(err) });
+    next();
+});
+
+const handlePembayaranBpUpload = runPembayaranBpUpload(uploadPembayaranBp.fields([
+    { name: "buktiBayar", maxCount: 1 },
+    { name: "buktiBayarDepositPajak", maxCount: 1 },
+]));
+
+const handleRekKoranUpload = runPembayaranBpUpload(uploadPembayaranBp.single("berkas"));
 
 // Named as the sheet already does: "00022.pdf", "P 00060.pdf". Takes the padded SPM.
 const pembayaranBpFileName = (key, nomorSpm) =>
@@ -5521,14 +5419,14 @@ function queuePembayaranBpWrite(spreadsheetId, task) {
 
 // Only files in the app's own folder: older links point at file drop attachments it
 // did not create and does not own.
-async function deletePembayaranBpUploads(urls) {
-    if (!driveFolderIdPembayaranBp || !await ensureGajiDriveReady()) return;
+async function deleteOwnedDriveFiles(urls, folderId) {
+    if (!folderId || !await ensureGajiDriveReady()) return;
     for (const url of urls.filter(Boolean)) {
         const fileId = driveFileIdFromLink(url);
         if (!fileId) continue;
         try {
             const file = await driveGaji.files.get({ fileId, fields: "parents", supportsAllDrives: true });
-            if ((file.data.parents || []).includes(driveFolderIdPembayaranBp)) {
+            if ((file.data.parents || []).includes(folderId)) {
                 await driveGaji.files.delete({ fileId, supportsAllDrives: true });
             }
         } catch (error) {
@@ -5569,6 +5467,234 @@ async function loadPembayaranBpRow(req, res, spreadsheetId, sheetName, rowNumber
         },
     };
 }
+
+// Account name -> Unit Kerja as the Pembayaran BP sheet spells it. UNIT_KERJA_ALIAS
+// cannot be reused: it maps the 'Database SPM' short forms, which differ.
+const SATKER_UNIT_KERJA = {
+    "BIRO UMUM": "BIRO UMUM",
+    "BIRO SARANA DAN PRASARANA": "SARPRAS",
+    "BIRO PERENCANAAN": "PERENCANAAN",
+    "DIT DATA DAN INFORMASI": "DATIN",
+    "DIT HUKUM": "HUKUM",
+    "DIT KEBIJAKAN": "KEBIJAKAN",
+    "DIT KERJA SAMA": "KERJASAMA",
+    "DIT LATIHAN": "LATIHAN",
+    "DIT LITBANG": "LITBANG",
+    "DIT OPERASI LAUT": "OPSLA",
+    "DIT OPERASI UDARA": "OPSUD",
+    "DIT STRATEGI": "STRATEGI",
+    "INSPEKTORAT": "INSPEKTORAT",
+    "PUSKODAL": "PUSKODAL",
+    "UNIT PENINDAKAN HUKUM": "UPH",
+    "ZONA MARITIM BARAT": "ZONA BARAT",
+    "ZONA MARITIM TENGAH": "ZONA TENGAH",
+    "ZONA MARITIM TIMUR": "ZONA TIMUR",
+};
+
+// A user only ever sees their own satker's rows; admins see the whole sheet. An
+// unmapped account matches nothing rather than everything - the safe direction. The
+// matcher differs per tab: Pembayaran BP holds the Unit Kerja on its own, REK KORAN
+// mixes it into a longer label ("BPG 049 ZONA TENGAH").
+function scopeToSatker(rows, viewer, matches) {
+    if (viewer.role !== "user") return rows;
+    const unitKerja = SATKER_UNIT_KERJA[normalizeSatker(viewer.name)];
+    if (!unitKerja) {
+        console.error(`Satker "${viewer.name}" tidak dikenal - data Pembayaran BP dikosongkan.`);
+        return [];
+    }
+    return rows.filter(row => matches(row, normalizeSatker(unitKerja)));
+}
+
+const pembayaranBpVisibleTo = (records, viewer) =>
+    scopeToSatker(records, viewer, (record, satker) => normalizeSatker(record.unitKerja) === satker);
+
+const spmDigits = (value) => String(value ?? "").replace(/\D/g, "").replace(/^0+/, "");
+
+// Looking up a handful of numbers in a row should not re-read the sheet each time
+const PEMBAYARAN_BP_SEARCH_TTL_MS = 60 * 1000;
+
+app.get("/bendahara/pembayaran-bp/cari", async (req, res) => {
+    const sheetName = pembayaranBpSheetName(req);
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const wanted = spmDigits(req.query.spm);
+        if (!wanted) return res.status(400).json({ message: "Nomor SPM wajib diisi." });
+
+        const records = await cached(`rows|${spreadsheetId}|${sheetName}`,
+            () => readPembayaranBpRecords(spreadsheetId, sheetName), PEMBAYARAN_BP_SEARCH_TTL_MS);
+
+        const matches = pembayaranBpVisibleTo(records, req.viewer)
+            .filter(record => spmDigits(record.nomorSpm) === wanted);
+
+        return res.status(200).json({
+            data: matches.map(({ tanggalSp2d, nomorSpm, jenis, unitKerja, nilaiSp2d,
+                                 buktiBayar, tanggalBayarPenerima, statusBayarPenerima }) => ({
+                tanggalSp2d, nomorSpm, jenis, unitKerja, nilaiSp2d,
+                buktiBayar, tanggalBayarPenerima, statusBayarPenerima,
+            })),
+        });
+    } catch (error) {
+        console.error("Error in GET /bendahara/pembayaran-bp/cari:", error);
+        return res.status(500).json({ message: "Gagal mencari data SPM." });
+    }
+});
+
+// REK KORAN carries no year in its tab name - the year is already in the spreadsheet id.
+// Row 6 is the month header, so the data starts at row 7 and index 0 below is column C.
+const REK_KORAN_SHEET = "REK KORAN";
+const REK_KORAN_RANGE = `'${REK_KORAN_SHEET}'!C7:Q`;
+const REK_KORAN_FIRST_ROW = 7;
+const REK_KORAN_FIRST_MONTH = 3;   // F, the first of twelve monthly berkas
+const REK_KORAN_MONTHS = 12;
+const REK_KORAN_MONTH_NAMES = ["JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
+    "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"];
+const driveFolderIdRekKoran = process.env.DRIVE_FOLDER_ID_REK_KORAN;
+
+const rekKoranMonthColumn = (month) => columnIndexOf("F") + month;
+
+// Named as the sheet already does: "BPP 001_AGUSTUS_2026.pdf". The account number sits
+// in a different place per shape - BPP rows end with theirs ("BPP 018 BAKAMLA 1" is
+// account 001), BPG rows carry theirs right after the prefix ("BPG 049 ZONA TENGAH").
+function rekKoranKode(namaRekening) {
+    const nama = normalizeSatker(namaRekening);
+    const numbers = nama.match(/\d+/g) || [];
+    if (nama.startsWith("RKK")) return "RKK OPS";
+    if (numbers.length === 0) return namaRekening;
+    if (nama.startsWith("BPP")) return `BPP ${numbers[numbers.length - 1].padStart(3, "0")}`;
+    if (nama.startsWith("BPG")) return `BPG ${numbers[0].padStart(3, "0")}`;
+    return namaRekening;
+}
+
+const rekKoranFileName = (namaRekening, month, year) =>
+    `${safePart(rekKoranKode(namaRekening))}_${REK_KORAN_MONTH_NAMES[month]}_${year}.pdf`;
+
+// The two REKENING INDUK rows share one vertically merged block of month cells, so only
+// the top row of a merge can be written. Merge coordinates are absolute and zero based.
+const rekKoranMergeFollower = (merges, rowNumber, month) => {
+    const rowIndex = rowNumber - 1;
+    const columnIndex = rekKoranMonthColumn(month);
+    return (merges || []).some(merge => {
+        const top = merge.startRowIndex ?? 0;
+        const left = merge.startColumnIndex ?? 0;
+        return rowIndex >= top && rowIndex < merge.endRowIndex
+            && columnIndex >= left && columnIndex < merge.endColumnIndex
+            && (rowIndex !== top || columnIndex !== left);
+    });
+};
+
+const rekKoranToRow = (cells, rowNumber, merges) => ({
+    rowNumber,
+    satker: String(cells?.[0]?.formattedValue ?? "").trim(),
+    namaRekening: String(cells?.[1]?.formattedValue ?? "").trim(),
+    berkas: Array.from({ length: REK_KORAN_MONTHS }, (_, month) => ({
+        ...pembayaranBpLink(cells?.[REK_KORAN_FIRST_MONTH + month]),
+        bisaUnggah: !rekKoranMergeFollower(merges, rowNumber, month),
+    })),
+});
+
+app.get("/bendahara/pembayaran-bp/rek-koran", async (req, res) => {
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        // F:Q hold file drop attachments, so this needs the hyperlinks a grid read carries
+        const rows = await cached(`rek-koran|${spreadsheetId}`, async () => {
+            const response = await withBackoff(() => sheets.spreadsheets.get({
+                spreadsheetId,
+                includeGridData: true,
+                ranges: [REK_KORAN_RANGE],
+                fields: "sheets(merges,data(rowData(values(formattedValue,hyperlink))))",
+            }));
+            const sheet = response.data.sheets?.[0];
+            return (sheet?.data?.[0]?.rowData || [])
+                .map((row, index) => rekKoranToRow(row.values, REK_KORAN_FIRST_ROW + index, sheet?.merges))
+                .filter(row => row.satker !== "");   // drops the footnote rows below the table
+        });
+
+        return res.status(200).json({
+            data: scopeToSatker(rows, req.viewer,
+                (row, satker) => normalizeSatker(row.satker).includes(satker)),
+        });
+    } catch (error) {
+        console.error("Error in GET /bendahara/pembayaran-bp/rek-koran:", error);
+        return res.status(500).json({ message: "Gagal memuat data Rekening Koran." });
+    }
+});
+
+// One cell, written in the shape the sheet's own file drop attachments have, so a
+// berkas uploaded here is indistinguishable from one dropped into Sheets by hand.
+app.patch("/bendahara/pembayaran-bp/rek-koran", handleRekKoranUpload, async (req, res) => {
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = parseInt(req.body.rowNumber, 10);
+        const month = parseInt(req.body.bulan, 10);
+        if (!Number.isInteger(rowNumber) || rowNumber < REK_KORAN_FIRST_ROW) {
+            return res.status(400).json({ message: "Baris tidak valid." });
+        }
+        if (!Number.isInteger(month) || month < 0 || month >= REK_KORAN_MONTHS) {
+            return res.status(400).json({ message: "Bulan tidak valid." });
+        }
+        if (!req.file) return res.status(400).json({ message: "Berkas wajib diunggah." });
+
+        if (!driveFolderIdRekKoran) {
+            console.error("DRIVE_FOLDER_ID_REK_KORAN belum diatur - upload dibatalkan.");
+            return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
+        }
+        if (!await requireGajiDriveReady(res, "Token Rekening Koran")) return;
+
+        const snapshot = await withBackoff(() => sheets.spreadsheets.get({
+            spreadsheetId,
+            includeGridData: true,
+            ranges: [`'${REK_KORAN_SHEET}'!C${rowNumber}:Q${rowNumber}`],
+            fields: "sheets(merges,data(rowData(values(formattedValue,hyperlink))))",
+        }));
+        const sheet = snapshot.data.sheets?.[0];
+        const target = rekKoranToRow(sheet?.data?.[0]?.rowData?.[0]?.values, rowNumber, sheet?.merges);
+
+        if (!target.satker) return res.status(404).json({ message: "Baris tidak ditemukan, muat ulang halaman." });
+        // Rows are addressed by position, so a row inserted above would move the target
+        if (normalizeSatker(target.satker) !== normalizeSatker(req.body.expectedSatker)
+            || normalizeSatker(target.namaRekening) !== normalizeSatker(req.body.expectedNamaRekening)) {
+            return res.status(409).json({ message: "Data sudah berubah, muat ulang halaman." });
+        }
+        if (!target.berkas[month].bisaUnggah) {
+            return res.status(409).json({ message: "Sel ini digabung dengan baris di atasnya." });
+        }
+
+        const nama = rekKoranFileName(target.namaRekening, month, getRequestYear(req));
+        const url = await uploadToDriveFolder(req.file, driveFolderIdRekKoran, nama);
+
+        const sheetId = await pembayaranBpSheetId(spreadsheetId, REK_KORAN_SHEET);
+        const columnIndex = rekKoranMonthColumn(month);
+        await withBackoff(() => sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [{ updateCells: {
+                range: { sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                    startColumnIndex: columnIndex, endColumnIndex: columnIndex + 1 },
+                rows: [{ values: [{
+                    userEnteredValue: { stringValue: nama },
+                    textFormatRuns: [{ startIndex: 0, format: { link: { uri: url } } }],
+                }] }],
+                fields: "userEnteredValue,textFormatRuns",
+            }}] },
+        }));
+
+        pembayaranBpCache.delete(`rek-koran|${spreadsheetId}`);
+        // Best effort: the cell already points at the new berkas, so a leftover old file
+        // must not turn a successful upload into an error
+        await deleteOwnedDriveFiles([target.berkas[month].url], driveFolderIdRekKoran)
+            .catch(error => console.error("Gagal menghapus berkas Rekening Koran lama:", error?.message || error));
+
+        return res.status(200).json({ message: `${nama} berhasil diunggah.`, berkas: { nama, url } });
+    } catch (error) {
+        console.error("Error in PATCH /bendahara/pembayaran-bp/rek-koran:", error);
+        return res.status(500).json({ message: "Gagal mengunggah berkas Rekening Koran." });
+    }
+});
 
 app.get("/bendahara/pembayaran-bp/options", async (req, res) => {
     const sheetName = pembayaranBpSheetName(req);
@@ -5653,7 +5779,8 @@ app.delete("/bendahara/pembayaran-bp", async (req, res) => {
         })));
 
         // After the row is gone, so a failed delete keeps the files too
-        await deletePembayaranBpUploads([target.links.buktiBayar.url, target.links.buktiBayarDepositPajak.url]);
+        await deleteOwnedDriveFiles([target.links.buktiBayar.url, target.links.buktiBayarDepositPajak.url],
+            driveFolderIdPembayaranBp);
 
         return res.status(200).json({ message: "Data berhasil dihapus." });
     } catch (error) {

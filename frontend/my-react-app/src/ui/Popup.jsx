@@ -41,7 +41,8 @@ function Popup(props) {
             <div className={`popup ${props.type === "ketentuan-bendahara" && "ketentuan"}`}>
                 <div className="popup-text">
                     {props.type !== "ketentuan-bendahara"? (
-                        popupType ? <h2>Apakah anda yakin data sudah benar?</h2> : <h2>Apakah anda yakin untuk menghapus data?</h2>
+                        props.message ? <h2>{props.message}</h2>
+                            : popupType ? <h2>Apakah anda yakin data sudah benar?</h2> : <h2>Apakah anda yakin untuk menghapus data?</h2>
                     )
                     :(ketentuanPopupText())}
                     

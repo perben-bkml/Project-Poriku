@@ -1,50 +1,33 @@
 import apiClient from './apiClient';
 
 // Functions for SPM-Bend.jsx
-//Fetch Data SPM belum dibayar
+// SPM yang belum selesai dibayarkan, dari sheet Pembayaran BP. limit=all keeps this to
+// one request - the rows are paginated in the table, not on the server.
 export async function fetchNotPaidSPM(setNotPaidSPM, setIsLoading1) {
     try {
         setIsLoading1(true);
-        const response = await apiClient.get('/bendahara/spm-belum-bayar')
-        if (response.status === 200){
-            setNotPaidSPM(response.data.data)
-            setIsLoading1(false);
-        }
-
+        const response = await apiClient.get('/bendahara/pembayaran-bp', {
+            params: {limit: "all", bulan: "", statusBayarNot: "SELESAI"},
+        });
+        setNotPaidSPM(response.data.data);
     } catch (error) {
         console.log("Failed fetching data.", error)
+        setNotPaidSPM([]);
+    } finally {
         setIsLoading1(false);
     }
 }
 
-// Cari Nomor SPM
-export async function handleCariBtn(setSheetTimer) {
+// Rekening Koran, satker-scoped by the server
+export async function fetchRekKoran(setRekKoran, setIsLoading) {
     try {
-        let cariSPM = document.getElementsByName("cari-input")[0].value;
-        if (cariSPM !== "") {
-            const response = await apiClient.patch('/bendahara/cari-spm', {data: cariSPM});
-            if (response.status === 200){
-                setSheetTimer(Date.now());
-            }
-        } else {
-            null;
-        }
+        setIsLoading(true);
+        const response = await apiClient.get('/bendahara/pembayaran-bp/rek-koran');
+        setRekKoran(response.data.data);
     } catch (error) {
-        console.log("Error sending data.", error)
-    }
-}
-
-// Cari Rincian SPM
-export async function handleRincianSubmit(event, setIsLoading2, setRincianData, rincianSearch) {
-    event.preventDefault();
-    try {
-        setIsLoading2(true);
-        const response = await apiClient.post('/bendahara/cari-rincian', rincianSearch)
-        if (response.status === 200) {
-            setRincianData(response.data.data);
-            setIsLoading2(false);
-        }
-    } catch (error) {
-        console.log("Error Sending Rincian.", error)
+        console.log("Failed fetching Rekening Koran.", error)
+        setRekKoran([]);
+    } finally {
+        setIsLoading(false);
     }
 }

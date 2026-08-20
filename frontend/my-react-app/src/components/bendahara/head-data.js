@@ -67,10 +67,6 @@ const jenisValueFromLabel = (label) => {
     return jenisPengajuan.find(jenis => jenis.label.toLowerCase() === target)?.value || null;
 };
 
-//For SPM-Bend.jsx
-const jenisSPM = ["GUP", "GUP NIHIL", "GUP KKP JKT", "GUP KKP ZOBAR", "GUP KKP ZOTIM", "GUP KKP JALDIS", "TUP", "GTUP NIHIL", "PENGEMBALIAN TUP", "LS JALDIS", "LS HONORARIUM", "UP"];
-const statusSPM = ["DANA BELUM MASUK", "DANA DI REK BPP", "SELESAI", "TUP ON GOING"];
-
 //For Kelola-Pengajuan.jsx
 const headData1 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Req. Tanggal", "Unit Kerja", "Status"];
 const headData2 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Tanggal Verifikasi", "Tanggal Acc.", "Pajak", "Anggaran", "Unit Kerja", "Status"];
@@ -113,29 +109,6 @@ const placeholderTable = ["No.", "ID Number", "Tanggal", "Satker", "DRPP", "SPM"
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
-//For SPM-Bend.jsx
-const satkerNames = [
-    {title: "", value: ""},
-    {title: "Biro Umum", value: "BIRO UMUM"},
-    {title: "Biro Sarana dan Prasarana", value: "SARPRAS"},
-    {title: "Biro Perencanaan", value: "PERENCANAAN"},
-    {title: "Dit Data dan Informasi", value: "DATIN"},
-    {title: "Dit Hukum", value: "HUKUM"},
-    {title: "Dit Kebijakan", value: "KEBIJAKAN"},
-    {title: "Dit Kerja Sama", value: "KERJASAMA"},
-    {title: "Dit Latihan", value: "LATIHAN"},
-    {title: "Dit Litbang", value: "LITBANG"},
-    {title: "Dit Operasi Laut", value: "OPSLA"},
-    {title: "Dit Operasi Udara", value: "OPSUD"},
-    {title: "Dit Strategi", value: "STRATEGI"},
-    {title: "Inspektorat", value: "INSPEKTORAT"},
-    {title: "Puskodal", value: "PUSKODAL"},
-    {title: "Unit Penindakan Hukum", value: "UPH"},
-    {title: "Zona Maritim Barat", value: "ZONA BARAT"},
-    {title: "Zona Maritim Tengah", value: "ZONA TENGAH"},
-    {title: "Zona Maritim Timur", value: "ZONA TIMUR"},
-]
-
 const monthNames = [
     {title: "", value: ""},
     {title: "Januari", value: "01"},
@@ -166,5 +139,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Tanggal Bayar Penerima", "Status Pajak", "Tanggal Trx Pajak", "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisSPM, statusSPM, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, satkerNames, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData };
 

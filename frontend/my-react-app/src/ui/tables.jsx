@@ -115,6 +115,10 @@ export function TableKelola(props) {
         setTableType(props.type);
     }, [props.type])
 
+    useEffect(() => {
+        setPage(0);
+    }, [props.filterActive])
+
 
     // Reset checkboxes and sum when clicking outside the table for aksi-drpp
     useEffect(() => {
@@ -156,6 +160,15 @@ export function TableKelola(props) {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
     };
+
+    const hasPajak = (row) => (props.filterColumns || [])
+        .some(column => {
+            const value = String(row[column] ?? "").trim();
+            return value !== "" && value.replace(/[.\s]/g, "") !== "0";
+        });
+    const visibleRows = props.content
+        .map((row, index) => ({ row, index }))
+        .filter(({ row }) => !props.filterActive || hasPajak(row));
 
     // Read here rather than inside Row, whose own props shadow these
     const aksiLabel = props.aksiLabel || "Lihat";
@@ -476,13 +489,13 @@ export function TableKelola(props) {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {props.content
+                    {visibleRows
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                        .map((row, index) => (
+                        .map(({ row, index }) => (
                             <Row 
                                 key={index} 
                                 rowData={row} 
-                                rowIndex={page * rowsPerPage + index} 
+                                rowIndex={index} 
                                 coloredRow={props.coloredRow} 
                                 addColorData={props.addColorData}
                                 feature={props.feature}
@@ -514,7 +527,7 @@ export function TableKelola(props) {
             <TablePagination
                 rowsPerPageOptions={[5, 10, 25]}
                 component="div"
-                count={props.content.length}
+                count={visibleRows.length}
                 rowsPerPage={rowsPerPage}
                 page={page}
                 onPageChange={handleChangePage}

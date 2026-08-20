@@ -9,6 +9,8 @@ import {SubmitButton} from "../../ui/buttons.jsx";
 
 
 
+const PAJAK_COLUMNS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
 export default function AksiDrpp(props) {
     //States
     const [isLoading, setIsLoading] = useState(false)
@@ -22,6 +24,7 @@ export default function AksiDrpp(props) {
     })
     const [coloredRow, setColoredRow] = useState([]);
     const [buktiSetor, setBuktiSetor] = useState(null);
+    const [onlyPajak, setOnlyPajak] = useState(false);
 
     //Setting Tablekelola data
     const drppData = [
@@ -208,9 +211,17 @@ export default function AksiDrpp(props) {
                 </div>
             </div>
             <div className="bg-card aksi-content">
-                <h2 className="aksi-content-title">Tabel Transaksi</h2>
+                <div className="aksi-content-heading">
+                    <h2 className="aksi-content-title">Tabel Transaksi</h2>
+                    <div className='aksi-drpp-pajakfilter'>
+                        <input className="btn-submit btn-submit-wide" type="button" style={{cursor: 'pointer'}}
+                               value={onlyPajak ? "Tampilkan Semua Baris" : "Hanya Baris Berpajak"}
+                               onClick={() => setOnlyPajak(prev => !prev)}/>
+                    </div>
+
+                </div>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi-drpp" feature={"AksiDrpp"} header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} />}
+                <TableKelola type="aksi-drpp" feature={"AksiDrpp"} header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} filterActive={onlyPajak} filterColumns={PAJAK_COLUMNS} />}
                 <div className='form-submit'>
                     <SubmitButton value='Kembali' name="submit-all" onClick={() => props.changeComponent('monitoring-drpp')} />
                 </div>

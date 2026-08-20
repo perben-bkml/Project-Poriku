@@ -24,7 +24,7 @@ const BERKAS_FILTER = [
     {value: "any", title: "Ada yang belum"},
 ];
 
-export default function PembayaranBp() {
+export default function PembayaranBp(props) {
 
     //State
     const [tableData, setTableData] = useState([]);
@@ -246,6 +246,13 @@ export default function PembayaranBp() {
             </div>
 
             <div className="bg-card">
+                <div className='form-submit bp-toolbar'>
+                    <SubmitButton value='Tambah Data' name='tambah-pembayaran-bp'
+                                  onClick={() => setPanel({mode: "buat", record: null})}/>
+                    <input className="btn-submit btn-submit-wide" type="button" style={{cursor: 'pointer'}}
+                           value="Masuk ke menu Pembayaran TUP"
+                           onClick={() => props.changeComponent('pembayaran-tup')}/>
+                </div>
                 {adaBerkasKurang &&
                     <p className="berkas-kurang-ringkas">Ada Transaksi Yang Belum Upload Berkas</p>}
                 {isLoading ? <LoadingAnimate/> :
@@ -277,10 +284,6 @@ export default function PembayaranBp() {
                             ))}
                         </select>
                     </div>
-                </div>
-                <div className='form-submit'>
-                    <SubmitButton value='Tambah Data' name='tambah-pembayaran-bp'
-                                  onClick={() => setPanel({mode: "buat", record: null})}/>
                 </div>
             </div>
             {panel && <PembayaranBpForm mode={panel.mode} record={panel.record}

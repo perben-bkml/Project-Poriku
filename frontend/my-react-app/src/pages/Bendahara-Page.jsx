@@ -12,6 +12,7 @@ import AksiDrpp from "../components/bendahara/Aksi-Drpp.jsx";
 import MonitorPerubahanGaji from "../components/bendahara/Monitor-Perubahan-Gaji.jsx";
 import KirimDokumenGaji from "../components/bendahara/Kirim-Dokumen-Gaji.jsx";
 import PembayaranBp from "../components/bendahara/Pembayaran-Bp.jsx";
+import PembayaranTup from "../components/bendahara/Pembayaran-Tup.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -43,10 +44,13 @@ const MENU_ROLES = {
     "aksi-drpp": ["admin"],
     "monitor-data-gaji": ["admin", "admin_gaji"],
     "pembayaran-bp": ["admin"],
+    "pembayaran-tup": ["admin"],
     // Writing dokumen gaji stays with the roles the backend lets write it
     "input-dokumen-gaji": ["admin_gaji"],
     "edit-dokumen-gaji": ["admin_gaji"],
 };
+
+const AKRONIM = ["bp", "tup", "drpp", "spm", "pjk"];
 
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
 const MENU_BUTTONS = [
@@ -106,7 +110,10 @@ function BendaharaPage(props) {
     //Just converting into title name
     function formatText(input) {
         const newText = input.split("-") // Split the string by "-"
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize the first letter of each word
+          // Acronyms stay as the sidebar spells them, the rest get a capital first letter
+          .map(word => AKRONIM.includes(word.toLowerCase())
+              ? word.toUpperCase()
+              : word.charAt(0).toUpperCase() + word.slice(1))
           .join(" "); // Join the words with a space
         return newText
       }
@@ -157,7 +164,8 @@ function BendaharaPage(props) {
                 return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} />
             case "input-dokumen-gaji":
                 return <KirimDokumenGaji type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
-            case "pembayaran-bp":     return <PembayaranBp />
+            case "pembayaran-bp":     return <PembayaranBp changeComponent={setButtonSelect} />
+            case "pembayaran-tup":    return <PembayaranTup changeComponent={setButtonSelect} />
             case "edit-dokumen-gaji":
                 return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:

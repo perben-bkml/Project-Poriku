@@ -264,6 +264,7 @@ const ROUTE_ROLES = {
     "GET /bendahara/pembayaran-bp/cari": USER_ADMIN,
     "GET /bendahara/pembayaran-bp/rek-koran": USER_ADMIN,
     "GET /bendahara/pembayaran-bp/bukti-setor": ADMIN,
+    "GET /bendahara/pembayaran-bp/tup": ADMIN,
     "PATCH /bendahara/pembayaran-bp/rek-koran": ADMIN,
     "POST /bendahara/pembayaran-bp": ADMIN,
     "PATCH /bendahara/pembayaran-bp": ADMIN,
@@ -5469,6 +5470,11 @@ async function pembayaranBpLinks(req, res, nomorSpm, current = {}) {
     return links;
 }
 
+// Every screen reading Pembayaran BP shares one cached snapshot, so a write has to drop
+// it or Cari SPM, Bukti Setor and Pembayaran TUP keep answering from the old rows.
+const forgetPembayaranBpRows = (spreadsheetId, sheetName) =>
+    pembayaranBpCache.delete(`rows|${spreadsheetId}|${sheetName}`);
+
 // Serialises anything that moves rows: two creates would target the same last row, and
 // a delete shifts every row below. Per spreadsheet, in-process only.
 const pembayaranBpWrites = new Map();
@@ -5667,7 +5673,7 @@ async function syncPembayaranBpFromAksi(req, { tanggalSp2d, rows, jenisSlug, sat
 
         if (requests.length === 0) return;
         await withBackoff(() => sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }));
-        pembayaranBpCache.delete(`rows|${spreadsheetId}|${sheetName}`);
+        forgetPembayaranBpRows(spreadsheetId, sheetName);
     });
 
     return null;
@@ -5885,6 +5891,71 @@ app.get("/bendahara/pembayaran-bp/bukti-setor", async (req, res) => {
     }
 });
 
+const TUP_JENIS_MULAI = "TUP";
+const TUP_JENIS_TUTUP = "PENGEMBALIAN TUP";
+const TUP_JENIS = [TUP_JENIS_MULAI, "GTUP NIHIL", TUP_JENIS_TUTUP];
+
+const sheetDateKey = (value) => PEMBAYARAN_BP_DATE.test(value)
+    ? `${value.slice(6)}${value.slice(3, 5)}${value.slice(0, 2)}` : "";
+
+// A TUP opens a cycle, GTUP NIHIL spends against it and PENGEMBALIAN TUP closes it, so
+// the cycles are the runs between one TUP and the next.
+function buildTupCycles(records) {
+    const ordered = records
+        .filter(record => TUP_JENIS.includes(normalizeSatker(record.jenis)))
+        .sort((a, b) => sheetDateKey(a.tanggalSp2d).localeCompare(sheetDateKey(b.tanggalSp2d))
+            || a.rowNumber - b.rowNumber);
+
+    const cycles = [];
+    for (const record of ordered) {
+        const jenis = normalizeSatker(record.jenis);
+        if (jenis === TUP_JENIS_MULAI || cycles.length === 0) {
+            cycles.push({ nomor: cycles.length + 1, rows: [], selesai: false });
+        }
+        const cycle = cycles[cycles.length - 1];
+        cycle.rows.push(record);
+        if (jenis === TUP_JENIS_TUTUP) cycle.selesai = true;
+    }
+
+    return cycles.map(cycle => {
+        const nilai = (jenis) => cycle.rows
+            .filter(row => normalizeSatker(row.jenis) === jenis)
+            .reduce((sum, row) => sum + (parseRupiah(row.nilaiSp2d) || 0), 0);
+        const tanggal = cycle.rows.map(row => row.tanggalSp2d).filter(Boolean);
+        return {
+            ...cycle,
+            sisa: nilai(TUP_JENIS_MULAI) - nilai("GTUP NIHIL") - nilai(TUP_JENIS_TUTUP),
+            tanggalMulai: tanggal[0] || "",
+            tanggalSelesai: cycle.selesai ? tanggal[tanggal.length - 1] : "",
+        };
+    });
+}
+
+app.get("/bendahara/pembayaran-bp/tup", async (req, res) => {
+    const sheetName = pembayaranBpSheetName(req);
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const records = await cached(`rows|${spreadsheetId}|${sheetName}`,
+            () => readPembayaranBpRecords(spreadsheetId, sheetName), PEMBAYARAN_BP_SEARCH_TTL_MS);
+
+        const cycles = buildTupCycles(records);
+        // Only the newest can be running: a new TUP is only issued once the last is returned
+        const last = cycles[cycles.length - 1];
+        const aktif = last && !last.selesai ? last : null;
+
+        return res.status(200).json({
+            cycles,
+            aktif: aktif ? aktif.nomor : null,
+            sisa: aktif ? aktif.sisa : 0,
+        });
+    } catch (error) {
+        console.error("Error in GET /bendahara/pembayaran-bp/tup:", error);
+        return res.status(500).json({ message: "Gagal memuat data TUP." });
+    }
+});
+
 app.get("/bendahara/pembayaran-bp/options", async (req, res) => {
     const sheetName = pembayaranBpSheetName(req);
     try {
@@ -5930,6 +6001,7 @@ app.post("/bendahara/pembayaran-bp", handlePembayaranBpUpload, async (req, res) 
             }));
             return row;
         });
+        forgetPembayaranBpRows(spreadsheetId, sheetName);
 
         return res.status(201).json({ message: "Data berhasil disimpan.", rowNumber: targetRow });
     } catch (error) {
@@ -5966,6 +6038,8 @@ app.delete("/bendahara/pembayaran-bp", async (req, res) => {
                 },
             }]},
         })));
+
+        forgetPembayaranBpRows(spreadsheetId, sheetName);
 
         // After the row is gone, so a failed delete keeps the files too
         await deleteOwnedDriveFiles([target.links.buktiBayar.url, target.links.buktiBayarDepositPajak.url],
@@ -6010,6 +6084,7 @@ app.patch("/bendahara/pembayaran-bp", handlePembayaranBpUpload, async (req, res)
             spreadsheetId,
             requestBody: { requests: pembayaranBpWriteRequests(sheetId, rowNumber, PEMBAYARAN_BP_RUNS_EDIT, built.cells) },
         }));
+        forgetPembayaranBpRows(spreadsheetId, sheetName);
 
         return res.status(200).json({ message: "Data berhasil diperbarui.", rowNumber });
     } catch (error) {

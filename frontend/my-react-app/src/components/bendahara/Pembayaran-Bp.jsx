@@ -15,6 +15,14 @@ import Pagination from '@mui/material/Pagination';
 import debounce from 'lodash.debounce';
 
 const EMPTY_OPTIONS = {unitKerja: [], jenis: [], statusBayar: [], statusPajak: []};
+const EMPTY_FILTER = {unitKerja: "", jenis: "", statusBayar: "", statusPajak: "", berkas: ""};
+// Fixed, unlike the other filters: these are conditions, not values read off the sheet
+const BERKAS_FILTER = [
+    {value: "", title: ""},
+    {value: "buktiBayar", title: "Bukti Bayar belum ada"},
+    {value: "buktiBayarDepositPajak", title: "Deposit Pajak belum ada"},
+    {value: "any", title: "Ada yang belum"},
+];
 
 export default function PembayaranBp() {
 
@@ -35,8 +43,10 @@ export default function PembayaranBp() {
     const [bulan, setBulan] = useState(() => localStorage.getItem('pembayaran-bp-bulan'));
     const [filterSelect, setFilterSelect] = useState(() => {
         const saved = localStorage.getItem('pembayaran-bp-filter');
-        return saved ? JSON.parse(saved) : {unitKerja: "", jenis: "", statusBayar: "", statusPajak: ""};
+        // Spread over the defaults: a filter saved before this key existed lacks it
+        return saved ? {...EMPTY_FILTER, ...JSON.parse(saved)} : EMPTY_FILTER;
     });
+    const [adaBerkasKurang, setAdaBerkasKurang] = useState(false);
     const [cariInput, setCariInput] = useState(() => localStorage.getItem('pembayaran-bp-cari') || "");
     // null = closed, {mode, record} = open
     const [panel, setPanel] = useState(null);
@@ -65,6 +75,7 @@ export default function PembayaranBp() {
                 setTableData(data);
                 setTotalPages(Math.ceil(totalRows / limit));
                 setOptions(sheetOptions || EMPTY_OPTIONS);
+                setAdaBerkasKurang(Boolean(response.data.adaBerkasKurang));
                 // Show the month the server settled on, but do not store it - only an
                 // explicit pick from the dropdown is worth remembering
                 if (month === null) {
@@ -218,11 +229,11 @@ export default function PembayaranBp() {
                         ))}
                     </select>
                 </div>
-                <label className="filter-label2">Baris:</label>
+                <label className="filter-label2">Berkas:</label>
                 <div className="filter-select filter-select2">
-                    <select value={rowsPerPage} onChange={handleRowsPerPageChange}>
-                        {rowsPerPageOptions.map((rows, index) => (
-                            <option key={index} value={rows}>{rows}</option>
+                    <select value={filterSelect.berkas} name="berkas" onChange={handleFilterChange}>
+                        {BERKAS_FILTER.map((item, index) => (
+                            <option key={index} value={item.value}>{item.title}</option>
                         ))}
                     </select>
                 </div>
@@ -235,6 +246,8 @@ export default function PembayaranBp() {
             </div>
 
             <div className="bg-card">
+                {adaBerkasKurang &&
+                    <p className="berkas-kurang-ringkas">Ada Transaksi Yang Belum Upload Berkas</p>}
                 {isLoading ? <LoadingAnimate/> :
                     <div className="lihat-antri-table">
                         <TablePembayaranBp header={pembayaranBpHeadData} content={tableData}
@@ -256,7 +269,14 @@ export default function PembayaranBp() {
                         page={currentPage}
                         onChange={handlePaginationChange}
                     />
-                    <div></div>
+                    <div className="rows-per-page">
+                        <label htmlFor="pembayaran-bp-rows">Baris per halaman:</label>
+                        <select id="pembayaran-bp-rows" value={rowsPerPage} onChange={handleRowsPerPageChange}>
+                            {rowsPerPageOptions.map((rows, index) => (
+                                <option key={index} value={rows}>{rows}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className='form-submit'>
                     <SubmitButton value='Tambah Data' name='tambah-pembayaran-bp'

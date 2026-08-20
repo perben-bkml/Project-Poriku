@@ -18,6 +18,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
@@ -921,7 +922,12 @@ export function TablePembayaranBp(props) {
     function renderCell(row, key) {
         if (!linkKeys.has(key)) return row[key] || "-";
         const {nama, url} = row[key] || {};
-        if (!nama) return "-";
+        if (!nama) {
+            // Empty on a row whose status still expects a berkas, not merely empty
+            return row.berkasKurang?.[key]
+                ? <span className="berkas-kurang"><WarningAmberIcon sx={{fontSize: 16}}/>Belum ada berkas</span>
+                : "-";
+        }
         return url ? <a href={url} target="_blank" rel="noopener noreferrer">{nama}</a> : nama;
     }
 

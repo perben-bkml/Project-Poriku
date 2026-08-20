@@ -161,113 +161,117 @@ export default function PembayaranBpForm(props) {
 
                 {!options ? <LoadingAnimate/> :
                 <form className="pembayaran-bp-form" onSubmit={handleSubmit}>
-                    <div className="bp-field">
-                        <label htmlFor="tanggalSp2d">Tanggal SP2D</label>
-                        <input type="date" id="tanggalSp2d" name="tanggalSp2d" className="type-btn"
-                               value={formData.tanggalSp2d} onChange={handleInputChange} required/>
-                    </div>
+                    <div className="bp-form-fields">
+                        <div className="bp-field">
+                            <label htmlFor="tanggalSp2d">Tanggal SP2D</label>
+                            <input type="date" id="tanggalSp2d" name="tanggalSp2d" className="type-btn"
+                                   value={formData.tanggalSp2d} onChange={handleInputChange} required/>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="nomorSpm">Nomor SPM</label>
-                        <input type="text" id="nomorSpm" name="nomorSpm" className="type-btn" inputMode="numeric"
-                               placeholder="00571" value={formData.nomorSpm} onChange={handleInputChange} required/>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="nomorSpm">Nomor SPM</label>
+                            <input type="text" id="nomorSpm" name="nomorSpm" className="type-btn" inputMode="numeric"
+                                   placeholder="00571" value={formData.nomorSpm} onChange={handleInputChange} required/>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="jenis">Jenis</label>
-                        <select id="jenis" name="jenis" className="type-btn"
-                                value={formData.jenis} onChange={handleInputChange} required>
-                            <option value="" disabled>Pilih jenis</option>
-                            {options.jenis.map(jenis => <option key={jenis} value={jenis}>{jenis}</option>)}
-                        </select>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="jenis">Jenis</label>
+                            <select id="jenis" name="jenis" className="type-btn"
+                                    value={formData.jenis} onChange={handleInputChange} required>
+                                <option value="" disabled>Pilih jenis</option>
+                                {options.jenis.map(jenis => <option key={jenis} value={jenis}>{jenis}</option>)}
+                            </select>
+                        </div>
 
-                    {/* Unit Kerja is a formula derived from this code, so pick by name
-                        and send back only the VA */}
-                    <div className="bp-field">
-                        <label htmlFor="va">Unit Kerja</label>
-                        <select id="va" name="va" className="type-btn"
-                                value={formData.va} onChange={handleInputChange} required>
-                            <option value="" disabled>Pilih unit kerja</option>
-                            {options.va.map(item => (
-                                <option key={item.kode} value={item.kode}>{item.kode} — {item.unitKerja}</option>
-                            ))}
-                        </select>
-                    </div>
+                        {/* Unit Kerja is a formula derived from this code, so pick by name
+                            and send back only the VA */}
+                        <div className="bp-field">
+                            <label htmlFor="va">Unit Kerja</label>
+                            <select id="va" name="va" className="type-btn"
+                                    value={formData.va} onChange={handleInputChange} required>
+                                <option value="" disabled>Pilih unit kerja</option>
+                                {options.va.map(item => (
+                                    <option key={item.kode} value={item.kode}>{item.kode} — {item.unitKerja}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="nilaiSp2d">Nilai SP2D</label>
-                        <input type="text" id="nilaiSp2d" name="nilaiSp2d" className="type-btn" inputMode="numeric"
-                               placeholder="12.345.678" value={formData.nilaiSp2d} required
-                               onChange={e => handleInputChange({target: {name: "nilaiSp2d", value: toRupiah(e.target.value)}})}/>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="nilaiSp2d">Nilai SP2D</label>
+                            <input type="text" id="nilaiSp2d" name="nilaiSp2d" className="type-btn" inputMode="numeric"
+                                   placeholder="12.345.678" value={formData.nilaiSp2d} required
+                                   onChange={e => handleInputChange({target: {name: "nilaiSp2d", value: toRupiah(e.target.value)}})}/>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="statusBayarPenerima">Status Bayar Penerima</label>
-                        <select id="statusBayarPenerima" name="statusBayarPenerima" className="type-btn"
-                                value={formData.statusBayarPenerima} onChange={handleInputChange}>
-                            <option value=""></option>
-                            {options.statusBayar.map(status => <option key={status} value={status}>{status}</option>)}
-                        </select>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="statusBayarPenerima">Status Bayar Penerima</label>
+                            <select id="statusBayarPenerima" name="statusBayarPenerima" className="type-btn"
+                                    value={formData.statusBayarPenerima} onChange={handleInputChange}>
+                                <option value=""></option>
+                                {options.statusBayar.map(status => <option key={status} value={status}>{status}</option>)}
+                            </select>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="tanggalBayarPenerima">Tanggal Bayar Penerima</label>
-                        <input type="date" id="tanggalBayarPenerima" name="tanggalBayarPenerima" className="type-btn"
-                               value={formData.tanggalBayarPenerima} onChange={handleInputChange}
-                               onDoubleClick={() => setFormData(prev => ({...prev, tanggalBayarPenerima: ""}))}/>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="tanggalBayarPenerima">Tanggal Bayar Penerima</label>
+                            <input type="date" id="tanggalBayarPenerima" name="tanggalBayarPenerima" className="type-btn"
+                                   value={formData.tanggalBayarPenerima} onChange={handleInputChange}
+                                   onDoubleClick={() => setFormData(prev => ({...prev, tanggalBayarPenerima: ""}))}/>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="statusPajak">Status Pajak</label>
-                        <select id="statusPajak" name="statusPajak" className="type-btn"
-                                value={formData.statusPajak} onChange={handleInputChange}>
-                            <option value=""></option>
-                            {options.statusPajak.map(status => <option key={status} value={status}>{status}</option>)}
-                        </select>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="statusPajak">Status Pajak</label>
+                            <select id="statusPajak" name="statusPajak" className="type-btn"
+                                    value={formData.statusPajak} onChange={handleInputChange}>
+                                <option value=""></option>
+                                {options.statusPajak.map(status => <option key={status} value={status}>{status}</option>)}
+                            </select>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="tanggalTrxPajak">Tanggal Trx Pajak</label>
-                        <input type="date" id="tanggalTrxPajak" name="tanggalTrxPajak" className="type-btn"
-                               value={formData.tanggalTrxPajak} onChange={handleInputChange}
-                               onDoubleClick={() => setFormData(prev => ({...prev, tanggalTrxPajak: ""}))}/>
-                    </div>
+                        <div className="bp-field">
+                            <label htmlFor="tanggalTrxPajak">Tanggal Trx Pajak</label>
+                            <input type="date" id="tanggalTrxPajak" name="tanggalTrxPajak" className="type-btn"
+                                   value={formData.tanggalTrxPajak} onChange={handleInputChange}
+                                   onDoubleClick={() => setFormData(prev => ({...prev, tanggalTrxPajak: ""}))}/>
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="buktiBayar">Bukti Bayar (PDF, maks. {MAX_FILE_MB} MB)</label>
-                        <input type="file" id="buktiBayar" name="buktiBayar" accept="application/pdf"
-                               onChange={handleFileChange}/>
-                        {isEdit && <span className="dokumen-gaji-file-current">
-                            Saat ini: {currentLink("buktiBayar")} - kosongkan jika tidak diganti.
-                        </span>}
-                        {!isEdit && !files.buktiBayar && pendingFileNames.buktiBayar &&
-                            <span className="dokumen-gaji-file-current">
-                                Pilih ulang {pendingFileNames.buktiBayar}.
+                        <div className="bp-field bp-field-file">
+                            <label htmlFor="buktiBayar">Bukti Bayar (PDF, maks. {MAX_FILE_MB} MB)</label>
+                            <input type="file" id="buktiBayar" name="buktiBayar" accept="application/pdf"
+                                   onChange={handleFileChange}/>
+                            {isEdit && <span className="dokumen-gaji-file-current">
+                                Saat ini: {currentLink("buktiBayar")} - kosongkan jika tidak diganti.
                             </span>}
-                    </div>
+                            {!isEdit && !files.buktiBayar && pendingFileNames.buktiBayar &&
+                                <span className="dokumen-gaji-file-current">
+                                    Pilih ulang {pendingFileNames.buktiBayar}.
+                                </span>}
+                        </div>
 
-                    <div className="bp-field">
-                        <label htmlFor="buktiBayarDepositPajak">Bukti Deposit Pajak (PDF, maks. {MAX_FILE_MB} MB)</label>
-                        <input type="file" id="buktiBayarDepositPajak" name="buktiBayarDepositPajak"
-                               accept="application/pdf" onChange={handleFileChange}/>
-                        {isEdit && <span className="dokumen-gaji-file-current">
-                            Saat ini: {currentLink("buktiBayarDepositPajak")} - kosongkan jika tidak diganti.
-                        </span>}
-                        {!isEdit && !files.buktiBayarDepositPajak && pendingFileNames.buktiBayarDepositPajak &&
-                            <span className="dokumen-gaji-file-current">
-                                Pilih ulang {pendingFileNames.buktiBayarDepositPajak}.
+                        <div className="bp-field bp-field-file">
+                            <label htmlFor="buktiBayarDepositPajak">Bukti Deposit Pajak (PDF, maks. {MAX_FILE_MB} MB)</label>
+                            <input type="file" id="buktiBayarDepositPajak" name="buktiBayarDepositPajak"
+                                   accept="application/pdf" onChange={handleFileChange}/>
+                            {isEdit && <span className="dokumen-gaji-file-current">
+                                Saat ini: {currentLink("buktiBayarDepositPajak")} - kosongkan jika tidak diganti.
                             </span>}
+                            {!isEdit && !files.buktiBayarDepositPajak && pendingFileNames.buktiBayarDepositPajak &&
+                                <span className="dokumen-gaji-file-current">
+                                    Pilih ulang {pendingFileNames.buktiBayarDepositPajak}.
+                                </span>}
+                        </div>
                     </div>
 
-                    {(fileError || formError) &&
-                        <span className="dokumen-gaji-file-error">{fileError || formError}</span>}
+                    <div className="bp-form-footer">
+                        {(fileError || formError) &&
+                            <span className="dokumen-gaji-file-error">{fileError || formError}</span>}
 
-                    {/* Native submit so the browser runs the required checks;
-                        SubmitButton renders type="button" and would skip them */}
-                    <div className="form-submit">
-                        <input type="submit" value={isEdit ? "Simpan Perubahan" : "Simpan"} name="submit-pembayaran-bp"/>
-                        <SubmitButton value="Batal" name="batal-pembayaran-bp" onClick={handleCancel}/>
+                        {/* Native submit so the browser runs the required checks;
+                            SubmitButton renders type="button" and would skip them */}
+                        <div className="form-submit">
+                            <input type="submit" value={isEdit ? "Simpan Perubahan" : "Simpan"} name="submit-pembayaran-bp"/>
+                            <SubmitButton value="Batal" name="batal-pembayaran-bp" onClick={handleCancel}/>
+                        </div>
                     </div>
                 </form>}
             </div>

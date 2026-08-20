@@ -5037,6 +5037,21 @@ const pembayaranBpLink = (cell) => ({
     url: String(cell?.hyperlink ?? "").trim(),
 });
 
+// The statuses that say a berkas is not owed. Both are values of the sheet's own
+// dropdowns, so they have to be spelled exactly as N and P offer them.
+const STATUS_BAYAR_SELESAI = "SELESAI";
+const STATUS_PAJAK_TANPA_DEPOSIT = "NON PAJAK";
+
+// A cell typed by hand ("WITHDRAWAL", "sisa dana") carries no url but is an answer all
+// the same, so this asks for nama, not url. A blank status is not SELESAI and not
+// NON PAJAK, which is what leaves a freshly added row flagged until it is filled in.
+const pembayaranBpBerkasKurang = (record) => ({
+    buktiBayar: !record.buktiBayar.nama
+        && normalizeSatker(record.statusBayarPenerima) !== STATUS_BAYAR_SELESAI,
+    buktiBayarDepositPajak: !record.buktiBayarDepositPajak.nama
+        && normalizeSatker(record.statusPajak) !== STATUS_PAJAK_TANPA_DEPOSIT,
+});
+
 function pembayaranBpToRecord(cells, rowNumber) {
     const record = { rowNumber };
     for (const column of PEMBAYARAN_BP_COLUMNS) {
@@ -5045,8 +5060,13 @@ function pembayaranBpToRecord(cells, rowNumber) {
             ? pembayaranBpLink(cell)
             : String(cell?.formattedValue ?? "").trim();
     }
+    record.berkasKurang = pembayaranBpBerkasKurang(record);
     return record;
 }
+
+const kurangBerkas = (record, which) => which === "any"
+    ? record.berkasKurang.buktiBayar || record.berkasKurang.buktiBayarDepositPajak
+    : Boolean(record.berkasKurang[which]);
 
 // Distinct values as spelled in the data, so the filters cannot drift from it.
 function pembayaranBpOptions(records) {
@@ -5080,7 +5100,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
         if (!spreadsheetId) return;
 
         const { page = 1, limit = 10, unitKerja = "", jenis = "", statusBayar = "",
-            statusBayarNot = "", statusPajak = "", cari = "" } = req.query;
+            statusBayarNot = "", statusPajak = "", cari = "", berkas = "" } = req.query;
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         // limit=all serves SPM Bendahara, whose watchlist is short and paginated in the
         // browser: one read instead of one per page. The cap stays for the paged table.
@@ -5108,14 +5128,23 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
             return true;
         });
 
-        let filtered = applyFilters(bulan);
+        // Berkas sits outside applyFilters so the warning below can be read off the wider
+        // set - asking the filtered rows would always say yes once the filter is on.
+        const byBerkas = (rows) => berkas ? rows.filter(record => kurangBerkas(record, berkas)) : rows;
+
+        let scoped = applyFilters(bulan);
+        let filtered = byBerkas(scoped);
         // Opening in a month the sheet has not reached yet would show an empty table
         if (!askedForMonth && filtered.length === 0) {
             bulan = "";
-            filtered = applyFilters(bulan);
+            scoped = applyFilters(bulan);
+            filtered = byBerkas(scoped);
         }
 
-        filtered.reverse();   // the sheet runs chronologically, newest last
+        // Only whether anything is outstanding: the screen shows a warning, not a tally
+        const adaBerkasKurang = scoped.some(record => kurangBerkas(record, "any"));
+
+        filtered = [...filtered].reverse();   // the sheet runs chronologically, newest last
 
         const totalRows = filtered.length;
         const startIndex = (pageNumber - 1) * rowsPerPage;
@@ -5125,6 +5154,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
             totalRows,
             rowsPerPage: unpaged ? totalRows : rowsPerPage,
             bulan,
+            adaBerkasKurang,
             options,
         });
     } catch (error) {

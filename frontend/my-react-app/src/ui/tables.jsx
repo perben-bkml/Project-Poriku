@@ -23,6 +23,12 @@ import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
 
+const BUKTI_SETOR_STYLE = {
+    "Sudah Diunggah": { color: "#9FFFC3", textcolor: "#0F9043" },
+    "Belum Diunggah": { color: "#C7B6A7", textcolor: "#5E4C3B" },
+    "Tidak Perlu": { color: "#E4E9F0", textcolor: "#5A6472" },
+};
+
 // SPM-Bend.jsx
 // Cells are plain strings except Bukti Bayar, which arrives as {nama, url}
 const spmCell = (cell) => {
@@ -284,7 +290,7 @@ export function TableKelola(props) {
         return(
             <p style={{margin: '0px', fontWeight: '700', height: "40px", width: "110px",
                 borderRadius:"5%", display:"flex", justifyContent:"center", alignItems:"center",
-                backgroundColor: props.color}}>{props.data}</p>
+                textAlign: "center", backgroundColor: props.color, color: props.textcolor}}>{props.data}</p>
         )
     }
 
@@ -418,12 +424,14 @@ export function TableKelola(props) {
                                    onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
                                    sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'}
                                        : (index === 1 || index === 19 ? {maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word', borderBottom: '2px solid rgb(214, 214, 214)'} : {borderBottom: '2px solid rgb(214, 214, 214)'})} >
-                            {tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 7 || index === 8) ?
-                                (data === "Sudah" && index === 7 || data === "Sudah" && index === 8 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
-                                    (data === "Belum" && index === 7 || data === "Belum" && index === 8 ? <CustomColoredCell color={"#f27272"} data={data} /> :
-                                        (data === "Ada Masalah" && index === 7 || data === "Ada Masalah" && index === 8 ? <CustomColoredCell color={"#eb3d3d"} data={data} /> :
-                                            (data === "Tidak Ada Pajak" && index === 7 || data === "Tidak Ada Pajak" && index === 8 ? <CustomColoredCell color={"white"} data={data} /> :
-                                                (data === "Pajak Manual" && index === 7 || data === "Pajak Manual" && index === 8 ? <CustomColoredCell color={"#b39979"} data={data} /> :
+                            {tableType === 'monitor' && BUKTI_SETOR_STYLE[data] ?
+                                <CustomColoredCell {...BUKTI_SETOR_STYLE[data]} data={data} /> :
+                            tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 8 || index === 9) ?
+                                (data === "Sudah" && index === 8 || data === "Sudah" && index === 9 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
+                                    (data === "Belum" && index === 8 || data === "Belum" && index === 9 ? <CustomColoredCell color={"#f27272"} data={data} /> :
+                                        (data === "Ada Masalah" && index === 8 || data === "Ada Masalah" && index === 9 ? <CustomColoredCell color={"#eb3d3d"} data={data} /> :
+                                            (data === "Tidak Ada Pajak" && index === 8 || data === "Tidak Ada Pajak" && index === 9 ? <CustomColoredCell color={"white"} data={data} /> :
+                                                (data === "Pajak Manual" && index === 8 || data === "Pajak Manual" && index === 9 ? <CustomColoredCell color={"#b39979"} data={data} /> :
                                          <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
                                 : data}
                         </CopyableTableCell>

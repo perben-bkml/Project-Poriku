@@ -263,6 +263,7 @@ const ROUTE_ROLES = {
     "GET /bendahara/pembayaran-bp/options": ADMIN,
     "GET /bendahara/pembayaran-bp/cari": USER_ADMIN,
     "GET /bendahara/pembayaran-bp/rek-koran": USER_ADMIN,
+    "GET /bendahara/pembayaran-bp/bukti-setor": ADMIN,
     "PATCH /bendahara/pembayaran-bp/rek-koran": ADMIN,
     "POST /bendahara/pembayaran-bp": ADMIN,
     "PATCH /bendahara/pembayaran-bp": ADMIN,
@@ -5845,6 +5846,32 @@ app.patch("/bendahara/pembayaran-bp/rek-koran", handleRekKoranUpload, async (req
     } catch (error) {
         console.error("Error in PATCH /bendahara/pembayaran-bp/rek-koran:", error);
         return res.status(500).json({ message: "Gagal mengunggah berkas Rekening Koran." });
+    }
+});
+
+app.get("/bendahara/pembayaran-bp/bukti-setor", async (req, res) => {
+    const sheetName = pembayaranBpSheetName(req);
+    try {
+        const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const records = await cached(`rows|${spreadsheetId}|${sheetName}`,
+            () => readPembayaranBpRecords(spreadsheetId, sheetName), PEMBAYARAN_BP_SEARCH_TTL_MS);
+
+        const wanted = spmDigits(req.query.spm);
+        const data = {};
+        for (const record of records) {
+            const spm = spmDigits(record.nomorSpm);
+            if (!spm || data[spm] || (wanted && spm !== wanted)) continue;
+            const ada = Boolean(record.buktiBayarDepositPajak.nama);
+            const tidakPerlu = normalizeSatker(record.statusPajak) === STATUS_PAJAK_TANPA_DEPOSIT;
+            if (ada || tidakPerlu) data[spm] = { ada, tidakPerlu, url: record.buktiBayarDepositPajak.url };
+        }
+
+        return res.status(200).json({ data });
+    } catch (error) {
+        console.error("Error in GET /bendahara/pembayaran-bp/bukti-setor:", error);
+        return res.status(500).json({ message: "Gagal memuat status Bukti Setor." });
     }
 });
 

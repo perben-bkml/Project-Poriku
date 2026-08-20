@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup from "../../ui/Popup.jsx";
 import { TableInfoAntri, TableKelola } from "../../ui/tables.jsx";
-import {columns, drppHeadData} from "./head-data.js";
+import {columns, drppHeadData, spmKey, buktiSetorLabel} from "./head-data.js";
 import {SubmitButton} from "../../ui/buttons.jsx";
 
 
@@ -21,6 +21,7 @@ export default function AksiDrpp(props) {
         catatan: '',
     })
     const [coloredRow, setColoredRow] = useState([]);
+    const [buktiSetor, setBuktiSetor] = useState(null);
 
     //Setting Tablekelola data
     const drppData = [
@@ -76,6 +77,14 @@ export default function AksiDrpp(props) {
         select.style.backgroundColor = findColor.color;
         select.style.color= findColor.textcolor;
     }
+
+    useEffect(() => {
+        const spm = spmKey(props.fulldata[5]);
+        if (!spm) return;
+        apiClient.get('/bendahara/pembayaran-bp/bukti-setor', { params: { spm } })
+            .then(response => setBuktiSetor(response.data.data?.[spm] || {}))
+            .catch(error => console.log("Failed fetching Bukti Setor.", error));
+    }, [props.fulldata]);
 
     useEffect(() => {
         fetchAntrianTable();
@@ -168,6 +177,13 @@ export default function AksiDrpp(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Informasi DRPP</h2>
                 <TableInfoAntri header={drppHeadData} body={drppData} />
+                <div className="lampiran-aksi-pengajuan">
+                    <p>Bukti Setor Pajak: <span className={"padd-span-bend"}/>
+                        {buktiSetor?.url
+                            ? <a href={buktiSetor.url} target={"_blank"} rel="noopener noreferrer">Klik disini</a>
+                            : buktiSetorLabel(buktiSetor)}
+                    </p>
+                </div>
                 <div className="aksi-content-label drpp-content">
                     <label htmlFor='pungut'>Pungutan Pajak</label>
                     <select id='pungut' className='type-btn' name='pungutan' value={!props.fulldata ? null : pajakStatus.pungutan} onChange={(e) => (selectOptionBackgroundColor(e.target), handleInputChange(e.target))}>

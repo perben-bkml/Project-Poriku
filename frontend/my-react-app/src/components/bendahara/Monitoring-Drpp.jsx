@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
 import { userSatkerNames } from "../verifikasi/head-data.js";
-import { placeholderTable, cardTitles, pajakStatus, monthNames } from "./head-data.js";
+import { placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames } from "./head-data.js";
 //Import Table
 import {TableKelola} from "../../ui/tables.jsx";
 //Import Pagination
@@ -16,6 +16,7 @@ export default function MonitoringDrpp(props) {
     //State
     const [fullDRPPData, setFullDRPPData] = useState([])
     const [monitoringData, setMonitoringData] = useState([]);
+    const [buktiSetor, setBuktiSetor] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(() => {
         const savedPage = localStorage.getItem('monitoring-drpp-pagination');
@@ -66,6 +67,12 @@ export default function MonitoringDrpp(props) {
         fetchMonitoringData(currentPage, filterSelect, cariSelect);
     }, [currentPage, filterSelect, cariSelect]);
 
+    useEffect(() => {
+        apiClient.get('/bendahara/pembayaran-bp/bukti-setor')
+            .then(response => setBuktiSetor(response.data.data || {}))
+            .catch(error => console.log("Failed fetching Bukti Setor.", error));
+    }, []);
+
     // Validate currentPage against totalPages
     useEffect(() => {
         if (totalPages > 0 && currentPage > totalPages) {
@@ -73,6 +80,9 @@ export default function MonitoringDrpp(props) {
             localStorage.setItem('monitoring-drpp-pagination', '1');
         }
     }, [totalPages, currentPage]);
+
+    const tableContent = monitoringData.map(row => [...row.slice(0, 7),
+        spmKey(row[5]) ? buktiSetorLabel(buktiSetor[spmKey(row[5])]) : "-", ...row.slice(7)]);
 
     // Handle Pagination
     function handlePaginationChange (event, value) {
@@ -208,7 +218,7 @@ export default function MonitoringDrpp(props) {
             <div className="bg-card">
                 {isLoading ? <LoadingAnimate /> :
                 <div className="lihat-antri-table" >
-                    <TableKelola type="monitor" header={placeholderTable} content={monitoringData} fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
+                    <TableKelola type="monitor" header={placeholderTable} content={tableContent} fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
                 </div>
                 }
                 <div className="lihat-antri-pagination" style={{

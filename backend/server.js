@@ -5570,6 +5570,16 @@ function scopeToSatker(rows, viewer, matches) {
 const pembayaranBpVisibleTo = (records, viewer) =>
     scopeToSatker(records, viewer, (record, satker) => normalizeSatker(record.unitKerja) === satker);
 
+// Matched on a fragment of the antrian's Unit Kerja, which spells these differently
+// from the satker names SATKER_UNIT_KERJA keys on
+const UNIT_KERJA_AJUAN_ALIAS = { "TU RUMGA": "DOM" };
+
+function aksiUnitKerja(satker) {
+    const name = normalizeSatker(satker);
+    const alias = Object.keys(UNIT_KERJA_AJUAN_ALIAS).find(fragment => name.includes(fragment));
+    return alias ? UNIT_KERJA_AJUAN_ALIAS[alias] : SATKER_UNIT_KERJA[name];
+}
+
 const spmDigits = (value) => String(value ?? "").replace(/\D/g, "").replace(/^0+/, "");
 
 // Aksi-Pengajuan only ever serves the gup flow, and the sheet's Jenis list has no PTUP.
@@ -5612,7 +5622,7 @@ async function syncPembayaranBpFromAksi(req, { tanggalSp2d, rows, jenisSlug, sat
 
     const sheetName = pembayaranBpSheetName(req);
     const options = await pembayaranBpFormOptions(spreadsheetId, sheetName);
-    const unitKerja = SATKER_UNIT_KERJA[normalizeSatker(satker)];
+    const unitKerja = aksiUnitKerja(satker);
     const va = options.va.find(item => normalizeSatker(item.unitKerja) === normalizeSatker(unitKerja));
     if (groups.size > 0 && !va) return `Unit Kerja "${satker}" tidak punya VA di Pembayaran BP.`;
 

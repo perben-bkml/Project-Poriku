@@ -1102,6 +1102,32 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-top: 12px;
     margin-bottom: 26px;
 }
+.bp-field-note {
+    margin-top: 12px;
+    margin-bottom: 26px;
+}
+/* .type-btn is sized for a single line control, so a textarea has to undo its height
+   and pill radius - the same override .dokumen-gaji-form makes. */
+.bp-field-note textarea {
+    height: auto;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 400;
+    line-height: 1.4;
+    resize: vertical;
+}
+/* Wraps inside a capped width instead of widening a table that is already 16 columns.
+   Past three lines it is cut and the tooltip carries the rest. */
+.bp-keterangan {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    max-width: 240px;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
 .bp-field-file input[type="file"] {
     padding: 6px 0;
 }

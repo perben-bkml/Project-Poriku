@@ -11,6 +11,7 @@ const DRAFT_KEY = 'pembayaran-bp-draft';
 const EMPTY = {
     tanggalSp2d: "", nomorSpm: "", jenis: "", va: "", nilaiSp2d: "",
     statusBayarPenerima: "", tanggalBayarPenerima: "", statusPajak: "", tanggalTrxPajak: "",
+    keterangan: "",
 };
 
 // Column O holds "WITHDRAWAL" on one row, so anything unparseable yields nothing
@@ -72,6 +73,7 @@ export default function PembayaranBpForm(props) {
             tanggalBayarPenerima: toDateInput(record.tanggalBayarPenerima),
             statusPajak: record.statusPajak || "",
             tanggalTrxPajak: toDateInput(record.tanggalTrxPajak),
+            keterangan: record.keterangan || "",
         });
     }, [isEdit, record]);
 
@@ -233,6 +235,12 @@ export default function PembayaranBpForm(props) {
                             <input type="date" id="tanggalTrxPajak" name="tanggalTrxPajak" className="type-btn"
                                    value={formData.tanggalTrxPajak} onChange={handleInputChange}
                                    onDoubleClick={() => setFormData(prev => ({...prev, tanggalTrxPajak: ""}))}/>
+                        </div>
+
+                        <div className="bp-field bp-field-note">
+                            <label htmlFor="keterangan">Keterangan</label>
+                            <textarea id="keterangan" name="keterangan" className="type-btn" rows={3}
+                                      value={formData.keterangan} onChange={handleInputChange}/>
                         </div>
 
                         <div className="bp-field bp-field-file">

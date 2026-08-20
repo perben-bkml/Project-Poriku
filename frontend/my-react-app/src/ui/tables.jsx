@@ -912,7 +912,7 @@ export function TablePembayaranBp(props) {
     // Column order, matching pembayaranBpHeadData and PEMBAYARAN_BP_COLUMNS on the server
     const keys = ["no", "tanggalSp2d", "nomorSpm", "jenis", "va", "unitKerja", "nilaiSp2d",
         "kodeBniDirect", "buktiBayar", "statusBayarPenerima", "tanggalBayarPenerima",
-        "statusPajak", "tanggalTrxPajak", "buktiBayarDepositPajak"];
+        "keterangan", "statusPajak", "tanggalTrxPajak", "buktiBayarDepositPajak"];
     const linkKeys = new Set(["buktiBayar", "buktiBayarDepositPajak"]);
     // First three columns are frozen; widths and offsets live in .bp-freeze-*
     const freeze = (index) => index < 3 ? `bp-freeze bp-freeze-${index + 1}` : undefined;
@@ -920,6 +920,12 @@ export function TablePembayaranBp(props) {
     // Attachment columns hold {nama, url}. Some cells are typed by hand ("WITHDRAWAL")
     // and have no url, so the name still renders, just without a dead link.
     function renderCell(row, key) {
+        // Free text, so it is capped and hovered rather than left to widen the table
+        if (key === "keterangan") {
+            return row.keterangan
+                ? <Tooltip title={row.keterangan}><span className="bp-keterangan">{row.keterangan}</span></Tooltip>
+                : "-";
+        }
         if (!linkKeys.has(key)) return row[key] || "-";
         const {nama, url} = row[key] || {};
         if (!nama) {

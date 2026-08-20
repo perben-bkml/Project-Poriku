@@ -4992,7 +4992,7 @@ app.patch("/verifikasi/code-anggaran", async (req, res) => {
 
 const PEMBAYARAN_BP_SHEET_PREFIX = "PEMBAYARAN BP";
 const PEMBAYARAN_BP_FIRST_ROW = 5;   // row 4 is the header, rows 1-3 are the title block
-const PEMBAYARAN_BP_RANGE = "B5:S";  // read starts at B, so index 0 below is column B
+const PEMBAYARAN_BP_RANGE = "B5:U";  // read starts at B, so index 0 below is column B
 
 // index is the offset from column B. I, J, L, R and T fall inside the read but are
 // deliberately not returned.
@@ -5011,6 +5011,7 @@ const PEMBAYARAN_BP_COLUMNS = [
     { index: 14, key: "statusPajak",            label: "Status Pajak" },                // P
     { index: 15, key: "tanggalTrxPajak",        label: "Tanggal Trx Pajak" },           // Q
     { index: 17, key: "buktiBayarDepositPajak", label: "Bukti Bayar Deposit Pajak", link: true }, // S
+    { index: 19, key: "keterangan",              label: "Keterangan" },                  // U
 ];
 
 // Guards the month filter: a cell that is not dd-mm-yyyy cannot match a month.
@@ -5037,17 +5038,19 @@ const pembayaranBpLink = (cell) => ({
     url: String(cell?.hyperlink ?? "").trim(),
 });
 
-// The statuses that say a berkas is not owed. Both are values of the sheet's own
-// dropdowns, so they have to be spelled exactly as N and P offer them.
-const STATUS_BAYAR_SELESAI = "SELESAI";
+// The statuses that say a berkas is not owed. All are values of the sheet's own
+// dropdowns, so they have to be spelled exactly as N and P offer them. WITHDRAWAL counts
+// as finished just like SELESAI, and by its nature never produces a Bukti Bayar.
+const STATUS_BAYAR_SELESAI = ["SELESAI", "WITHDRAWAL"];
 const STATUS_PAJAK_TANPA_DEPOSIT = "NON PAJAK";
+
+const bayarSelesai = (status) => STATUS_BAYAR_SELESAI.includes(normalizeSatker(status));
 
 // A cell typed by hand ("WITHDRAWAL", "sisa dana") carries no url but is an answer all
 // the same, so this asks for nama, not url. A blank status is not SELESAI and not
 // NON PAJAK, which is what leaves a freshly added row flagged until it is filled in.
 const pembayaranBpBerkasKurang = (record) => ({
-    buktiBayar: !record.buktiBayar.nama
-        && normalizeSatker(record.statusBayarPenerima) !== STATUS_BAYAR_SELESAI,
+    buktiBayar: !record.buktiBayar.nama && !bayarSelesai(record.statusBayarPenerima),
     buktiBayarDepositPajak: !record.buktiBayarDepositPajak.nama
         && normalizeSatker(record.statusPajak) !== STATUS_PAJAK_TANPA_DEPOSIT,
 });
@@ -5100,7 +5103,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
         if (!spreadsheetId) return;
 
         const { page = 1, limit = 10, unitKerja = "", jenis = "", statusBayar = "",
-            statusBayarNot = "", statusPajak = "", cari = "", berkas = "" } = req.query;
+            belumSelesai = "", statusPajak = "", cari = "", berkas = "" } = req.query;
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         // limit=all serves SPM Bendahara, whose watchlist is short and paginated in the
         // browser: one read instead of one per page. The cap stays for the paged table.
@@ -5122,7 +5125,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
             if (unitKerja && normalizeSatker(record.unitKerja) !== normalizeSatker(unitKerja)) return false;
             if (jenis && normalizeSatker(record.jenis) !== normalizeSatker(jenis)) return false;
             if (statusBayar && normalizeSatker(record.statusBayarPenerima) !== normalizeSatker(statusBayar)) return false;
-            if (statusBayarNot && normalizeSatker(record.statusBayarPenerima) === normalizeSatker(statusBayarNot)) return false;
+            if (belumSelesai && bayarSelesai(record.statusBayarPenerima)) return false;
             if (statusPajak && normalizeSatker(record.statusPajak) !== normalizeSatker(statusPajak)) return false;
             if (cari && !record.nomorSpm.toLowerCase().includes(String(cari).trim().toLowerCase())) return false;
             return true;
@@ -5193,14 +5196,15 @@ const PEMBAYARAN_BP_FIELDS = [
     { key: "statusPajak",            column: "P", type: "enum",  label: "Status Pajak", source: "statusPajak" },
     { key: "tanggalTrxPajak",        column: "Q", type: "date",  label: "Tanggal Trx Pajak" },
     { key: "buktiBayarDepositPajak", column: "S", type: "link",  label: "Bukti Bayar Deposit Pajak" },
+    { key: "keterangan",             column: "U", type: "text",  label: "Keterangan" },
 ];
 const PEMBAYARAN_BP_FIELD_AT = new Map(PEMBAYARAN_BP_FIELDS.map(field => [columnIndexOf(field.column), field]));
 
 // Runs of columns a write may cover, cut so the formula columns fall in the gaps.
 // Create blanks I, J and L, which the copy below would otherwise leave holding the
 // template row's values; edit steps around them so whatever a human put there survives.
-const PEMBAYARAN_BP_RUNS_CREATE = [["C", "F"], ["H", "J"], ["L", "Q"], ["S", "S"]];
-const PEMBAYARAN_BP_RUNS_EDIT = [["C", "F"], ["H", "H"], ["M", "Q"], ["S", "S"]];
+const PEMBAYARAN_BP_RUNS_CREATE = [["C", "F"], ["H", "J"], ["L", "Q"], ["S", "S"], ["U", "U"]];
+const PEMBAYARAN_BP_RUNS_EDIT = [["C", "F"], ["H", "H"], ["M", "Q"], ["S", "S"], ["U", "U"]];
 
 // Inverse of toDateInputValue. Writing the serial rather than "26-01-2026" keeps the
 // value a real date whatever the spreadsheet's locale does with text.
@@ -5374,7 +5378,7 @@ function pembayaranBpWriteRequests(sheetId, row, runs, cells) {
 // or K, so copying the neighbour propagates its gaps. Relative refs adjust on paste.
 // Column B is skipped - it is a spill from B5 and pasting over it would block the spill.
 const pembayaranBpCopyRow = (sheetId, sourceRow, targetRow) =>
-    [[0, 1], [2, 20]].map(([startColumnIndex, endColumnIndex]) => ({
+    [[0, 1], [2, 21]].map(([startColumnIndex, endColumnIndex]) => ({
         copyPaste: {
             source: { sheetId, startRowIndex: sourceRow - 1, endRowIndex: sourceRow, startColumnIndex, endColumnIndex },
             destination: { sheetId, startRowIndex: targetRow - 1, endRowIndex: targetRow, startColumnIndex, endColumnIndex },

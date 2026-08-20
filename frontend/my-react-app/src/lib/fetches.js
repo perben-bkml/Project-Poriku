@@ -7,7 +7,7 @@ export async function fetchNotPaidSPM(setNotPaidSPM, setIsLoading1) {
     try {
         setIsLoading1(true);
         const response = await apiClient.get('/bendahara/pembayaran-bp', {
-            params: {limit: "all", bulan: "", statusBayarNot: "SELESAI"},
+            params: {limit: "all", bulan: "", belumSelesai: 1},
         });
         setNotPaidSPM(response.data.data);
     } catch (error) {

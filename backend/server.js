@@ -2166,7 +2166,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 app.post("/bendahara/aksi-ajuan", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const {updatedAntriData, monitoringDrppData, documentData} = req.body
+        const {updatedAntriData, monitoringDrppData, documentData, tanggalSp2d, drppProcess} = req.body
         if (!updatedAntriData) {
             return res.status(400).json({ message: "Invalid or missing data." });
         }
@@ -2245,16 +2245,16 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {
-            const {trans_id, satker, nominal, jenis, spmDrpp} = monitoringDrppData;
+            const {trans_id, satker, jenis} = monitoringDrppData;
 
-            //Split drpp and nominal into arrays
-            const drppArray = drpp.split(", ").map(num => num.trim());
-            const nominalArray = nominal.split(", ").map(num => num.trim());
-            const spmDrppArray = spmDrpp.split(", ").map(num => num.trim());
-
-            if (drppArray.length !== nominalArray.length) {
-                return res.status(400).json({message: "DRPP and Nominal data mismatch."});
-            }
+            // Straight from the grid, so the three stay aligned and a row the admin
+            // emptied or removed simply is not there. Unticking Buat DRPP means none.
+            const drppRows = drppProcess === false ? []
+                : (documentData || []).filter(row => trimmed(row?.drpp) !== "");
+            const drppArray = drppRows.map(row => trimmed(row.drpp));
+            const nominalArray = drppRows.map(row => trimmed(row.nominal));
+            // Column F has always carried Nomor SPP despite the name
+            const spmDrppArray = drppRows.map(row => trimmed(row.spp));
 
             // Apply backoff for getting monitoring data
             const getMonitoringResponse = await readRange(sheets, spreadsheetId, "'Monitoring DRPP'!B:I");
@@ -2374,16 +2374,39 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
                     });
                 }
 
-                // Update the rows with backoff
-                const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
-                await writeRange(sheets, spreadsheetId, targetRange, rowsToWrite, "RAW");
+                // Nothing is left to write once every row has been deleted above
+                if (newRowCount > 0) {
+                    const targetRange = `Monitoring DRPP!B${existingStartRow}:J${existingStartRow + newRowCount - 1}`;
+                    await writeRange(sheets, spreadsheetId, targetRange, rowsToWrite, "RAW");
+                }
 
-            } else {
+            } else if (newRowCount > 0) {
                 // If trans_id doesn't exist, append new rows with backoff
                 const lastFilledRow = monitoringRows.length + 1;
                 const targetRange = `Monitoring DRPP!B${lastFilledRow}:J${lastFilledRow + newRowCount - 1}`;
                 await writeRange(sheets, spreadsheetId, targetRange, rowsToWrite, "RAW");
             }
+        }
+
+        // Record the transaction on Pembayaran BP. Isolated like the notification below:
+        // the aksi is already saved, so a failure here is reported, not retried.
+        let warning = null;
+        if (documentData) {
+            const antrianRow = allRows[rowIndex - 1] || [];
+            try {
+                warning = await syncPembayaranBpFromAksi(req, {
+                    tanggalSp2d,
+                    rows: drppProcess === false ? [] : documentData,
+                    jenisSlug: antrianRow[3],
+                    satker: antrianRow[11],
+                    // K before this save: an SPM it no longer carries loses its row
+                    previousSpm: antrianRow[10],
+                });
+            } catch (error) {
+                console.error("Gagal mencatat ke Pembayaran BP (aksi-ajuan):", error);
+                warning = error?.message || "Transaksi gagal dicatat di Pembayaran BP.";
+            }
+            if (warning) warning = `Aksi tersimpan, tetapi ${warning}`;
         }
 
         // Notify the satker. Isolated: the sheet update already succeeded, so a
@@ -2418,7 +2441,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             console.error("Gagal menulis notifikasi (aksi-ajuan):", notifError);
         }
 
-        res.json({ message: "Data updated successfully!" });
+        res.json({ message: "Data updated successfully!", warning });
 
     } catch (error) {
         console.error("Error in /bendahara/aksi-ajuan:", error);
@@ -5042,6 +5065,7 @@ const pembayaranBpLink = (cell) => ({
 // dropdowns, so they have to be spelled exactly as N and P offer them. WITHDRAWAL counts
 // as finished just like SELESAI, and by its nature never produces a Bukti Bayar.
 const STATUS_BAYAR_SELESAI = ["SELESAI", "WITHDRAWAL"];
+const PEMBAYARAN_BP_STATUS_BARU = "DANA BELUM MASUK";
 const STATUS_PAJAK_TANPA_DEPOSIT = "NON PAJAK";
 
 const bayarSelesai = (status) => STATUS_BAYAR_SELESAI.includes(normalizeSatker(status));
@@ -5205,6 +5229,9 @@ const PEMBAYARAN_BP_FIELD_AT = new Map(PEMBAYARAN_BP_FIELDS.map(field => [column
 // template row's values; edit steps around them so whatever a human put there survives.
 const PEMBAYARAN_BP_RUNS_CREATE = [["C", "F"], ["H", "J"], ["L", "Q"], ["S", "S"], ["U", "U"]];
 const PEMBAYARAN_BP_RUNS_EDIT = [["C", "F"], ["H", "H"], ["M", "Q"], ["S", "S"], ["U", "U"]];
+// Only the columns an aksi owns. Refreshing an existing row must leave the berkas,
+// the statuses and the Keterangan an admin filled in afterwards untouched.
+const PEMBAYARAN_BP_RUNS_SYNC = [["C", "F"], ["H", "H"]];
 
 // Inverse of toDateInputValue. Writing the serial rather than "26-01-2026" keeps the
 // value a real date whatever the spreadsheet's locale does with text.
@@ -5543,6 +5570,97 @@ const pembayaranBpVisibleTo = (records, viewer) =>
     scopeToSatker(records, viewer, (record, satker) => normalizeSatker(record.unitKerja) === satker);
 
 const spmDigits = (value) => String(value ?? "").replace(/\D/g, "").replace(/^0+/, "");
+
+// Aksi-Pengajuan only ever serves the gup flow, and the sheet's Jenis list has no PTUP.
+const PEMBAYARAN_BP_JENIS_AJUAN = { gup: "GUP", ptup: "GTUP NIHIL" };
+
+// One Pembayaran BP row per Nomor SPM, its Nilai SP2D the sum of every DRPP row carrying
+// that SPM. Blank SPM rows are not a transaction yet.
+function groupAksiRowsBySpm(rows) {
+    const groups = new Map();
+    for (const row of rows || []) {
+        const spm = spmDigits(row?.spm);
+        if (!spm) continue;
+        const nominal = parseRupiah(row?.nominal);
+        if (Number.isNaN(nominal)) return { error: `Nominal "${row?.nominal}" bukan angka.` };
+        groups.set(spm, (groups.get(spm) || 0) + nominal);
+    }
+    return { groups };
+}
+
+// Records the aksi on the Pembayaran BP sheet, and drops the rows of any SPM the aksi
+// no longer carries. Returns a warning to show the admin, or null when everything
+// landed - never throws, the aksi itself is already saved.
+async function syncPembayaranBpFromAksi(req, { tanggalSp2d, rows, jenisSlug, satker, previousSpm }) {
+    const spreadsheetId = getSpreadsheetId(req, 'PEMBAYARAN_BP');
+    if (!spreadsheetId) return "Spreadsheet Pembayaran BP untuk tahun ini belum dikonfigurasi.";
+
+    const { groups, error } = groupAksiRowsBySpm(rows);
+    if (error) return `${error} Transaksi tidak dicatat di Pembayaran BP.`;
+
+    // Whatever the antrian claimed before this save and no longer does
+    const dropped = String(previousSpm || "").split(",").map(spmDigits)
+        .filter(spm => spm && !groups.has(spm));
+    if (groups.size === 0 && dropped.length === 0) return null;
+    if (groups.size > 0 && !String(tanggalSp2d || "").trim()) {
+        return "Tanggal SP2D belum diisi, transaksi tidak dicatat di Pembayaran BP.";
+    }
+
+    const jenis = PEMBAYARAN_BP_JENIS_AJUAN[String(jenisSlug || "").trim().toLowerCase()];
+    if (groups.size > 0 && !jenis) return `Jenis "${jenisSlug}" tidak dikenal di Pembayaran BP.`;
+
+    const sheetName = pembayaranBpSheetName(req);
+    const options = await pembayaranBpFormOptions(spreadsheetId, sheetName);
+    const unitKerja = SATKER_UNIT_KERJA[normalizeSatker(satker)];
+    const va = options.va.find(item => normalizeSatker(item.unitKerja) === normalizeSatker(unitKerja));
+    if (groups.size > 0 && !va) return `Unit Kerja "${satker}" tidak punya VA di Pembayaran BP.`;
+
+    const sheetId = await pembayaranBpSheetId(spreadsheetId, sheetName);
+
+    await queuePembayaranBpWrite(spreadsheetId, async () => {
+        // C answers where an append goes (the No formula counts it), D which SPM are
+        // already there - one read for both
+        const existing = await readRange(sheets, spreadsheetId, `'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:D`);
+        const values = existing.data.values || [];
+        const rowOf = new Map();
+        values.forEach((row, index) => {
+            const spm = spmDigits(row?.[1]);
+            if (spm && !rowOf.has(spm)) rowOf.set(spm, PEMBAYARAN_BP_FIRST_ROW + index);
+        });
+        let appendRow = PEMBAYARAN_BP_FIRST_ROW + values.filter(row => trimmed(row?.[0]) !== "").length;
+
+        const requests = [];
+        for (const [spm, nilaiSp2d] of groups) {
+            const built = pembayaranBpCells({
+                tanggalSp2d, nomorSpm: spm, jenis, va: va.kode, nilaiSp2d: String(nilaiSp2d),
+                statusBayarPenerima: PEMBAYARAN_BP_STATUS_BARU,
+            }, { buktiBayar: {}, buktiBayarDepositPajak: {} }, options);
+            if (!built.ok) throw new Error(built.message);
+
+            const known = rowOf.get(spm);
+            if (known) {
+                requests.push(...pembayaranBpWriteRequests(sheetId, known, PEMBAYARAN_BP_RUNS_SYNC, built.cells));
+            } else {
+                if (appendRow > PEMBAYARAN_BP_FIRST_ROW) requests.push(...pembayaranBpCopyRow(sheetId, PEMBAYARAN_BP_FIRST_ROW, appendRow));
+                requests.push(...pembayaranBpWriteRequests(sheetId, appendRow, PEMBAYARAN_BP_RUNS_CREATE, built.cells));
+                appendRow++;
+            }
+        }
+
+        // Last and bottom up: No spills from SEQUENCE, so rows are removed rather than
+        // blanked, and every request above still points at the row it was built for.
+        dropped.map(spm => rowOf.get(spm)).filter(Boolean).sort((a, b) => b - a)
+            .forEach(row => requests.push({ deleteDimension: {
+                range: { sheetId, dimension: "ROWS", startIndex: row - 1, endIndex: row },
+            }}));
+
+        if (requests.length === 0) return;
+        await withBackoff(() => sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }));
+        pembayaranBpCache.delete(`rows|${spreadsheetId}|${sheetName}`);
+    });
+
+    return null;
+}
 
 // Looking up a handful of numbers in a row should not re-read the sheet each time
 const PEMBAYARAN_BP_SEARCH_TTL_MS = 60 * 1000;

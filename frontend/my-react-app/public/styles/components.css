@@ -735,6 +735,48 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 8px;
 }
 
+.docs-rincian {
+    max-width: 460px;
+    margin: 12px 0 26px;
+    padding: 14px 18px;
+    border: 1px solid #E4E9F0;
+    border-left: 4px solid #00449C;
+    border-radius: 12px;
+    background: #F7FAFD;
+}
+
+.docs-rincian-title {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #5A6472;
+}
+
+.docs-rincian-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 4px 0;
+    color: #5A6472;
+    font-weight: 500;
+}
+
+.docs-rincian-row span:last-child {
+    font-variant-numeric: tabular-nums;
+}
+
+.docs-rincian-total {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #D8DEE8;
+    color: #00204A;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
 .docs-btn {
     height: 30px;
     border-radius: 20px;
@@ -1102,6 +1144,16 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-top: 12px;
     margin-bottom: 26px;
 }
+.docs-sp2d {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+.docs-sp2d .type-btn {
+    width: 180px;
+}
+
 .bp-field-note {
     margin-top: 12px;
     margin-bottom: 26px;

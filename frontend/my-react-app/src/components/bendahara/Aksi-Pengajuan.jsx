@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
 //Import components;
-import { columns, infoHeadData } from "./head-data.js";
+import { columns, infoHeadData, formatNomorSpp } from "./head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
-import Popup from "../../ui/Popup.jsx";
+import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 
 function AksiPengajuan(props) {
 
@@ -30,6 +30,10 @@ function AksiPengajuan(props) {
     const [documentData, setDocumentData] = useState([{
         drpp: "", nominal: "", spp: "", spm: "",
     }])
+    const [tanggalSp2d, setTanggalSp2d] = useState("")
+    // Only once the existing DRPP rows are known may a save mean "delete what is there"
+    const [docsLoaded, setDocsLoaded] = useState(false)
+    const [warning, setWarning] = useState("")
     //State for aju-verif select
     const [verifValue, setVerifValue] = useState("FALSE")
     const [drppProcess, setDrppProcess] = useState(false)
@@ -74,9 +78,14 @@ function AksiPengajuan(props) {
                     setDocumentData(response.data.data || []);
                     setDrppProcess(true);
                 }
+                setDocsLoaded(true);
             }
         } catch (error) {
-            console.error("Error fetching monitoring data", error);
+            // 404 is the normal answer for a pengajuan with no DRPP rows yet, so the
+            // state is known. Any other failure leaves it unknown, and a save then
+            // touches neither Monitoring DRPP nor Pembayaran BP.
+            if (error.response?.status === 404) setDocsLoaded(true);
+            else console.error("Error fetching monitoring data", error);
         }
     }
 
@@ -201,6 +210,19 @@ function AksiPengajuan(props) {
         }
     }
 
+    // Grouped the way the server does before writing Pembayaran BP: by SPM digits, so
+    // "60" and "00060" are one transaction
+    const nominalOf = (row) => Number(String(row.nominal ?? "").replace(/\D/g, "") || 0);
+    const spmKey = (row) => String(row.spm ?? "").replace(/\D/g, "").replace(/^0+/, "");
+    const nominalPerSpm = documentData.reduce((groups, row) => {
+        const key = spmKey(row);
+        if (key) groups.set(key, (groups.get(key) || 0) + nominalOf(row));
+        return groups;
+    }, new Map());
+    const nominalTanpaSpm = documentData.reduce(
+        (sum, row) => spmKey(row) ? sum : sum + nominalOf(row), 0);
+    const totalNominal = documentData.reduce((sum, row) => sum + nominalOf(row), 0);
+
     //Compile Info Antrian table data
     const infoTableData = [
         props.fulldata[0], 
@@ -215,11 +237,14 @@ function AksiPengajuan(props) {
 
     //Submit Handler
     async function handleOnSubmit(){
-        const drppArray = documentData.map(row => row.drpp).join(", ");
-        const sppArray = documentData.map(row => row.spp).filter(spp => spp.trim() !== "");
+        // Unticking Buat DRPP means this pengajuan has no DRPP, so the antrian stops
+        // claiming a DRPP, SPP and SPM as well
+        const docRows = drppProcess ? documentData : [];
+        const drppArray = docRows.map(row => row.drpp).join(", ");
+        const sppArray = docRows.map(row => row.spp).filter(spp => spp.trim() !== "");
         const sppString = [...new Set(sppArray)].join(", ");
 
-        const spmArray = documentData.map(row => row.spm).filter(spm => spm.trim() !== "");
+        const spmArray = docRows.map(row => row.spm).filter(spm => spm.trim() !== "");
         const spmString = [...new Set(spmArray)].join(", ");
 
         const updatedAntriData = {
@@ -229,22 +254,18 @@ function AksiPengajuan(props) {
             spm: spmString,
         };
 
-        const nominalArray = documentData.map(row => row.nominal).join(", ");
-        const spmArrayString = documentData.map(row => row.spp).join(", ");
-        let monitoringDrppData = null
-        if (drppProcess) {
-            monitoringDrppData = {
-                trans_id: props.fulldata[0],
-                satker: props.fulldata[11],
-                nominal: nominalArray,
-                jenis: props.fulldata[3],
-                spmDrpp: spmArrayString,
-            }
-        }
+        // Sent even when unticked: the rows already on the sheet have to be removed,
+        // which the server can only do if it is told about this save
+        const monitoringDrppData = docsLoaded ? {
+            trans_id: props.fulldata[0],
+            satker: props.fulldata[11],
+            jenis: props.fulldata[3],
+        } : null
 
         const sendData = {
             updatedAntriData,
             monitoringDrppData,
+            ...(docsLoaded ? { documentData, drppProcess, tanggalSp2d } : {}),
         }
 
         try {
@@ -252,8 +273,10 @@ function AksiPengajuan(props) {
             setIsLoading(true);
             const result = await apiClient.post('/bendahara/aksi-ajuan', sendData)
             if (result.status === 200) {
-                props.changeComponent("kelola-pengajuan")
                 setIsLoading(false)
+                // Stay put when Pembayaran BP was not written, or the admin never sees it
+                if (result.data?.warning) return setWarning(result.data.warning)
+                props.changeComponent("kelola-pengajuan")
             }
         } catch (error) {
             console.log("Failed sending Data.", error)
@@ -301,6 +324,11 @@ function AksiPengajuan(props) {
                 </div>
                 { drppProcess &&
                 <div className="aksi-content-docs">
+                    <div className="docs-sp2d">
+                        <label htmlFor="tanggalSp2d">Tanggal SP2D</label>
+                        <input id="tanggalSp2d" className="type-btn" type="date" name="tanggalSp2d"
+                               value={tanggalSp2d} onChange={e => setTanggalSp2d(e.target.value)}/>
+                    </div>
                     <div className="docs-label">
                         <label htmlFor="drpp">Nomor DRPP</label>
                         <label htmlFor="nominal">Nominal</label>
@@ -315,6 +343,24 @@ function AksiPengajuan(props) {
                         <input id="spm" className="docs-btn" type="text" name="spm" value={row.spm} onChange={e => handleDocInputChange(e.target, index)}/>
                     </div>
                 ))}
+                    <div className="docs-rincian">
+                        <span className="docs-rincian-title">Rincian Nominal</span>
+                        {[...nominalPerSpm].map(([spm, nominal]) => (
+                            <div key={spm} className="docs-rincian-row">
+                                <span>SPM {formatNomorSpp(spm)}</span>
+                                <span>Rp {numberFormats(nominal) || "0"}</span>
+                            </div>
+                        ))}
+                        {nominalTanpaSpm > 0 &&
+                            <div className="docs-rincian-row">
+                                <span>Tanpa Nomor SPM</span>
+                                <span>Rp {numberFormats(nominalTanpaSpm) || "0"}</span>
+                            </div>}
+                        <div className="docs-rincian-row docs-rincian-total">
+                            <span>Total Nominal</span>
+                            <span>Rp {numberFormats(totalNominal) || "0"}</span>
+                        </div>
+                    </div>
                     <div>
                         <button className="add-row-btn" onClick={(e) => addNewRow(e)}>Tambah Baris</button>
                         <button className="add-row-btn" onClick={(e) => deleteRow(e)} disabled={documentData.length === 1}>Hapus Baris</button>
@@ -334,6 +380,7 @@ function AksiPengajuan(props) {
                 }
             </div>
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}
+            {warning && <PopupAlert isAlert={!!warning} severity="warning" message={warning}/>}
             {isLoading && <LoadingScreen />}
         </div>
     )

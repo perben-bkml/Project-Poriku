@@ -3501,7 +3501,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         const informasi = [], sedangVerif = [], sudahVerif = [];
         for (const row of rows) {
             if (filled(row[PJK_COLUMN.selesaiVerif])
-                || (isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan]))) {
+                && isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan])) {
                 sudahVerif.push(row);
             } else if (filled(row[PJK_COLUMN.mulaiVerif])) {
                 sedangVerif.push(row);

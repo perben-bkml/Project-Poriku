@@ -1224,13 +1224,123 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 26px;
 }
 .docs-sp2d {
+    max-width: 470px;
+    margin: 4px 0 26px;
+    padding: 14px 18px 16px;
+    border: 1px solid #F0C36B;
+    border-left: 6px solid #E8A33D;
+    border-radius: 12px;
+    background: #FFF8E8;
+    animation: docs-sp2d-attention 2.2s ease-in-out infinite;
+}
+
+.docs-sp2d-head {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 18px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
+
+.docs-sp2d-head label {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #7A4B00;
+}
+
+.docs-sp2d-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #E8A33D;
+    color: #FFFFFF;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.docs-sp2d-badge {
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #E8A33D;
+    color: #FFFFFF;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.docs-sp2d-body {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
 .docs-sp2d .type-btn {
-    width: 180px;
+    width: 190px;
+    height: 38px;
+    border: solid 1.5px #E8A33D;
+    background: #FFFFFF;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #7A4B00;
+}
+
+.docs-sp2d .type-btn:focus-visible {
+    outline: 2px solid #B26A00;
+    outline-offset: 1px;
+}
+
+.docs-sp2d-hint {
+    flex: 1 1 170px;
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: #8A5A10;
+}
+
+.docs-sp2d-filled {
+    border-color: #B6E5C9;
+    border-left-color: #0F9043;
+    background: #F2FBF6;
+    animation: none;
+}
+
+.docs-sp2d-filled .docs-sp2d-head label {
+    color: #0B5F2E;
+}
+
+.docs-sp2d-filled .docs-sp2d-icon,
+.docs-sp2d-filled .docs-sp2d-badge {
+    background: #0F9043;
+}
+
+.docs-sp2d-filled .type-btn {
+    border-color: #0F9043;
+    color: #0B5F2E;
+}
+
+.docs-sp2d-filled .docs-sp2d-hint {
+    color: #3F7A57;
+}
+
+@keyframes docs-sp2d-attention {
+    0%, 100% { box-shadow: 0 2px 10px rgba(232, 163, 61, 0.25); }
+    50% { box-shadow: 0 2px 20px rgba(232, 163, 61, 0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .docs-sp2d {
+        animation: none;
+        box-shadow: 0 2px 10px rgba(232, 163, 61, 0.35);
+    }
 }
 
 .bp-field-note {

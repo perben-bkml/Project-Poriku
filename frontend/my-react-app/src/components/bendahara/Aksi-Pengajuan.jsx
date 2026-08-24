@@ -324,10 +324,19 @@ function AksiPengajuan(props) {
                 </div>
                 { drppProcess &&
                 <div className="aksi-content-docs">
-                    <div className="docs-sp2d">
-                        <label htmlFor="tanggalSp2d">Tanggal SP2D</label>
-                        <input id="tanggalSp2d" className="type-btn" type="date" name="tanggalSp2d"
-                               value={tanggalSp2d} onChange={e => setTanggalSp2d(e.target.value)}/>
+                    <div className={`docs-sp2d${tanggalSp2d ? " docs-sp2d-filled" : ""}`}>
+                        <div className="docs-sp2d-head">
+                            <span className="docs-sp2d-icon">{tanggalSp2d ? "\u2713" : "!"}</span>
+                            <label htmlFor="tanggalSp2d">Tanggal SP2D</label>
+                            <span className="docs-sp2d-badge">{tanggalSp2d ? "Sudah Diisi" : "Wajib Diisi"}</span>
+                        </div>
+                        <div className="docs-sp2d-body">
+                            <input id="tanggalSp2d" className="type-btn" type="date" name="tanggalSp2d"
+                                   value={tanggalSp2d} onChange={e => setTanggalSp2d(e.target.value)}/>
+                            <p className="docs-sp2d-hint">{tanggalSp2d
+                                ? "Transaksi akan dicatat di Pembayaran BP."
+                                : "Tanpa Tanggal SP2D, transaksi tidak akan dicatat di Pembayaran BP."}</p>
+                        </div>
                     </div>
                     <div className="docs-label">
                         <label htmlFor="drpp">Nomor DRPP</label>

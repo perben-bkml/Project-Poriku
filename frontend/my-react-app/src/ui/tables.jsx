@@ -492,11 +492,11 @@ export function TableKelola(props) {
                     {visibleRows
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map(({ row, index }) => (
-                            <Row 
-                                key={index} 
-                                rowData={row} 
-                                rowIndex={index} 
-                                coloredRow={props.coloredRow} 
+                            <Row
+                                key={index}
+                                rowData={row}
+                                rowIndex={index}
+                                coloredRow={props.coloredRow}
                                 addColorData={props.addColorData}
                                 feature={props.feature}
                             />

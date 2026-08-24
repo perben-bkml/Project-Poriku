@@ -641,6 +641,102 @@ input[type="number"]::-webkit-inner-spin-button {
     justify-content: center;
     font-size: 1rem;
 }
+/* Kelola-Pengajuan tab strip. Width and side margins mirror .bg-card so the strip
+   lines up with the table card it switches. */
+.kelola-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 94%;
+    margin: 10px 50px 0 50px;
+}
+
+.kelola-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: solid 1px rgb(214, 214, 214);
+    border-radius: 20px;
+    background-color: white;
+    color: #5A6472;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.kelola-tab:hover {
+    border-color: #00449C;
+    color: #00449C;
+}
+
+.kelola-tab:focus-visible {
+    outline: 2px solid #00449C;
+    outline-offset: 2px;
+}
+
+.kelola-tab-count {
+    min-width: 26px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background-color: #EDF1F7;
+    color: #5A6472;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.kelola-tab-active {
+    border-color: #00449C;
+    background-color: #00449C;
+    color: white;
+    font-weight: 600;
+}
+
+.kelola-tab-active:hover {
+    color: #FFCF5F;
+}
+
+.kelola-tab-active .kelola-tab-count {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: white;
+}
+
+.kelola-tab-alert .kelola-tab-count {
+    background-color: #EB2727;
+    color: white;
+}
+
+.kelola-tab-alert:not(.kelola-tab-active) {
+    border-color: #F3B5B5;
+    color: #8B0808;
+}
+
+.kelola-tab-alert.kelola-tab-active {
+    border-color: #8B0808;
+    background-color: #8B0808;
+}
+
+.kelola-tab-count-alert {
+    background-color: #EB2727;
+    color: white;
+}
+
+.kelola-tab-count-warn {
+    background-color: #FFE39F;
+    color: #8A6100;
+}
+
+.kelola-empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: #8A93A2;
+    font-size: 1rem;
+}
+
 /* Mirrors .bg-card's width and side margins so the action lines up with the right
    edge of the cards below instead of the window */
 .pjk-toolbar {
@@ -1067,6 +1163,12 @@ input[type="number"]::-webkit-inner-spin-button {
     .pjk-toolbar {
         max-width: 1280px;
         margin: 0 30px 10px 30px;
+    }
+
+    .kelola-tabs {
+        max-width: 1280px;
+        margin: 10px 30px 0 30px;
+        font-size: 0.9rem;
     }
 
     /* Styling Pengajuan-info */

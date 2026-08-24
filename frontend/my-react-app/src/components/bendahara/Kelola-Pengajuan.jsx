@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 //Import components
-import { Card, WideTableCard } from '../../ui/cards.jsx';
+import { WideTableCard } from '../../ui/cards.jsx';
 import { headData1, headData2, headData3, headData4, headDataPjk } from './head-data.js';
-import { PILOT } from '../../lib/pilot.js';
 import PropTypes from "prop-types";
 
 // Pajak (12) or Anggaran (13) answered with anything but OK - the bendahara flagged
@@ -12,27 +11,46 @@ const bermasalah = row => [row[12], row[13]]
     .map(value => String(value ?? "").trim())
     .some(value => value !== "" && value !== "OK");
 
-// source picks the section out of the response; columns are indices on the 'Write Antrian' row
+// Each tab groups the original per-status tables it used to show as its own always-visible
+// card; source/columns index into the 'Write Antrian' row exactly as before the tab UI
 const SECTIONS = [
-    {card: "Dalam Antrian", title: "Pengajuan Belum Verifikasi", head: headData1,
-        source: data => data[0], columns: [0, 1, 2, 3, 4, 5, 11, 7]},
-    {card: "Sedang di Verifikasi", title: "Sedang Verifikasi Bendahara", head: headData2,
-        source: data => (data[1] || []).filter(row => !bermasalah(row)), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7]},
-    {card: "Bermasalah", title: "Pengajuan Bermasalah", head: headData2,
-        source: data => (data[1] || []).filter(bermasalah), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7]},
-    {card: "Menunggu Verifikator PJK", title: "Menunggu Diuji Verifikator PJK", head: headDataPjk,
-        source: data => data[6], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 20, 21, 11]},
-    {card: "Sudah di Verifikasi", title: "Sudah Verifikasi", head: headData2,
-        source: data => data[2], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 11, 7]},
-    {card: "Diajukan Hari Ini", title: "Ajuan Hari Ini", head: headData3,
-        source: data => data[3], columns: [0, 2, 3, 4, 6, 11, 7]},
-    {card: "Selesai Bulan Ini", title: "Sudah Diajukan Bulan Ini", head: headData4,
-        source: data => [...(data[4] || []), ...(data[5] || [])], columns: [0, 2, 3, 4, 6, 11, 8, 9, 10]},
+    {card: "Dalam Antrian", tables: [
+        {title: "Pengajuan Belum Verifikasi", head: headData1,
+            source: data => data[0], columns: [0, 1, 2, 3, 4, 5, 11, 7],
+            empty: "Tidak ada pengajuan dalam antrian."},
+    ]},
+    {card: "Sedang Diverifikasi", tables: [
+        {title: "Sedang Verifikasi Bendahara", head: headData2,
+            source: data => (data[1] || []).filter(row => !bermasalah(row)), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
+            empty: "Tidak ada pengajuan yang sedang diverifikasi."},
+        {title: "Pengajuan Bermasalah", head: headData2, badge: "alert",
+            source: data => (data[1] || []).filter(bermasalah), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
+            empty: "Tidak ada pengajuan bermasalah."},
+        {title: "Menunggu Diuji Verifikator PJK", head: headDataPjk, badge: "warn",
+            source: data => data[6], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 20, 21, 11],
+            empty: "Tidak ada pengajuan yang menunggu verifikator PJK."},
+    ]},
+    {card: "Sudah Diverifikasi", tables: [
+        {title: "Sudah Verifikasi", head: headData2,
+            source: data => data[2], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 11, 7],
+            empty: "Tidak ada pengajuan yang sudah diverifikasi."},
+        {title: "Ajuan Hari Ini", head: headData3,
+            source: data => data[3], columns: [0, 2, 3, 4, 6, 11, 7],
+            empty: "Tidak ada pengajuan yang diajukan hari ini."},
+    ]},
+    {card: "Sudah Diajukan", tables: [
+        {title: "Sudah Diajukan Bulan Ini", head: headData4,
+            source: data => [...(data[4] || []), ...(data[5] || [])], columns: [0, 2, 3, 4, 6, 11, 8, 9, 10],
+            empty: "Tidak ada pengajuan yang sudah diajukan bulan ini."},
+    ]},
 ];
+
+const TAB_KEY = 'kelolaTabBendahara';
 
 function KelolaPengajuan(props) {
     const [data, setData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [activeCard, setActiveCard] = useState(() => localStorage.getItem(TAB_KEY) || "");
 
     useEffect(() => {
         (async () => {
@@ -47,26 +65,57 @@ function KelolaPengajuan(props) {
         })();
     }, [])
 
-    // Pilot hold: with PILOT_SKIP_MENUNGGU_PJK on, the backend parks a row on the
-    // verifikator only when it belongs to a pilot satker, so this section holds those rows
-    // and nobody else's. It is dropped rather than shown empty only when the pilot has no
-    // participants left. Turning both flags back off restores it as it was.
-    const sections = SECTIONS
-        .filter(section => !(PILOT.hideMenungguPjkSection && section.card === "Menunggu Verifikator PJK"))
-        .map(section => ({...section, rows: section.source(data) || []}));
+    const sections = useMemo(() => SECTIONS.map(section => {
+        const tables = section.tables.map(table => ({...table, rows: table.source(data) || []}));
+        const badgeCount = (type) => tables
+            .filter(table => table.badge === type)
+            .reduce((sum, table) => sum + table.rows.length, 0);
+        return {...section, tables, count: tables.reduce((sum, table) => sum + table.rows.length, 0),
+            alertCount: badgeCount("alert"), warnCount: badgeCount("warn")};
+    }), [data]);
+
+    // A remembered tab can be a card name from before the 7-to-4 merge
+    const active = sections.find(section => section.card === activeCard) || sections[0];
+
+    const selectTab = (card) => {
+        setActiveCard(card);
+        localStorage.setItem(TAB_KEY, card);
+    };
 
     return (
         <div className='kelola-container'>
-            <div className='card-wrap'>
-                {sections.map(section => (
-                    <Card key={section.card} title={section.card} content={section.rows.length}/>
-                ))}
+            <div className='kelola-tabs' role='tablist'>
+                {sections.map(section => {
+                    const isActive = section.card === active.card;
+                    return (
+                        <button key={section.card} type='button' role='tab' aria-selected={isActive}
+                            onClick={() => selectTab(section.card)}
+                            className={`kelola-tab${isActive ? " kelola-tab-active" : ""}`}>
+                            <span className='kelola-tab-label'>{section.card}</span>
+                            <span className='kelola-tab-count'>{isLoading ? "-" : section.count}</span>
+                            {!isLoading && section.alertCount > 0 &&
+                                <span className='kelola-tab-count kelola-tab-count-alert'>{section.alertCount}</span>}
+                            {!isLoading && section.warnCount > 0 &&
+                                <span className='kelola-tab-count kelola-tab-count-warn'>{section.warnCount}</span>}
+                        </button>
+                    );
+                })}
             </div>
-            {sections.map(section => (
-                <WideTableCard key={section.title} title={section.title} tableHead={section.head}
-                    tableContent={section.rows.map(row => section.columns.map(index => row[index]))}
-                    fullContent={section.rows} loading={isLoading}
-                    changeComponent={props.changeComponent} aksiData={props.aksiData}/>
+            {/* Keyed per table (titles are unique across every tab) so TableKelola remounts
+                on tab switch: its page number is internal state, and page 3 of one table is
+                out of range in the next */}
+            {active.tables.map(table => (
+                !isLoading && table.rows.length === 0 ? (
+                    <div key={table.title} className='bg-card wide-card'>
+                        <h2 className='wide-card-title'>{table.title}</h2>
+                        <p className='kelola-empty'>{table.empty}</p>
+                    </div>
+                ) : (
+                    <WideTableCard key={table.title} title={table.title} tableHead={table.head}
+                        tableContent={table.rows.map(row => table.columns.map(index => row[index]))}
+                        fullContent={table.rows} loading={isLoading}
+                        changeComponent={props.changeComponent} aksiData={props.aksiData}/>
+                )
             ))}
         </div>
     )

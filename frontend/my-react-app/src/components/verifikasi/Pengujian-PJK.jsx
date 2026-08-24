@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
@@ -25,10 +25,13 @@ const POLL_LIMIT = 15;
 const ditolak = row => [row[SUBSTANSI], row[KELENGKAPAN]]
     .some(value => String(value ?? "").trim() === "Ditolak");
 
+const TAB_KEY = 'pengujianPjkTab';
+
 function PengujianPJK(props) {
     const [sections, setSections] = useState([[], [], []]);
     const [pending, setPending] = useState(new Set());
     const [isLoading, setIsLoading] = useState(true);
+    const [activeTitle, setActiveTitle] = useState(() => localStorage.getItem(TAB_KEY) || "");
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
     async function fetchPjk({quiet = false} = {}) {
@@ -75,12 +78,23 @@ function PengujianPJK(props) {
         return row[index];
     }));
 
-    const tables = [
-        {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0]},
-        {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row))},
-        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(ditolak)},
-        {title: "Sudah Verifikasi", head: [...pjkHeadData, DOK_HEAD], columns: INFO_DOK_COLUMNS, rows: sections[2]},
-    ];
+    const tables = useMemo(() => [
+        {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0],
+            empty: "Tidak ada pengajuan yang perlu diuji."},
+        {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
+            empty: "Tidak ada pengajuan yang sedang diverifikasi."},
+        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(ditolak), alert: true,
+            empty: "Tidak ada pengajuan bermasalah."},
+        {title: "Sudah Verifikasi", head: [...pjkHeadData, DOK_HEAD], columns: INFO_DOK_COLUMNS, rows: sections[2],
+            empty: "Tidak ada pengajuan yang sudah diverifikasi."},
+    ], [sections]);
+
+    const active = tables.find(table => table.title === activeTitle) || tables[0];
+
+    const selectTab = (title) => {
+        setActiveTitle(title);
+        localStorage.setItem(TAB_KEY, title);
+    };
 
     return (
         <div className='kelola-container'>
@@ -89,14 +103,33 @@ function PengujianPJK(props) {
                        disabled={isLoading} onClick={() => fetchPjk()}
                        style={{cursor: isLoading ? 'wait' : 'pointer'}}/>
             </div>
-            {tables.map(table => (
-                <WideTableCard key={table.title} title={table.title} feature="PJK"
+            <div className='kelola-tabs' role='tablist'>
+                {tables.map(table => {
+                    const isActive = table.title === active.title;
+                    return (
+                        <button key={table.title} type='button' role='tab' aria-selected={isActive}
+                            onClick={() => selectTab(table.title)}
+                            className={`kelola-tab${isActive ? " kelola-tab-active" : ""}`
+                                + `${table.alert && table.rows.length ? " kelola-tab-alert" : ""}`}>
+                            <span className='kelola-tab-label'>{table.title}</span>
+                            <span className='kelola-tab-count'>{isLoading ? "-" : table.rows.length}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            {!isLoading && active.rows.length === 0 ? (
+                <div className='bg-card wide-card'>
+                    <h2 className='wide-card-title'>{active.title}</h2>
+                    <p className='kelola-empty'>{active.empty}</p>
+                </div>
+            ) : (
+                <WideTableCard key={active.title} title={active.title} feature="PJK"
                     aksiLabel="Verif" aksiTarget="aksi-verif-PJK"
-                    tableHead={table.head}
-                    tableContent={project(table.rows, table.columns)}
-                    fullContent={table.rows} loading={isLoading}
+                    tableHead={active.head}
+                    tableContent={project(active.rows, active.columns)}
+                    fullContent={active.rows} loading={isLoading}
                     changeComponent={props.changeComponent} aksiData={props.aksiData}/>
-            ))}
+            )}
         </div>
     )
 }

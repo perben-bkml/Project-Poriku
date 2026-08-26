@@ -1,4 +1,4 @@
-import {useState, Fragment, useEffect, useMemo, useRef} from 'react';
+import {useState, Fragment, useEffect, useMemo, useRef, memo} from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -11,17 +11,20 @@ import TableFooter from '@mui/material/TableFooter';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { CircularProgress, IconButton, TablePagination, Tooltip } from '@mui/material';
+import { CircularProgress, IconButton, Pagination, TablePagination, Tooltip } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import RemoveRedEyeIcon from '@mui/icons-material/RemoveRedEye';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
+import PropTypes from 'prop-types';
 
 const BUKTI_SETOR_STYLE = {
     "Sudah Diunggah": { color: "#9FFFC3", textcolor: "#0F9043" },
@@ -1090,3 +1093,201 @@ export function TableRekKoran(props) {
         </TableContainer>
     )
 }
+
+
+// Daftar-Pengajuan.jsx
+// Status is free text off the sheet, so match on the lowered value and let anything
+// unrecognised fall back to neutral rather than rendering an unstyled pill.
+const DAFTAR_STATUS_STYLE = {
+    "dalam antrian":          { bg: "#E7ECF4", fg: "#41506B" },
+    "diajukan hari ini":      { bg: "#DCE9FF", fg: "#00449C" },
+    "sedang di verifikasi":   { bg: "#FFF1CF", fg: "#8A6100" },
+    "sudah di verifikasi":    { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "sudah diterbitkan drpp": { bg: "#D5EEF6", fg: "#0B6478" },
+    "sudah diajukan ke kppn": { bg: "#E5DEFA", fg: "#4B32A8" },
+};
+const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
+const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
+
+function daftarStatusStyle(status) {
+    const key = String(status ?? "").trim().toLowerCase();
+    if (key.includes("masalah")) return DAFTAR_STATUS_MASALAH;
+    return DAFTAR_STATUS_STYLE[key] || DAFTAR_STATUS_FALLBACK;
+}
+
+const DAFTAR_DETAIL_FIELDS = [
+    { key: "spp", label: "Nomor SPP" },
+    { key: "spm", label: "Nomor SPM" },
+    { key: "pajak", label: "Status Pajak" },
+    { key: "anggaran", label: "Ketersediaan Anggaran" },
+    { key: "mulaiVerif", label: "Mulai Verifikasi" },
+    { key: "selesaiVerif", label: "Selesai Verifikasi" },
+];
+
+const DAFTAR_COLUMN_COUNT = 9;
+const dash = (value) => {
+    const text = String(value ?? "").trim();
+    return text === "" ? "—" : text;
+};
+
+function DaftarBerkas({ label, url, pending }) {
+    if (pending) return <span className="dp-file dp-file-pending">{label} · sedang dibuat…</span>;
+    if (!url) return <span className="dp-file dp-file-empty">{label} · —</span>;
+    return (
+        <a className="dp-file" href={url} target="_blank" rel="noopener noreferrer">
+            <DescriptionOutlinedIcon sx={{ fontSize: 17 }} />{label}
+        </a>
+    );
+}
+
+DaftarBerkas.propTypes = {
+    label: PropTypes.string.isRequired,
+    url: PropTypes.string,
+    pending: PropTypes.bool,
+};
+
+const DaftarRow = memo(function DaftarRow({ row, onView, onEdit, onDelete }) {
+    const [open, setOpen] = useState(false);
+    const status = daftarStatusStyle(row.status);
+
+    return (
+        <Fragment>
+            <tr className={`dp-row${open ? " dp-row-open" : ""}`}>
+                <td className="dp-cell-toggle">
+                    <IconButton size="small" aria-label={open ? "Tutup rincian" : "Lihat rincian"}
+                        aria-expanded={open} onClick={() => setOpen(value => !value)}>
+                        {open ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
+                    </IconButton>
+                </td>
+                <td><span className="dp-id">{row.id}</span></td>
+                <td className="dp-cell-jenis">{row.jenis}</td>
+                <td className="dp-num dp-cell-nominal">{dash(row.nominal)}</td>
+                <td className="dp-num">{dash(row.tglAjuan)}</td>
+                <td className="dp-num">{dash(row.tglProses)}</td>
+                <td className="dp-num">{dash(row.drpp)}</td>
+                <td>
+                    <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>{dash(row.status)}</span>
+                    {row.hasilVerifPending && <span className="dp-status-note">Hasil verif. dibuat…</span>}
+                </td>
+                <td>
+                    <div className="dp-actions">
+                        <Tooltip title="Lihat detail" arrow>
+                            <IconButton size="small" aria-label="Lihat detail pengajuan" onClick={() => onView(row)}>
+                                <RemoveRedEyeIcon sx={{ fontSize: 21, color: "#00204A" }} />
+                            </IconButton>
+                        </Tooltip>
+                        {/* A pengajuan already on a DRPP is locked: editing or deleting it would
+                            leave the DRPP pointing at a row that no longer matches */}
+                        {row.canModify && <>
+                            <Tooltip title="Ubah pengajuan" arrow>
+                                <IconButton size="small" aria-label="Ubah pengajuan" onClick={() => onEdit(row)}>
+                                    <EditIcon sx={{ fontSize: 21, color: "#D9A33B" }} />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Hapus pengajuan" arrow>
+                                <IconButton size="small" aria-label="Hapus pengajuan" onClick={() => onDelete(row)}>
+                                    <DeleteForeverIcon sx={{ fontSize: 21, color: "#BD1404" }} />
+                                </IconButton>
+                            </Tooltip>
+                        </>}
+                    </div>
+                </td>
+            </tr>
+            <tr className="dp-detail-row">
+                <td className="dp-detail-cell" colSpan={DAFTAR_COLUMN_COUNT}>
+                    <Collapse in={open} timeout={160} unmountOnExit>
+                        <div className="dp-detail">
+                            <dl className="dp-detail-grid">
+                                {DAFTAR_DETAIL_FIELDS.map(field => (
+                                    <div className="dp-detail-item" key={field.key}>
+                                        <dt>{field.label}</dt>
+                                        <dd>{dash(row[field.key])}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            <div className="dp-detail-files">
+                                {/* Only GUP/PTUP carry a Bupot; the other jenis have the PJK in its place */}
+                                {row.isGup && <DaftarBerkas label="Bupot" url={row.bupot} />}
+                                <DaftarBerkas label="PJK" url={row.pjk} />
+                                <DaftarBerkas label="Hasil Verifikasi" url={row.hasilVerif} pending={row.hasilVerifPending} />
+                            </div>
+                            {(row.catatan || row.pjkCatatan) &&
+                                <div className="dp-detail-notes">
+                                    {row.catatan && <p><span>Catatan Bendahara</span>{row.catatan}</p>}
+                                    {row.pjkCatatan && <p><span>Catatan Verifikator PJK</span>{row.pjkCatatan}</p>}
+                                </div>}
+                        </div>
+                    </Collapse>
+                </td>
+            </tr>
+        </Fragment>
+    );
+});
+
+DaftarRow.propTypes = {
+    row: PropTypes.object.isRequired,
+    onView: PropTypes.func.isRequired,
+    onEdit: PropTypes.func.isRequired,
+    onDelete: PropTypes.func.isRequired,
+};
+
+export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
+                                       onPageChange, onRowsPerPageChange, onView, onEdit, onDelete }) {
+    return (
+        <div className="dp-table-card">
+            <div className="dp-toolbar">
+                <span className="dp-toolbar-info">
+                    {loading ? "Memuat data…" : totalPages > 0 ? `Halaman ${page} dari ${totalPages}` : "Tidak ada pengajuan"}
+                </span>
+                <label className="dp-perpage">
+                    Baris per halaman
+                    <select value={rowsPerPage} onChange={event => onRowsPerPageChange(Number(event.target.value))}>
+                        {rowsPerPageOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </label>
+            </div>
+            <div className="dp-scroll">
+                <table className="dp-table">
+                    <thead>
+                        <tr>
+                            <th className="dp-cell-toggle"><span className="dp-sr-only">Rincian</span></th>
+                            <th>No.</th>
+                            <th>Jenis</th>
+                            <th className="dp-th-right">Nominal</th>
+                            <th>Tgl. Ajuan</th>
+                            <th>Tgl. Proses</th>
+                            <th>DRPP</th>
+                            <th>Status</th>
+                            <th className="dp-th-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading
+                            ? <tr><td colSpan={DAFTAR_COLUMN_COUNT} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
+                            : rows.length === 0
+                                ? <tr><td colSpan={DAFTAR_COLUMN_COUNT} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
+                                : rows.map(row => (
+                                    <DaftarRow key={row.key} row={row} onView={onView} onEdit={onEdit} onDelete={onDelete} />
+                                ))}
+                    </tbody>
+                </table>
+            </div>
+            {totalPages > 1 &&
+                <Pagination className="dp-pagination" size="medium" count={totalPages} page={page} onChange={onPageChange} />}
+        </div>
+    );
+}
+
+TableDaftarPengajuan.propTypes = {
+    rows: PropTypes.array.isRequired,
+    loading: PropTypes.bool,
+    page: PropTypes.number.isRequired,
+    totalPages: PropTypes.number.isRequired,
+    rowsPerPage: PropTypes.number.isRequired,
+    rowsPerPageOptions: PropTypes.array.isRequired,
+    onPageChange: PropTypes.func.isRequired,
+    onRowsPerPageChange: PropTypes.func.isRequired,
+    onView: PropTypes.func.isRequired,
+    onEdit: PropTypes.func.isRequired,
+    onDelete: PropTypes.func.isRequired,
+};

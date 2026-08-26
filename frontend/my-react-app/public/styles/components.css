@@ -47,7 +47,7 @@
     margin-left: 30px;
     font-family: "Outfit", serif;
     font-size: 1rem;
-    height: 22px;
+    height: 30px;
     width: 150px;
 }
 
@@ -90,66 +90,329 @@
     padding: 20px 10px 10px 10px;
 }
 
-/* Pengajuan Info Style */
-.pengajuan-info {
+/* Daftar-Pengajuan tab strip. Sits inside .bg-card rather than beside it, so only the
+   container differs from Kelola-Pengajuan's - the buttons reuse .kelola-tab. */
+.dp-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 94%;
+    margin: 14px auto 0 auto;
+}
+
+/* Daftar-Pengajuan table. Replaces the per-row card layout: the card could only show
+   eight fields side by side, the table keeps those as columns and hangs the rest
+   (SPP, SPM, pajak, anggaran, berkas, catatan) off an expandable detail row. */
+.dp-table-card {
     background-color: #fdfdfd;
-    margin: auto;
-    margin-top: 20px;
-    /* min-height, not height: a wrapped Jenis grows the row instead of spilling out of it */
-    min-height: 100px;
-    width: 92%;
-    border: 1px solid rgb(214, 214, 214);
-    border-radius: 12px;
-    padding-left: 10px;
-    padding-right: 10px;
-    display: grid;
-    /* Jenis holds values up to "LS PLATFORM PEMBAYARAN PEMERINTAH" and Tgl. Ajuan a full
-       timestamp, so those two get the largest shares; the icons get a fixed track wide
-       enough for all three */
-    grid-template-columns: 170px minmax(0, 1.29fr) 1.35fr 1.55fr 1.57fr 1.32fr 1.36fr 1.26fr 100px;
-    column-gap: 5px;
-    font-size: 1.1rem;
-    font-weight: 600;
+    width: 94%;
+    margin: 20px auto;
+    border: 1px solid rgb(228, 233, 240);
+    border-radius: 14px;
+    /* clips the sticky header and the first/last row corners to the card radius */
+    overflow: hidden;
+}
+
+.dp-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid #EDF1F6;
+    background-color: #FBFCFE;
+}
+
+.dp-toolbar-info {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #5A6472;
+}
+
+.dp-perpage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #5A6472;
+}
+
+.dp-perpage select {
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: #00204A;
+    padding: 5px 8px;
+    border: 1px solid #D8DEE8;
+    border-radius: 8px;
+    background-color: white;
+    cursor: pointer;
+}
+
+/* The table is wider than a narrow viewport; scroll it here rather than the page body */
+.dp-scroll {
+    overflow-x: auto;
+}
+
+.dp-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
     color: #0a0f1b;
 }
 
-.info-avatar {
-    height: 100%;
-    width: 115px;
-    display: flex;
-    justify-content: center;
+.dp-table thead th {
+    background-color: #F4F7FB;
+    padding: 11px 14px;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.71rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #5A6472;
+    border-bottom: 1px solid #E1E7EF;
 }
 
-.info-ubah {
-    display: flex;
-    padding-right: 8px;
+.dp-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #F1F4F8;
+    vertical-align: middle;
+}
+
+.dp-th-right,
+.dp-table td.dp-cell-nominal {
+    text-align: right;
+}
+
+.dp-row td {
+    transition: background-color 0.12s ease;
+}
+
+.dp-row:hover td {
+    background-color: #F7FAFF;
+}
+
+.dp-row-open td {
+    background-color: #F2F7FF;
+    border-bottom-color: transparent;
+}
+
+/* Ids, nominal and dates line up column-wise only with fixed-width figures */
+.dp-num {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.dp-cell-toggle {
+    width: 44px;
+    padding-left: 8px !important;
+    padding-right: 0 !important;
+}
+
+.dp-cell-jenis {
+    font-weight: 600;
+    min-width: 90px;
+    max-width: 240px;
+}
+
+
+.dp-cell-nominal {
+    font-weight: 600;
+}
+
+.dp-id {
+    display: inline-flex;
     align-items: center;
-    justify-content: space-evenly;
+    justify-content: center;
+    min-width: 34px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 8px;
+    background-color: #00449C;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
-.info p {
-    margin-bottom: 0px;
+.dp-status {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-/* Grid items default to min-width:auto, which makes a long Jenis widen its track and push
-   the whole row past the card. These let the cell shrink and wrap instead. */
-.info {
-    min-width: 0;
+.dp-status-note {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: #8A6100;
+}
+
+.dp-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+/* Keeps the buttons reachable once the table scrolls sideways - same freeze trick the
+   Rekening Koran table uses on its left columns. Backgrounds have to be repeated per
+   state because a sticky cell paints over the row underneath it. */
+.dp-table thead th:last-child,
+.dp-row > td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    box-shadow: inset 1px 0 0 #E8EDF4;
+}
+
+.dp-table thead th:last-child {
+    background-color: #F4F7FB;
+}
+
+.dp-row > td:last-child {
+    background-color: #fdfdfd;
+}
+
+.dp-row:hover > td:last-child {
+    background-color: #F7FAFF;
+}
+
+.dp-row-open > td:last-child {
+    background-color: #F2F7FF;
+}
+
+/* The detail row is always in the DOM so Collapse has something to animate; without a
+   zero-height cell it would show as an empty striped row under every collapsed row */
+.dp-detail-row td {
+    padding: 0 !important;
+    border-bottom: 0;
+}
+
+.dp-row-open + .dp-detail-row td {
+    border-bottom: 1px solid #E1E7EF;
+}
+
+.dp-detail {
+    padding: 16px 20px 18px 52px;
+    background-color: #F8FAFD;
+}
+
+.dp-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 24px;
+    margin: 0;
+    max-width: 1000px;
+}
+
+.dp-detail-item dt {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7A8598;
+}
+
+.dp-detail-item dd {
+    margin: 3px 0 0 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #0a0f1b;
     overflow-wrap: break-word;
 }
 
-.info.data {
-    margin-top: 12px;
-    font-weight: 400;
-    font-size: 1rem;
+.dp-detail-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
 }
 
-.info.data.info-status {
+.dp-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid #DCE3EC;
+    border-radius: 999px;
+    background-color: white;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #00449C;
+    text-decoration: none;
+}
+
+.dp-file:hover {
+    border-color: #00449C;
+    background-color: #F0F5FF;
+}
+
+.dp-file-empty {
+    color: #8B94A3;
+    background-color: #F3F5F8;
+}
+
+.dp-file-pending {
+    color: #8A6100;
+    background-color: #FFF6E2;
+    border-color: #F0DFB8;
+}
+
+.dp-detail-notes {
+    margin-top: 16px;
+    display: grid;
+    gap: 10px;
+}
+
+.dp-detail-notes p {
+    margin: 0;
+    padding: 10px 14px;
+    border-left: 3px solid #C9D4E4;
+    border-radius: 0 8px 8px 0;
+    background-color: white;
+    font-size: 0.86rem;
+    color: #2A3446;
+}
+
+.dp-detail-notes span {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7A8598;
+}
+
+.dp-placeholder {
+    padding: 40px 0 !important;
+    text-align: center;
+}
+
+.dp-empty {
+    color: #7A8598;
     font-size: 0.9rem;
 }
 
-.info.nomor {
-    padding-left: 24px;
+.dp-pagination {
+    display: flex;
+    justify-content: center;
+    padding: 14px 0;
+    border-top: 1px solid #EDF1F6;
+}
+
+.dp-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
 }
 
 /* Buat Pengajuan Style */
@@ -464,19 +727,6 @@
     height: 100%;
     background: rgba(0, 0, 0, 0.781);
     z-index: 99;
-}
-
-.loading-daftar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    top: 0;
-    left: 0;
-    margin: auto;
-    width: 98%;
-    height: 200px;
-    background: rgba(0, 0, 0, 0.247);
-    border-radius: 20px;
 }
 
 .loading-antri {
@@ -1171,25 +1421,25 @@ input[type="number"]::-webkit-inner-spin-button {
         font-size: 0.9rem;
     }
 
-    /* Styling Pengajuan-info */
-    .pengajuan-info {
-        min-height: 85px;
-        width: 90%;
-        font-size: 0.9rem;
-        padding-left: 5px;
-        grid-template-columns: 150px minmax(0, 1.19fr) 1.1fr 1.25fr 1.27fr 1.33fr 1.1fr 1.04fr 100px;
+    /* Styling Daftar-Pengajuan table */
+    .dp-table-card {
+        max-width: 1280px;
     }
 
-    .info.data {
-        font-size: 0.8rem;
+    .dp-table {
+        font-size: 0.84rem;
     }
 
-    .info-avatar {
-       width: 95px;
+    .dp-table td {
+        padding: 10px 12px;
     }
 
-    .info-ubah {
-        padding: 20px 5px;
+    .dp-detail {
+        padding-left: 40px;
+    }
+
+    .dp-detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     /* Styling Buat-Pengajuan */

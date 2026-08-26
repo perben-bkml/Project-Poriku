@@ -882,7 +882,7 @@ app.get("/bendahara/antrian-gaji", async (req, res) => {
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 5, username, flow } = req.query;
+        const { page = 1, limit = 5, username, flow, kategori } = req.query;
 
         // Both antrian sheets, already projected onto the canonical layout
         let filteredRows = await fetchMergedAntrianRows(spreadsheetId);
@@ -894,6 +894,10 @@ app.get("/bendahara/antrian", async (req, res) => {
         // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
         if (flow) {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
+        }
+        // kategori is the daftar's tab split, counted over every row rather than a page
+        if (kategori) {
+            filteredRows = filteredRows.filter(row => antrianKategori(row) === kategori);
         }
         // Latest first. The two sheets each number their own rows, so the timestamp is
         // the only ordering the merged list can share.
@@ -917,7 +921,7 @@ app.get("/bendahara/antrian", async (req, res) => {
 
 // Filter data antrian based on keyword
 app.get("/bendahara/filter-date", async (req, res) => {
-    const { datePrefix, page = 1, limit = 5 } = req.query;
+    const { datePrefix, page = 1, limit = 5, kategori } = req.query;
 
     if (!datePrefix || typeof datePrefix !== 'string') {
         return res.status(400).json({ message: "Invalid date prefix." });
@@ -932,6 +936,9 @@ app.get("/bendahara/filter-date", async (req, res) => {
         let allRows = await fetchMergedAntrianRows(spreadsheetId);
         if (username) {
             allRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
+        }
+        if (kategori) {
+            allRows = allRows.filter(row => antrianKategori(row) === kategori);
         }
 
         // Filter rows whose timestamp matches the date prefix
@@ -1056,6 +1063,12 @@ const ANTRIAN_PJK_INDEX = ANTRIAN_ROW_WIDTH + 1;
 const ANTRIAN_PJK_CATATAN_INDEX = ANTRIAN_ROW_WIDTH + 2;
 const ANTRIAN_DOK_VERIF_INDEX = ANTRIAN_ROW_WIDTH + 3;
 const ANTRIAN_HASIL_VERIF_ID_INDEX = ANTRIAN_ROW_WIDTH + 4;
+
+// The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
+// bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
+const KATEGORI_GUP_JENIS = new Set(["gup", "ptup", "gup kkp"]);
+const antrianKategori = (row) =>
+    KATEGORI_GUP_JENIS.has(String(row[ANTRIAN_JENIS_INDEX] ?? "").trim().toLowerCase()) ? "gup" : "ls";
 
 // GUP/PTUP are verified twice and independently - Pajak/Anggaran by the bendahara on
 // 'Write Antrian', Substansi/Kelengkapan by the verifikator on the mirror. Either side

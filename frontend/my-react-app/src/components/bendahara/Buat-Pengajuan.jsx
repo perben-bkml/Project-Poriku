@@ -59,7 +59,9 @@ function BuatPengajuan(props) {
     const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
     const [sppError, setSppError] = useState("");
     const sppRef = useRef(null);
-    const [tanggalAjuan, setTanggalAjuan] = useState("");
+    // Seeded like nomorSpp above: the input is controlled, so leaving this empty made an
+    // untouched "ubah" write "" over the Request Tanggal the row already had
+    const [tanggalAjuan, setTanggalAjuan] = useState(() => props.passedData?.[4] || "");
     const [lockRow, setLockRow] = useState(false);
 
     //State for reading and edit tabledata
@@ -1177,8 +1179,7 @@ function BuatPengajuan(props) {
                         <input type="date" id="aju-date" name="tanggal-ajuan" className="pengajuan-date"
                             readOnly={componentType === "lihat"}
                             value={tanggalAjuan}
-                            onChange={(e)=>setTanggalAjuan(e.target.value)}
-                            defaultValue={componentType === "buat"? null : (props.passedData && props.passedData[4])}/>
+                            onChange={(e)=>setTanggalAjuan(e.target.value)}/>
                         </>}
                     </div>
                     {nomorSppRequired && sppError ?

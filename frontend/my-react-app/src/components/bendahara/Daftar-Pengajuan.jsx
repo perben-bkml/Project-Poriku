@@ -3,6 +3,7 @@ import apiClient from "../../lib/apiClient";
 // Import components
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
+import CekSisaGup from "./Cek-Sisa-Gup.jsx";
 import { rowsPerPageOptions, monthNames } from "./head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -269,6 +270,8 @@ function DaftarPengajuan(props){
     }
 
     return (
+        <>
+        <CekSisaGup />
         <div className="pengajuan bg-card">
         {isAlert && <PopupAlert isAlert={isAlert} severity={alertMessage.severity} message={alertMessage.message} />}
             <div className="pengajuan-filter">
@@ -318,6 +321,7 @@ function DaftarPengajuan(props){
             </div>
             {isDelPopup && <Popup type="delete" whenCancel={closeDelPopup} whenDel={handleDelPengajuan}/>}
         </div>
+        </>
     )
 }
 

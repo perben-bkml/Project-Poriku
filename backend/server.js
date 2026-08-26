@@ -99,8 +99,8 @@ const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
 // REFACTOR: every Sheets call went through the same five line
 // withBackoff(async () => { return await client.spreadsheets.values.X({...}) }) wrapper.
 // These keep the backoff and the argument shape identical, just without the repetition.
-const readRange = (client, spreadsheetId, range) =>
-    withBackoff(async () => client.spreadsheets.values.get({ spreadsheetId, range }));
+const readRange = (client, spreadsheetId, range, options = {}) =>
+    withBackoff(async () => client.spreadsheets.values.get({ spreadsheetId, range, ...options }));
 
 const readRanges = (client, spreadsheetId, ranges) =>
     withBackoff(async () => client.spreadsheets.values.batchGet({ spreadsheetId, ranges }));
@@ -227,6 +227,7 @@ const ROUTE_ROLES = {
 
     // Daftar Pengajuan, Buat Pengajuan, Lihat Antrian
     "GET /bendahara/antrian": USER,
+    "GET /bendahara/sisa-gup": USER,
     "GET /bendahara/filter-date": USER,
     "POST /bendahara/buat-ajuan": USER,
     "PATCH /bendahara/edit-table": USER,
@@ -969,6 +970,99 @@ app.get("/bendahara/filter-date", async (req, res) => {
     }
 });
 
+// --- Sisa GUP harian ----------------------------------------------------------
+// GUP is capped per calendar day and the cap is shared by every satker, so the daftar can
+// show which dates still have room before a bendahara commits to one.
+const GUP_DAILY_LIMIT = 300000000;
+const SISA_GUP_TTL_MS = 60 * 1000;
+
+// Tanggal Acc is written USER_ENTERED, so Sheets may have turned it into a real date. Read
+// UNFORMATTED_VALUE and a coerced cell arrives as a serial instead of a locale string, where
+// "03/04/2026" would be ambiguous. Request Tanggal is written RAW and stays ISO text.
+const SHEET_EPOCH_MS = Date.UTC(1899, 11, 30);
+const SHEET_SERIAL_MAX = 100000; // year 2173; past this toISOString throws rather than returns
+function toIsoDate(value) {
+    if (typeof value === "number") {
+        // A stray number in a date column is not a date, and NaN is typeof "number"
+        if (!Number.isFinite(value) || value < 1 || value > SHEET_SERIAL_MAX) return "";
+        return new Date(SHEET_EPOCH_MS + Math.round(value) * 86400000).toISOString().slice(0, 10);
+    }
+    const text = String(value ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    return dmy ? `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}` : "";
+}
+
+// The gup antrian is the only sheet carrying jenis "gup", so no flow logic is needed here.
+// Keyed by spreadsheet rather than by month so changing month costs no read.
+async function readGupSlotRows(spreadsheetId) {
+    const response = await readRange(sheets, spreadsheetId,
+        `'${AJUAN_FLOWS.gup.antrianSheet}'!A3:L`, { valueRenderOption: "UNFORMATTED_VALUE" });
+
+    const rows = [];
+    let nominalTidakValid = 0;
+    for (const row of response.data.values || []) {
+        if (String(row?.[3] ?? "").trim().toLowerCase() !== "gup") continue;
+        const nominal = parseRupiah(row[4]);
+        // NaN would poison the whole day's sum, so drop the row and say so instead
+        if (!Number.isFinite(nominal)) { nominalTidakValid++; continue; }
+        // A row holds the slot it was approved for, falling back to the one it asked for
+        const disetujui = toIsoDate(row[6]);
+        rows.push({
+            tanggal: disetujui || toIsoDate(row[5]),
+            sumber: disetujui ? "disetujui" : "request",
+            nominal,
+            status: String(row[7] ?? "").trim(),
+            unitKerja: String(row[11] ?? "").trim(),
+        });
+    }
+    return { rows, nominalTidakValid };
+}
+
+// The grid only draws weekdays, so a booking that landed on a Saturday would otherwise
+// vanish from the month's total with nothing to show for it
+const isAkhirPekan = (iso) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUTCDay());
+
+// A booking made through this app has to be visible on the next press of the button, or
+// the panel invites the very double booking it exists to prevent
+const forgetSisaGup = (spreadsheetId) => pembayaranBpCache.delete(`sisa-gup|${spreadsheetId}`);
+
+app.get("/bendahara/sisa-gup", async (req, res) => {
+    try {
+        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const month = /^\d{4}-\d{2}$/.test(req.query.month || "")
+            ? req.query.month
+            : getFormattedDate().fullDateFormat.slice(0, 7);
+
+        const { rows, nominalTidakValid } = await cached(`sisa-gup|${spreadsheetId}`,
+            () => readGupSlotRows(spreadsheetId), SISA_GUP_TTL_MS);
+
+        // The whole month ships at once so picking a date on the grid costs no round trip
+        const days = {};
+        let tanpaTanggal = 0;
+        let akhirPekan = 0;
+        for (const row of rows) {
+            if (!row.tanggal) { tanpaTanggal++; continue; }
+            if (!row.tanggal.startsWith(month)) continue;
+            if (isAkhirPekan(row.tanggal)) { akhirPekan++; continue; }
+            const day = days[row.tanggal] || (days[row.tanggal] = { used: 0, rows: [] });
+            day.used += row.nominal;
+            day.rows.push({
+                unitKerja: row.unitKerja, nominal: row.nominal,
+                status: row.status, sumber: row.sumber,
+            });
+        }
+
+        return res.status(200).json({
+            limit: GUP_DAILY_LIMIT, month, days,
+            diabaikan: { tanpaTanggal, akhirPekan, nominalTidakValid },
+        });
+    } catch (error) {
+        console.error("Error in GET /bendahara/sisa-gup:", error);
+        return res.status(500).json({ message: "Gagal memuat sisa GUP." });
+    }
+});
+
 
 
 // Write data from table on sheet
@@ -1457,6 +1551,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             }
 
             await writeRanges(sheets, spreadsheetId, data, "RAW");
+            forgetSisaGup(spreadsheetId); // the slot grid must show this booking at once
 
             if (!hasTable) {
                 return res.status(200).json({message: "Data sent successfully."});
@@ -1887,6 +1982,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
 
         // Execute batch data update with backoff (preserves text format)
         await writeRanges(sheets, spreadsheetId, batchDataUpdates, "RAW");
+        forgetSisaGup(spreadsheetId); // nominal or tanggal may have moved to another day
 
         console.log("✅ Update successful!");
 
@@ -2036,6 +2132,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
         });
 
         console.log("Successfully delete data.")
+        forgetSisaGup(spreadsheetId); // the day this row held is free again
 
         // Drive last, for the same reason as the edit route: a failure here leaves
         // unreferenced files rather than rows pointing at something already deleted
@@ -2242,6 +2339,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             })),
             "USER_ENTERED",
         );
+        forgetSisaGup(spreadsheetId); // Tanggal Acc decides which day the row books
 
         // GUP/PTUP keep their Nomor SPP only here, so the mirror the PJK screen reads
         // shows it blank without this. Written RAW and on its own - USER_ENTERED above
@@ -5262,6 +5360,7 @@ function toSheetSerial(value) {
 // The form asks for these every time the panel opens, so cache them per spreadsheet +
 // tab rather than making three Google round trips each time.
 const PEMBAYARAN_BP_CACHE_TTL_MS = 5 * 60 * 1000;
+// Also backs the sisa GUP snapshot; the key prefix is the namespace, not the name
 const pembayaranBpCache = new Map();
 
 function cached(key, produce, ttl = PEMBAYARAN_BP_CACHE_TTL_MS) {

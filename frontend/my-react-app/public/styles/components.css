@@ -90,6 +90,223 @@
     padding: 20px 10px 10px 10px;
 }
 
+/* Cek Sisa GUP panel. Sits beside .bg-card rather than inside it, so it mirrors the card's
+   width and side margins to line up with the table below. Colour is never the only signal -
+   every cell also carries the remaining amount as text. */
+.gup-panel {
+    width: 94%;
+    margin: 5px 50px 0 50px;
+    background-color: white;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 20px;
+    color: #00204A;
+}
+
+.gup-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+}
+
+.gup-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #00204A;
+}
+
+.gup-toggle {
+    padding: 8px 18px;
+    border: 1px solid #00449C;
+    border-radius: 20px;
+    background-color: #00449C;
+    color: white;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.gup-toggle:hover {
+    color: #FFCF5F;
+}
+
+.gup-body {
+    padding: 0 20px 18px 20px;
+    border-top: 1px solid #EDF1F6;
+}
+
+.gup-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    font-size: 0.8rem;
+    color: #5A6472;
+}
+
+.gup-legend-month {
+    margin-right: 8px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #00204A;
+}
+
+.gup-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gup-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+}
+
+.gup-reload {
+    margin-left: auto;
+    padding: 5px 12px;
+    border: 1px solid #D8DEE8;
+    border-radius: 8px;
+    background-color: white;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: #00449C;
+    cursor: pointer;
+}
+
+.gup-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+}
+
+.gup-weekday {
+    padding-bottom: 4px;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7A8598;
+}
+
+.gup-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 62px;
+    padding: 8px 4px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+}
+
+.gup-cell:hover {
+    transform: translateY(-1px);
+}
+
+/* An outline, not a background swap - the background is the band and must survive selection */
+.gup-cell-active {
+    outline: 2px solid #00449C;
+    outline-offset: -2px;
+}
+
+.gup-cell-day {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.gup-cell-sisa {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.gup-band-hijau  { background-color: #D6F5E1; border-color: #A9E4C3; color: #0F7A3D; }
+.gup-band-kuning { background-color: #FFF3C4; border-color: #F0DC9A; color: #8A6100; }
+.gup-band-jingga { background-color: #FFDCC0; border-color: #F3C398; color: #9C4A06; }
+.gup-band-merah  { background-color: #FBE1DE; border-color: #F2BDB7; color: #BD1404; }
+
+.gup-note {
+    margin: 12px 0 0 0;
+    font-size: 0.82rem;
+    color: #7A8598;
+}
+
+.gup-detail {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border: 1px solid #E1E7EF;
+    border-radius: 10px;
+    background-color: #F8FAFD;
+}
+
+.gup-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 10px;
+    font-size: 0.88rem;
+    color: #00204A;
+}
+
+.gup-lebih {
+    color: #BD1404;
+    font-weight: 600;
+}
+
+.gup-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+}
+
+.gup-table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7A8598;
+    border-bottom: 1px solid #E1E7EF;
+}
+
+.gup-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #EDF1F6;
+    color: #0a0f1b;
+}
+
+.gup-table th:nth-child(2),
+.gup-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.gup-tag {
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: #FFF1CF;
+    color: #8A6100;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
 /* Daftar-Pengajuan tab strip. Sits inside .bg-card rather than beside it, so only the
    container differs from Kelola-Pengajuan's - the buttons reuse .kelola-tab. */
 .dp-tabs {
@@ -1419,6 +1636,27 @@ input[type="number"]::-webkit-inner-spin-button {
         max-width: 1280px;
         margin: 10px 30px 0 30px;
         font-size: 0.9rem;
+    }
+
+    .gup-panel {
+        max-width: 1280px;
+        margin: 5px 30px 0 30px;
+    }
+
+    .gup-title {
+        font-size: 1.3rem;
+    }
+
+    .gup-legend-month {
+        font-size: 1.1rem;
+    }
+
+    .gup-cell {
+        min-height: 54px;
+    }
+
+    .gup-cell-day {
+        font-size: 0.95rem;
     }
 
     /* Styling Daftar-Pengajuan table */

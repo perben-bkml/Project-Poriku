@@ -135,6 +135,18 @@ const statusPegawaiOptions = ["PNS", "PPPK", "TNI/POLRI"];
 const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Surat", "Nama Tercantum", "Status Pegawai", "Keterangan Surat", "Berkas"];
 const rowsPerPageOptions = [10, 15, 20, 25];
 
+//For Cek-Sisa-Gup.jsx. Thresholds are absolute rupiah, not a share of the daily limit -
+//changing the limit does not move them.
+const formatRupiah = (nominal) => `Rp ${Math.round(nominal).toLocaleString('id-ID')}`;
+const sisaGupBands = [
+    { min: 250000000, className: "gup-band-hijau", label: "\u2265 250 juta" },
+    { min: 200000000, className: "gup-band-kuning", label: "\u2265 200 juta" },
+    { min: 150000000, className: "gup-band-jingga", label: "\u2265 150 juta" },
+    { min: -Infinity, className: "gup-band-merah", label: "< 150 juta" },
+];
+const hariKerja = ["Sen", "Sel", "Rab", "Kam", "Jum"];
+const sisaGupHeadData = ["Unit Kerja", "Nominal", "Status"];
+
 
 //For Pembayaran-Bp.jsx - order must match PEMBAYARAN_BP_COLUMNS on the server. The
 //dropdown lists are absent on purpose: they come from the route, read off the sheet.
@@ -144,5 +156,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, sisaGupBands, hariKerja, sisaGupHeadData };
 

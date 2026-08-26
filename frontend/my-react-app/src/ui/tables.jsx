@@ -1124,7 +1124,8 @@ const DAFTAR_DETAIL_FIELDS = [
     { key: "selesaiVerif", label: "Selesai Verifikasi" },
 ];
 
-const DAFTAR_COLUMN_COUNT = 9;
+// toggle, No., Jenis, Nominal, Tgl. Antri, Tgl. Diproses, Status, Aksi - the rest are per tab
+const DAFTAR_FIXED_COLUMNS = 8;
 const dash = (value) => {
     const text = String(value ?? "").trim();
     return text === "" ? "—" : text;
@@ -1146,9 +1147,10 @@ DaftarBerkas.propTypes = {
     pending: PropTypes.bool,
 };
 
-const DaftarRow = memo(function DaftarRow({ row, onView, onEdit, onDelete }) {
+const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, onDelete }) {
     const [open, setOpen] = useState(false);
     const status = daftarStatusStyle(row.status);
+    const promoted = extraColumns.map(column => column.field);
 
     return (
         <Fragment>
@@ -1164,41 +1166,41 @@ const DaftarRow = memo(function DaftarRow({ row, onView, onEdit, onDelete }) {
                 <td className="dp-num dp-cell-nominal">{dash(row.nominal)}</td>
                 <td className="dp-num">{dash(row.tglAjuan)}</td>
                 <td className="dp-num">{dash(row.tglProses)}</td>
-                <td className="dp-num">{dash(row.drpp)}</td>
+                {extraColumns.map(column =>
+                    <td key={column.field} className="dp-num">{dash(row[column.field])}</td>)}
                 <td>
                     <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>{dash(row.status)}</span>
                     {row.hasilVerifPending && <span className="dp-status-note">Hasil verif. dibuat…</span>}
                 </td>
                 <td>
                     <div className="dp-actions">
-                        <Tooltip title="Lihat detail" arrow>
-                            <IconButton size="small" aria-label="Lihat detail pengajuan" onClick={() => onView(row)}>
-                                <RemoveRedEyeIcon sx={{ fontSize: 21, color: "#00204A" }} />
-                            </IconButton>
-                        </Tooltip>
-                        {/* A pengajuan already on a DRPP is locked: editing or deleting it would
-                            leave the DRPP pointing at a row that no longer matches */}
-                        {row.canModify && <>
-                            <Tooltip title="Ubah pengajuan" arrow>
-                                <IconButton size="small" aria-label="Ubah pengajuan" onClick={() => onEdit(row)}>
-                                    <EditIcon sx={{ fontSize: 21, color: "#D9A33B" }} />
+                        {row.locked
+                            ? <Tooltip title="Lihat detail" arrow>
+                                <IconButton size="small" aria-label="Lihat detail pengajuan" onClick={() => onView(row)}>
+                                    <RemoveRedEyeIcon sx={{ fontSize: 21, color: "#00204A" }} />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Hapus pengajuan" arrow>
-                                <IconButton size="small" aria-label="Hapus pengajuan" onClick={() => onDelete(row)}>
-                                    <DeleteForeverIcon sx={{ fontSize: 21, color: "#BD1404" }} />
-                                </IconButton>
-                            </Tooltip>
-                        </>}
+                            : <>
+                                <Tooltip title="Ubah pengajuan" arrow>
+                                    <IconButton size="small" aria-label="Ubah pengajuan" onClick={() => onEdit(row)}>
+                                        <EditIcon sx={{ fontSize: 21, color: "#D9A33B" }} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Hapus pengajuan" arrow>
+                                    <IconButton size="small" aria-label="Hapus pengajuan" onClick={() => onDelete(row)}>
+                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "#BD1404" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </>}
                     </div>
                 </td>
             </tr>
             <tr className="dp-detail-row">
-                <td className="dp-detail-cell" colSpan={DAFTAR_COLUMN_COUNT}>
+                <td className="dp-detail-cell" colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length}>
                     <Collapse in={open} timeout={160} unmountOnExit>
                         <div className="dp-detail">
                             <dl className="dp-detail-grid">
-                                {DAFTAR_DETAIL_FIELDS.map(field => (
+                                {DAFTAR_DETAIL_FIELDS.filter(field => !promoted.includes(field.key)).map(field => (
                                     <div className="dp-detail-item" key={field.key}>
                                         <dt>{field.label}</dt>
                                         <dd>{dash(row[field.key])}</dd>
@@ -1226,13 +1228,14 @@ const DaftarRow = memo(function DaftarRow({ row, onView, onEdit, onDelete }) {
 
 DaftarRow.propTypes = {
     row: PropTypes.object.isRequired,
+    extraColumns: PropTypes.array.isRequired,
     onView: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
     onDelete: PropTypes.func.isRequired,
 };
 
 export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
-                                       onPageChange, onRowsPerPageChange, onView, onEdit, onDelete }) {
+                                       extraColumns, onPageChange, onRowsPerPageChange, onView, onEdit, onDelete }) {
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1254,20 +1257,21 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                             <th>No.</th>
                             <th>Jenis</th>
                             <th className="dp-th-right">Nominal</th>
-                            <th>Tgl. Ajuan</th>
-                            <th>Tgl. Proses</th>
-                            <th>DRPP</th>
+                            <th>Tgl. Antri</th>
+                            <th>Tgl. Diproses</th>
+                            {extraColumns.map(column => <th key={column.field}>{column.label}</th>)}
                             <th>Status</th>
                             <th className="dp-th-right">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading
-                            ? <tr><td colSpan={DAFTAR_COLUMN_COUNT} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
+                            ? <tr><td colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
                             : rows.length === 0
-                                ? <tr><td colSpan={DAFTAR_COLUMN_COUNT} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
+                                ? <tr><td colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
                                 : rows.map(row => (
-                                    <DaftarRow key={row.key} row={row} onView={onView} onEdit={onEdit} onDelete={onDelete} />
+                                    <DaftarRow key={row.key} row={row} extraColumns={extraColumns}
+                                        onView={onView} onEdit={onEdit} onDelete={onDelete} />
                                 ))}
                     </tbody>
                 </table>
@@ -1285,6 +1289,7 @@ TableDaftarPengajuan.propTypes = {
     totalPages: PropTypes.number.isRequired,
     rowsPerPage: PropTypes.number.isRequired,
     rowsPerPageOptions: PropTypes.array.isRequired,
+    extraColumns: PropTypes.array.isRequired,
     onPageChange: PropTypes.func.isRequired,
     onRowsPerPageChange: PropTypes.func.isRequired,
     onView: PropTypes.func.isRequired,

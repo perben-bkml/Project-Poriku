@@ -12,6 +12,22 @@ const POLL_LIMIT = 15;
 const ALERT_MS = 3000;
 const TAB_KEY = 'daftarTabBendahara';
 
+// Past these statuses the row is out of the bendahara's hands: it may be viewed but no
+// longer edited or deleted. The split follows the flow, not the tab - GUP KKP runs the
+// verifikasi flow and locks with LS even though it is listed under GUP/PTUP.
+const LOCKED_STATUS = {
+    gup: ["Sudah Diterbitkan DRPP", "Sudah Diajukan ke KPPN"],
+    verif: ["Sudah Di Verifikasi", "Sudah Verifikasi"],
+};
+const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+// The columns between Tgl. Diproses and Status differ per tab: the verifikasi sheet has no
+// DRPP column at all, so an LS row can only ever show a blank there.
+const EXTRA_COLUMNS = {
+    gup: [{ label: "DRPP", field: "drpp" }, { label: "SPM", field: "spm" }],
+    ls: [{ label: "SPP", field: "spp" }],
+};
+
 // kategori is resolved server-side so the split counts every row, not just this page
 const TABS = [
     { kategori: "gup", label: "GUP/PTUP" },
@@ -21,7 +37,6 @@ const TABS = [
 // Canonical 'Write Antrian' indices. 20+ are appended server-side past ANTRIAN_ROW_WIDTH,
 // so every index below keeps its meaning on both antrian sheets.
 function toTableRow(data, pending, lastPage) {
-    const drpp = String(data[8] ?? "").trim();
     // Lampiran (19) is the Bupot on a GUP/PTUP row and the PJK on every other jenis, whose
     // PJK index the server just copies from it. Same split Buat-Pengajuan.jsx makes.
     const isGup = data[20] === "gup";
@@ -47,9 +62,7 @@ function toTableRow(data, pending, lastPage) {
         pjkCatatan: data[22],
         hasilVerif: data[23],
         hasilVerifPending: pending.has(String(data[24])),
-        // A row already carried onto a DRPP is locked - editing or deleting it would leave
-        // the DRPP pointing at a row that no longer matches
-        canModify: drpp === "",
+        locked: LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7])),
         // Shape Bendahara-Page's handleInvisibleComponent destructures
         passData: {
             lastPage, keyword: data[0], antriNum: data[0], antriName: data[2], antriType: data[3],
@@ -290,6 +303,7 @@ function DaftarPengajuan(props){
             </div>
             <TableDaftarPengajuan
                 rows={rows}
+                extraColumns={EXTRA_COLUMNS[kategori]}
                 loading={isLoading}
                 page={currentPage}
                 totalPages={totalPages}

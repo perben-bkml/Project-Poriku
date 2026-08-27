@@ -113,6 +113,16 @@ const buktiSetorLabel = (entry) =>
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
+//Values are the keys JENIS_PAJAK_KOLOM in server.js resolves to a 'Write Table' column
+const jenisPajakOptions = [
+    { value: "", label: "" },
+    { value: "ppn", label: "PPN" },
+    { value: "pph-21", label: "PPh 21" },
+    { value: "pph-22", label: "PPh 22" },
+    { value: "pph-23", label: "PPh 23" },
+    { value: "pph-final", label: "PPh Final" },
+]
+
 const monthNames = [
     {title: "", value: ""},
     {title: "Januari", value: "01"},
@@ -153,6 +163,44 @@ const sisaGupBands = [
 const hariKerja = ["Sen", "Sel", "Rab", "Kam", "Jum"];
 const sisaGupHeadData = ["Unit Kerja", "Nominal", "Status"];
 
+//For Monitoring-Drpp.jsx -> Aksi-Drpp.jsx. The Cari boxes match against 'Write Table', so
+//the DRPP row cannot show why it came back; these mark the cell that actually matched.
+//Twin of WRITE_TABLE_CARI in server.js plus the spby/bupot .includes() rules in the same
+//route: they must agree, or a row the server returned shows nothing highlighted.
+//Indices are offsets from column A, the layout `columns` above writes and data-transaksi
+//pads every row out to.
+const cariSorotKolom = {
+    uraian: { columns: [1], mode: "teks" },                             // B, Nama Kegiatan
+    nominal: { columns: [4], mode: "angka" },                           // E, Nilai Tagihan
+    penerima: { columns: [18], mode: "teks" },                          // S, Penerima
+    spby: { columns: [3], mode: "persis" },                             // D, Nomor SPBY
+    bupot: { columns: [8, 9, 10, 11, 12, 13, 14, 15, 16], mode: "persis" }, // I:Q
+};
+
+const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
+
+// Display only: the Cari Nominal box shows "100.000" while every match still runs on
+// digitsOnly, so what the user types and what the server compares cannot diverge.
+const formatRibuan = (value) => digitsOnly(value).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+// null when the cell does not match, else [sebelum, cocok, sesudah] to render. "angka"
+// marks the whole cell: the search reads a formatted "5.000.000" while data-transaksi
+// reads UNFORMATTED_VALUE and returns 5000000, so the typed text is never literally there.
+function sorotPotongan(cell, term, mode) {
+    const teks = String(cell ?? "");
+    const cari = String(term ?? "");
+    if (cari === "") return null;
+    if (mode === "angka") {
+        const angka = digitsOnly(cari);
+        return angka && digitsOnly(teks) === angka ? ["", teks, ""] : null;
+    }
+    const posisi = mode === "persis"
+        ? teks.indexOf(cari)
+        : teks.toLowerCase().indexOf(cari.toLowerCase());
+    return posisi < 0 ? null
+        : [teks.slice(0, posisi), teks.slice(posisi, posisi + cari.length), teks.slice(posisi + cari.length)];
+}
+
 
 //For Pembayaran-Bp.jsx - order must match PEMBAYARAN_BP_COLUMNS on the server. The
 //dropdown lists are absent on purpose: they come from the route, read off the sheet.
@@ -162,5 +210,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions };
 

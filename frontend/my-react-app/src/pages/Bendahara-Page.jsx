@@ -77,6 +77,8 @@ function BendaharaPage(props) {
     const [alertMessage, setAlertMessage] = useState("");
     const [aksiData, setAksiData] = useState([]);
     const [drppData, setDrppData] = useState([]);
+    // The Cari term from Monitoring DRPP, so Aksi DRPP can mark the cell that matched
+    const [drppSorot, setDrppSorot] = useState(null);
     // Which Dokumen Gaji row the edit form should load, set by Monitor-Perubahan-Gaji
     const [dokumenGajiData, setDokumenGajiData] = useState(null);
 
@@ -145,9 +147,9 @@ function BendaharaPage(props) {
             case "aksi-pengajuan":
                 return <AksiPengajuan fulldata={aksiData} changeComponent={setButtonSelect}/>
             case "monitoring-drpp":
-                return <MonitoringDrpp changeComponent={setButtonSelect} aksiData={setDrppData} />
+                return <MonitoringDrpp changeComponent={setButtonSelect} aksiData={setDrppData} sorotData={setDrppSorot} />
             case "aksi-drpp":
-                return <AksiDrpp fulldata={drppData} changeComponent={setButtonSelect} />
+                return <AksiDrpp fulldata={drppData} sorot={drppSorot} changeComponent={setButtonSelect} />
             case "daftar-pengajuan":
                 return <DaftarPengajuan invisible={handleInvisibleComponent} userPagination={savedPagination} alertMessage={alertMessage} />;
             case "buat-pengajuan":

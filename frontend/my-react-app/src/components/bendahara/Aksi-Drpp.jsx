@@ -4,8 +4,9 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup from "../../ui/Popup.jsx";
 import { TableInfoAntri, TableKelola } from "../../ui/tables.jsx";
-import {columns, drppHeadData, spmKey, buktiSetorLabel} from "./head-data.js";
+import {columns, drppHeadData, spmKey, buktiSetorLabel, cariSorotKolom, sorotPotongan} from "./head-data.js";
 import {SubmitButton} from "../../ui/buttons.jsx";
+import PropTypes from "prop-types";
 
 
 
@@ -25,6 +26,8 @@ export default function AksiDrpp(props) {
     const [coloredRow, setColoredRow] = useState([]);
     const [buktiSetor, setBuktiSetor] = useState(null);
     const [onlyPajak, setOnlyPajak] = useState(false);
+    // Local so Bersihkan can drop the marks without clearing the search the admin goes back to
+    const [sorotAktif, setSorotAktif] = useState(props.sorot || null);
 
     //Setting Tablekelola data
     const drppData = [
@@ -72,6 +75,14 @@ export default function AksiDrpp(props) {
             console.log("Failed sending Keyword.", error)
         }
     }
+
+    // The Cari boxes match against this sheet, not against the DRPP row, so mark the cell
+    // that actually matched instead of leaving the admin to read the block by eye
+    const kolomSorot = sorotAktif && cariSorotKolom[sorotAktif.field];
+    const sorot = kolomSorot ? {...kolomSorot, term: sorotAktif.term} : null;
+    const jumlahSorot = sorot
+        ? tableData.filter(row => sorot.columns.some(column => sorotPotongan(row[column], sorot.term, sorot.mode))).length
+        : 0;
 
     //Handle Select Option colors
     function selectOptionBackgroundColor(select) {
@@ -220,8 +231,17 @@ export default function AksiDrpp(props) {
                     </div>
 
                 </div>
+                {sorot && !isTableLoading &&
+                    <div className="sorot-banner">
+                        {/* A zero count means the mark rules here and in server.js have drifted;
+                            saying so beats silently showing an unmarked table */}
+                        <span>{jumlahSorot > 0
+                            ? `${jumlahSorot} baris cocok dengan "${sorot.term}"`
+                            : `Tidak ada baris yang cocok dengan "${sorot.term}"`}</span>
+                        <button type="button" className="sorot-bersihkan" onClick={() => setSorotAktif(null)}>Bersihkan</button>
+                    </div>}
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi-drpp" feature={"AksiDrpp"} header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} filterActive={onlyPajak} filterColumns={PAJAK_COLUMNS} />}
+                <TableKelola type="aksi-drpp" feature={"AksiDrpp"} header={columns} content={tableData} fullContent={tableData} coloredRow={coloredRow} addColorData={addColorData} filterActive={onlyPajak} filterColumns={PAJAK_COLUMNS} sorot={sorot} />}
                 <div className='form-submit'>
                     <SubmitButton value='Kembali' name="submit-all" onClick={() => props.changeComponent('monitoring-drpp')} />
                 </div>
@@ -231,3 +251,8 @@ export default function AksiDrpp(props) {
         </div>
     )
 }
+
+// Only the prop this screen's highlight feature added; the rest predate it
+AksiDrpp.propTypes = {
+    sorot: PropTypes.shape({ field: PropTypes.string, term: PropTypes.string }),
+};

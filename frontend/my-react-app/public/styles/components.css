@@ -75,6 +75,9 @@
     display: flex;
     align-items: baseline;
     margin-top: 20px;
+    /* A long Cari row would otherwise overflow on one line */
+    flex-wrap: wrap;
+    row-gap: 10px;
 }
 
 .filter-search input {
@@ -336,6 +339,115 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
     font-weight: 600;
+}
+
+/* Monitoring DRPP filter row. Scoped to this screen - .filter-monitoring and
+   .filter-select2 are shared with three other screens. auto-fit lands on 3 columns at
+   1440px (240px sidebar) and 4 on a wider display, without a hard line break. */
+/* .pengajuan-filter carries 35px side padding outside its width. Corrected here only -
+   that rule is shared with six other screens. */
+.filter-drpp {
+    box-sizing: border-box;
+}
+
+/* Fixed track width rather than 1fr: the content column is stretched wider than the
+   viewport by the DRPP table, and stretching tracks to fill it would push the filters
+   off a 1440px screen. Three fit at 1440, four from ~1700 up. */
+.filter-drpp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 340px));
+    align-items: center;
+    column-gap: 24px;
+    row-gap: 14px;
+    margin-top: 6px;
+    padding-left: 30px;
+}
+
+.filter-drpp-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* The shared margins are sized for the old inline run and overflow a grid track here;
+   min-width holds the selects on a common left edge down each column */
+.filter-drpp-item .filter-label2 {
+    margin-left: 0;
+    min-width: 110px;
+}
+
+.filter-drpp-item .filter-select {
+    flex: 1;
+    min-width: 0;
+    margin-right: 0;
+}
+
+.filter-drpp-item .filter-select2 select {
+    width: 100%;
+    max-width: 200px;
+    margin-left: 0;
+}
+
+/* Cari row on the same screen. "Cari" sits above its boxes the way "Filter" does, and the
+   boxes share the filter grid's left edge. Seven boxes plus Go land as 4 + 4 at 1440.
+   Scoped: .filter-search and .cari-input are shared with three other screens. */
+.cari-drpp {
+    display: block;
+}
+
+.cari-drpp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 250px));
+    align-items: center;
+    gap: 14px 16px;
+    margin-top: 10px;
+    padding-left: 30px;
+}
+
+.cari-drpp-grid .cari-input {
+    width: 100%;
+    margin: 0;
+}
+
+.cari-drpp-grid .spm-button {
+    margin-left: 0;
+    justify-self: start;
+}
+
+/* Marks the Cari term inside the DRPP transaction table. <mark> carries a UA background,
+   so it is overridden rather than left to the browser's own yellow. */
+.sorot {
+    padding: 1px 3px;
+    border-radius: 3px;
+    background-color: #FFE9A8;
+    color: #6B4A00;
+    font-weight: 700;
+}
+
+.sorot-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 96%;
+    margin: 0 auto 10px auto;
+    padding: 10px 14px;
+    border: 1px solid #E1E7EF;
+    border-radius: 10px;
+    background-color: #F8FAFD;
+    font-size: 0.9rem;
+    color: #00204A;
+}
+
+.sorot-bersihkan {
+    margin-left: auto;
+    padding: 5px 12px;
+    border: 1px solid #D8DEE8;
+    border-radius: 8px;
+    background-color: white;
+    font-family: inherit;
+    font-size: 0.8rem;
+    color: #00449C;
+    cursor: pointer;
 }
 
 .gup-tag {

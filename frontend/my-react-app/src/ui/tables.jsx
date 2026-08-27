@@ -1,4 +1,4 @@
-import {useState, Fragment, useEffect, useMemo, useRef, memo} from 'react';
+import {useState, Fragment, useEffect, useRef, memo} from 'react';
 // Import Material UI Table
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -24,6 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
+import { sorotPotongan } from '../components/bendahara/head-data.js';
 import PropTypes from 'prop-types';
 
 const BUKTI_SETOR_STYLE = {
@@ -113,6 +114,8 @@ export function TableKelola(props) {
     const mousePositionRef = useRef({ x: 0, y: 0 });
     const popupRef = useRef(null);
     const tableContainerRef = useRef(null);
+    // Which sorot has already been scrolled to, so re-renders do not keep yanking the view
+    const sorotTerpakaiRef = useRef(null);
 
     useEffect(() => {
         setTableType(props.type);
@@ -145,6 +148,42 @@ export function TableKelola(props) {
         };
     }, [tableType, checkedItems.size]);
 
+    const hasPajak = (row) => (props.filterColumns || [])
+        .some(column => {
+            const value = String(row[column] ?? "").trim();
+            return value !== "" && value.replace(/[.\s]/g, "") !== "0";
+        });
+    // Computed above the early returns below so the sorot effect stays unconditional
+    const visibleRows = (props.content || [])
+        .map((row, index) => ({ row, index }))
+        .filter(({ row }) => !props.filterActive || hasPajak(row));
+
+    // Inert without a sorot prop, so the six other screens using this table are untouched
+    const sorot = props.sorot;
+    const potongCell = (data, column) => sorot && sorot.columns.includes(column)
+        ? sorotPotongan(data, sorot.term, sorot.mode)
+        : null;
+    const barisSorot = (row) => !!sorot && sorot.columns.some(column => potongCell(row[column], column));
+    // Position within visibleRows, not the original index: the pajak filter may have
+    // dropped rows above it, and pagination slices the filtered list
+    const posisiSorotPertama = sorot ? visibleRows.findIndex(({ row }) => barisSorot(row)) : -1;
+    const indexSorotPertama = posisiSorotPertama >= 0 ? visibleRows[posisiSorotPertama].index : -1;
+    const sorotKunci = sorot ? `${sorot.mode}|${sorot.term}` : null;
+
+    // Open on the page holding the first match, or it sits invisible behind the pager.
+    // Keyed on the search alone so changing rows-per-page later does not yank the page back.
+    useEffect(() => {
+        if (posisiSorotPertama >= 0) setPage(Math.floor(posisiSorotPertama / rowsPerPage));
+    }, [sorotKunci]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fires once per search: the marked cell may be far right in a table that scrolls
+    // sideways. block:'nearest' keeps the page from jumping vertically to reach it.
+    const sorotRef = (node) => {
+        if (!node || sorotTerpakaiRef.current === sorotKunci) return;
+        sorotTerpakaiRef.current = sorotKunci;
+        node.scrollIntoView({ block: 'nearest', inline: 'center' });
+    };
+
     // Only the caller knows whether an empty content means "still fetching" or "nothing to show"
     if (props.loading) {
         return <LoadingAnimate />
@@ -164,14 +203,6 @@ export function TableKelola(props) {
         setPage(0);
     };
 
-    const hasPajak = (row) => (props.filterColumns || [])
-        .some(column => {
-            const value = String(row[column] ?? "").trim();
-            return value !== "" && value.replace(/[.\s]/g, "") !== "0";
-        });
-    const visibleRows = props.content
-        .map((row, index) => ({ row, index }))
-        .filter(({ row }) => !props.filterActive || hasPajak(row));
 
     // Read here rather than inside Row, whose own props shadow these
     const aksiLabel = props.aksiLabel || "Lihat";
@@ -210,7 +241,7 @@ export function TableKelola(props) {
         return totals.map(value => typeof value === "number" ? numberFormats(value) : "");
     }
     //For copy button feature
-    function CopyableTableCell({ children, showCheckbox, isChecked, onCheckboxChange, ...props }) {
+    function CopyableTableCell({ children, showCheckbox, isChecked, onCheckboxChange, copyText, ...props }) {
         const [isHovered, setIsHovered] = useState(false);
         const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
 
@@ -239,9 +270,12 @@ export function TableKelola(props) {
 
         const handleCopyClick = (e) => {
             e.stopPropagation();
-            const text = typeof children === 'string' ? children : 
-                        typeof children === 'object' && children?.props?.children ? children.props.children : 
-                        children?.toString() || '';
+            // copyText wins when given: a highlighted cell wraps its text in several
+            // nodes, and deriving from children would paste them comma-joined
+            const text = copyText !== undefined ? String(copyText ?? "")
+                : typeof children === 'string' ? children
+                : typeof children === 'object' && children?.props?.children ? children.props.children
+                : children?.toString() || '';
             copyToClipboard(text);
         };
 
@@ -431,10 +465,16 @@ export function TableKelola(props) {
                             || props.feature === "AksiDrpp" && (index === 7 || index === 9 || index === 11 || index === 13 || index === 15);
                         const isItemChecked = checkedItems.has(itemId);
                         
+                        const potongan = potongCell(data, index);
+                        // Only the first marked cell of the first matching row is scrolled to
+                        const isSorotPertama = potongan && props.rowIndex === indexSorotPertama
+                            && index === sorot.columns.find(column => potongCell(props.rowData[column], column) !== null);
+
                         return (
                         <CopyableTableCell key={index} className={tableType === "kelola" || tableType === "monitor"? null : "table-cell" }
                                    column={index}
                                    feature={props.feature}
+                                   copyText={potongan ? data : undefined}
                                    showCheckbox={shouldShowCheckbox}
                                    isChecked={isItemChecked}
                                    onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
@@ -449,6 +489,8 @@ export function TableKelola(props) {
                                             (data === "Tidak Ada Pajak" && index === 8 || data === "Tidak Ada Pajak" && index === 9 ? <CustomColoredCell color={"white"} data={data} /> :
                                                 (data === "Pajak Manual" && index === 8 || data === "Pajak Manual" && index === 9 ? <CustomColoredCell color={"#b39979"} data={data} /> :
                                          <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
+                                : potongan
+                                ? <>{potongan[0]}<mark className="sorot" ref={isSorotPertama ? sorotRef : null}>{potongan[1]}</mark>{potongan[2]}</>
                                 : data}
                         </CopyableTableCell>
                         );
@@ -570,6 +612,15 @@ export function TableKelola(props) {
         </div>
     )
 }
+
+TableKelola.propTypes = {
+    // The active Cari term and the columns it may appear in; absent on every other screen
+    sorot: PropTypes.shape({
+        term: PropTypes.string.isRequired,
+        mode: PropTypes.oneOf(["teks", "persis", "angka"]).isRequired,
+        columns: PropTypes.arrayOf(PropTypes.number).isRequired,
+    }),
+};
 
 export function TableInfoAntri(props) {
     return(

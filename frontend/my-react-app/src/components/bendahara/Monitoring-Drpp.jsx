@@ -4,12 +4,37 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
 import { userSatkerNames } from "../verifikasi/head-data.js";
-import { placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames } from "./head-data.js";
+import { placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, formatRibuan, jenisPajakOptions } from "./head-data.js";
 //Import Table
 import {TableKelola} from "../../ui/tables.jsx";
 //Import Pagination
 import Pagination from '@mui/material/Pagination';
+import PropTypes from 'prop-types';
 
+
+// One search field is active at a time; adding a row here is enough to wire it up
+const CARI_INPUTS = [
+    { name: "drpp", type: "number", placeholder: "DRPP..." },
+    { name: "spm", type: "number", placeholder: "SPM..." },
+    { name: "spby", type: "number", placeholder: "SPBY..." },
+    { name: "bupot", type: "text", placeholder: "Faktur/Bupot..." },
+    { name: "uraian", type: "text", placeholder: "Uraian..." },
+    // text, not number: type="number" rejects the separator dots
+    { name: "nominal", type: "text", inputMode: "numeric", placeholder: "Nominal..." },
+    { name: "penerima", type: "text", placeholder: "Penerima..." },
+];
+const CARI_KOSONG = Object.fromEntries(CARI_INPUTS.map(input => [input.name, ""]));
+
+const FILTER_KOSONG = { satker: "", pungutan: "", setoran: "", month: "", jenisPajak: "" };
+
+const asOptions = (list, value, label) => list.map(item => ({ value: item[value], label: item[label] }));
+const FILTER_SELECTS = [
+    { name: "satker", label: "Satker:", options: asOptions(userSatkerNames, "title", "value") },
+    { name: "pungutan", label: "Pungutan:", options: pajakStatus.map(status => ({ value: status, label: status })) },
+    { name: "setoran", label: "Setoran:", options: pajakStatus.map(status => ({ value: status, label: status })) },
+    { name: "month", label: "Bulan:", options: asOptions(monthNames, "value", "title") },
+    { name: "jenisPajak", label: "Jenis Pajak:", options: jenisPajakOptions },
+];
 
 export default function MonitoringDrpp(props) {
 
@@ -28,19 +53,9 @@ export default function MonitoringDrpp(props) {
     const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
     const [filterSelect, setFilterSelect] = useState(() => {
         const savedFilter = localStorage.getItem('monitoring-drpp-filter');
-        return savedFilter ? JSON.parse(savedFilter) : {
-            satker: "",
-            pungutan: "",
-            setoran: "",
-            month: ""
-        };
+        return {...FILTER_KOSONG, ...(savedFilter ? JSON.parse(savedFilter) : {})};
     });
-    const [cariInput, setCariInput] = useState({
-        spm: "",
-        spby: "",
-        drpp: "",
-        bupot: "",
-    })
+    const [cariInput, setCariInput] = useState(CARI_KOSONG)
     const [cariSelect, setCariSelect] = useState({});
     const [pageInput, setPageInput] = useState("");
 
@@ -66,6 +81,13 @@ export default function MonitoringDrpp(props) {
     useEffect(() => {
         fetchMonitoringData(currentPage, filterSelect, cariSelect);
     }, [currentPage, filterSelect, cariSelect]);
+
+    // Publish the active search so Aksi-Drpp can mark the cell that matched. The value
+    // lives in 'Write Table', not in the DRPP row, so it cannot be shown on this screen.
+    useEffect(() => {
+        const aktif = Object.entries(cariSelect).find(([, value]) => value);
+        props.sorotData?.(aktif ? { field: aktif[0], term: aktif[1] } : null);
+    }, [cariSelect]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         apiClient.get('/bendahara/pembayaran-bp/bukti-setor')
@@ -95,8 +117,8 @@ export default function MonitoringDrpp(props) {
 
     // Handle Filter Changes
     function handleFilterChange (event) {
-        if (cariInput.spm !== "" || cariInput.spby !== "" || cariInput.drpp !== "" || cariInput.bupot !== "") {
-            setCariInput({ spm: "", spby: "", drpp: "", bupot: ""})
+        if (Object.values(cariInput).some(Boolean)) {
+            setCariInput(CARI_KOSONG);
             setCariSelect({});
         }
         // Reset pagination when filter changes
@@ -109,22 +131,32 @@ export default function MonitoringDrpp(props) {
 
     // Handle Cari Input Changes
     function handleCariChange (event) {
-        const eventName = event.target.name;
-        const eventValue = event.target.value.toString();
-        
-        if (eventName === "spm") {
-            setCariInput({spm: eventValue, spby: "", drpp: "", bupot: ""});
-        } else if (eventName === "spby") {
-            setCariInput({spm: "", spby: eventValue, drpp: "", bupot: ""});
-        } else if (eventName === "drpp") {
-            setCariInput({spm: "", spby: "", drpp: eventValue, bupot: ""});
-        } else {
-            setCariInput({spm: "", spby: "", drpp: "", bupot: eventValue});
+        const { name, value, selectionStart } = event.target;
+        if (name !== "nominal") {
+            setCariInput({...CARI_KOSONG, [name]: value.toString()});
+            return;
         }
+        // Nominal is shown with thousand separators; every match still runs on digits only,
+        // so the dots never reach the comparison
+        const rapi = formatRibuan(value);
+        setCariInput({...CARI_KOSONG, nominal: rapi});
+        // Rewriting the value parks the caret at the end, which fights anyone editing
+        // mid-number, so put it back after the same count of digits
+        const input = event.target;
+        const digitKe = value.slice(0, selectionStart).replace(/\D/g, "").length;
+        requestAnimationFrame(() => {
+            let pos = 0;
+            for (let dilihat = 0; pos < rapi.length && dilihat < digitKe; pos++) {
+                if (rapi[pos] >= "0" && rapi[pos] <= "9") dilihat++;
+            }
+            input.setSelectionRange(pos, pos);
+        });
     }
 
     // Handle Cari input request when onBlur
     function handleCariSearch () {
+        setCurrentPage(1);
+        localStorage.removeItem('monitoring-drpp-pagination');
         setCariSelect(cariInput)
     }
 
@@ -165,53 +197,34 @@ export default function MonitoringDrpp(props) {
                     <Card key={index} title={card} content={cardContent[index]} />
                 ))}
             </div>
-            <div className="pengajuan-filter filter-monitoring">
+            <div className="pengajuan-filter filter-monitoring filter-drpp">
                 <h3 className="wide-card-title">Filter</h3>
-                    <label className="filter-label2">Satker:</label>
-                    <div className="filter-select filter-select2">
-                        <select value={filterSelect.satker} name={"satker"} onChange={event => handleFilterChange(event)}>
-                        {userSatkerNames.map((satker, index) => (
-                            <option key={index} value={satker.title}>{satker.value}</option>
+                    <div className="filter-drpp-grid">
+                        {FILTER_SELECTS.map(({ name, label, options }) => (
+                            <div className="filter-drpp-item" key={name}>
+                                <label className="filter-label2" htmlFor={`filter-${name}`}>{label}</label>
+                                <div className="filter-select filter-select2">
+                                    <select id={`filter-${name}`} name={name} value={filterSelect[name]}
+                                            onChange={event => handleFilterChange(event)}>
+                                        {options.map(option => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                         ))}
-                        </select>
-                    </div>
-                    <label className="filter-label2">Pungutan:</label>
-                    <div className="filter-select filter-select2">
-                        <select value={filterSelect.pungutan} name={"pungutan"} onChange={event => handleFilterChange(event)}>
-                            {pajakStatus.map((pajak, index) => (
-                                <option key={index} value={pajak}>{pajak}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <label className="filter-label2">Setoran:</label>
-                    <div className="filter-select filter-select2">
-                        <select value={filterSelect.setoran} name={"setoran"} onChange={event => handleFilterChange(event)}>
-                            {pajakStatus.map((pajak, index) => (
-                                <option key={index} value={pajak}>{pajak}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <br /><br /><br />
-                    <label className="filter-label2">Bulan: </label>
-                    <div className="filter-select filter-select2">
-                        <select value={filterSelect.month} name={"month"} onChange={event => handleFilterChange(event)}>
-                            {monthNames.map((month, index) => (
-                                <option key={index} value={month.value}>{month.title}</option>
-                            ))}
-                        </select>
                     </div>
 
-                    <div className={"filter-search"}>
+                    <div className="filter-search cari-drpp">
                         <h3 className="wide-card-title">Cari</h3>
-                        <input className={'cari-input'} type={"number"} name={"drpp"} value={cariInput.drpp} placeholder={"DRPP..."}
-                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
-                        <input className={'cari-input'} type={"number"} name={"spm"} value={cariInput.spm} placeholder={"SPM..."}
-                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
-                        <input className={'cari-input'} type={"number"} name={"spby"} value={cariInput.spby} placeholder={"SPBY..."}
-                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
-                        <input className={'cari-input'} type={"text"} name={"bupot"} value={cariInput.bupot} placeholder={"Faktur/Bupot..."}
-                               onWheel={ e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
-                        <button className='cari spm-button' onClick={handleCariSearch} >Go</button>
+                        <div className="cari-drpp-grid">
+                            {CARI_INPUTS.map(({ name, type, inputMode, placeholder }) => (
+                                <input key={name} className="cari-input" type={type} inputMode={inputMode}
+                                       name={name} value={cariInput[name]} placeholder={placeholder}
+                                       onWheel={e => e.currentTarget.blur()} onChange={e => handleCariChange(e)} />
+                            ))}
+                            <button className="cari spm-button" onClick={handleCariSearch}>Go</button>
+                        </div>
                     </div>
 
             </div>
@@ -280,3 +293,8 @@ export default function MonitoringDrpp(props) {
         </div>
     )
 }
+
+// Only the prop this screen's highlight feature added; the rest predate it
+MonitoringDrpp.propTypes = {
+    sorotData: PropTypes.func,
+};

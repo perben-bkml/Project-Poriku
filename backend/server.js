@@ -1614,6 +1614,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
 
             await writeRanges(sheets, spreadsheetId, data, "RAW");
             forgetSisaGup(spreadsheetId); // the slot grid must show this booking at once
+            forgetWriteTable(spreadsheetId);
 
             if (!hasTable) {
                 return res.status(200).json({message: "Data sent successfully."});
@@ -2045,6 +2046,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         // Execute batch data update with backoff (preserves text format)
         await writeRanges(sheets, spreadsheetId, batchDataUpdates, "RAW");
         forgetSisaGup(spreadsheetId); // nominal or tanggal may have moved to another day
+        forgetWriteTable(spreadsheetId);
 
         console.log("✅ Update successful!");
 
@@ -2195,6 +2197,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
 
         console.log("Successfully delete data.")
         forgetSisaGup(spreadsheetId); // the day this row held is free again
+        forgetWriteTable(spreadsheetId);
 
         // Drive last, for the same reason as the edit route: a failure here leaves
         // unreferenced files rather than rows pointing at something already deleted
@@ -2677,6 +2680,87 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
 });
 
 //Monitoring DRPP component handlers
+// 'Write Table' is block structured: each transaksi opens with a header row carrying
+// "Nomor SPBY" in D and "TRANS_ID:nn" in X, its data rows follow beneath. These three
+// fields are free text, so one term can match many blocks - unlike the SPM/DRPP numbers,
+// which are unique and stop at the first hit.
+const digitsOnly = (value) => String(value ?? "").replace(/\D/g, "");
+const includesTerm = (term) => {
+    const wanted = term.toLowerCase();
+    return (cell) => cell.toLowerCase().includes(wanted);
+};
+
+// Batched rather than dragging the sheet's full A:X width across: one batchGet is one
+// quota unit either way, and this is a third of the payload. Cached because Cari and the
+// Jenis Pajak filter both scan it, and the filter re-runs on every page change.
+const WRITE_TABLE_RANGES = [
+    "'Write Table'!B:E",   // 0: B Nama Kegiatan, D Nomor SPBY, E Nilai Tagihan
+    "'Write Table'!H:Q",   // 1: the tax amounts and their bupot numbers
+    "'Write Table'!S:S",   // 2: Penerima
+    "'Write Table'!X:X",   // 3: TRANS_ID
+];
+const WRITE_TABLE_TTL_MS = 60 * 1000;
+
+const readWriteTable = (spreadsheetId) => cached(`write-table|${spreadsheetId}`, async () => {
+    const response = await readRanges(sheets, spreadsheetId, WRITE_TABLE_RANGES);
+    return response.data.valueRanges.map(range => range.values || []);
+}, WRITE_TABLE_TTL_MS);
+
+const forgetWriteTable = (spreadsheetId) => pembayaranBpCache.delete(`write-table|${spreadsheetId}`);
+
+const WRITE_TABLE_CARI = {
+    uraian: { range: 0, index: 0, build: includesTerm },              // B, Nama Kegiatan
+    nominal: { range: 0, index: 3, build: (term) => {                 // E, Nilai Tagihan
+        const wanted = digitsOnly(term);
+        // Exact on digits so "5.000.000" and "5000000" agree and "500" cannot flood
+        return wanted ? (cell) => digitsOnly(cell) === wanted : () => false;
+    } },
+    penerima: { range: 2, index: 0, build: includesTerm },            // S, Penerima
+};
+
+// Offsets within H:Q, pointing at the amount and never at its bupot number: a row is
+// taxed when the amount is filled, whether or not the bupot has been recorded yet.
+const JENIS_PAJAK_KOLOM = { ppn: 0, "pph-21": 2, "pph-22": 4, "pph-23": 6, "pph-final": 8 };
+const adaNilai = (cell) => {
+    const teks = trimmed(cell);
+    return teks !== "" && teks.replace(/[.,\s]/g, "") !== "0";
+};
+
+// Walks the blocks once, carrying the id of the block each data row belongs to
+async function transIdsFromWriteTable(spreadsheetId, cocok) {
+    const kolom = await readWriteTable(spreadsheetId);
+    const jumlahBaris = Math.max(...kolom.map(range => range.length));
+    const found = new Set();
+    let transId = null;
+    for (let i = 0; i < jumlahBaris; i++) {
+        if (trimmed(kolom[0][i]?.[2]) === "Nomor SPBY") {
+            // A header row opens the next block and carries its id. Never matched against,
+            // or searching "Penerima" would hit every block's column labels.
+            transId = (trimmed(kolom[3][i]?.[0]).match(/TRANS_ID:(\d+)/) || [])[1] || null;
+            continue;
+        }
+        if (transId && cocok(kolom, i)) found.add(transId);
+    }
+    return found;
+}
+
+const cocokCari = (field, term) => {
+    const matches = field.build(term);
+    return (kolom, i) => matches(trimmed(kolom[field.range][i]?.[field.index]));
+};
+
+// Monitoring DRPP rows are 11 wide and carry the transaksi id in B; rows 1-2 are headers
+function drppRowsForTransIds(totalRows, transIds) {
+    const rows = [];
+    totalRows.forEach((row, index) => {
+        if (index + 1 < 3 || !transIds.has(trimmed(row[1]))) return;
+        const values = [...row];
+        while (values.length < 11) values.push("");
+        rows.push({ values, rowIndex: index + 1 });
+    });
+    return rows.sort((a, b) => b.rowIndex - a.rowIndex).map(row => row.values);
+}
+
 app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
@@ -2703,6 +2787,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
             pungut: row[7] || "",
             setor: row[8] || "",
             date: row[2] || "",
+            transId: trimmed(row[1]),
             rowIndex: index + 1,
         }));
 
@@ -2726,6 +2811,15 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 }
                 return false;
             });
+        }
+        // Lives on 'Write Table', not on this sheet, so it resolves through the block ids.
+        // Truthy rather than !== "": a filter saved before this existed has no such key.
+        if (filterKeyword.jenisPajak) {
+            const kolomPajak = JENIS_PAJAK_KOLOM[filterKeyword.jenisPajak];
+            if (kolomPajak === undefined) return res.status(400).json({ error: "Jenis pajak tidak dikenal." });
+            const transIds = await transIdsFromWriteTable(spreadsheetId,
+                (kolom, i) => adaNilai(kolom[1][i]?.[kolomPajak]));
+            allRows = allRows.filter(row => transIds.has(row.transId));
         }
 
         //Get Total count of pajak status
@@ -2751,7 +2845,8 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         const countData = [hBelum, hSudah, iBelum, iSudah, totalRowCount]
 
         // Handle cariNomor search logic
-        if (parsedCariNomor && (parsedCariNomor.spm || parsedCariNomor.spby || parsedCariNomor.drpp || parsedCariNomor.bupot)) {
+        const cariWriteTable = Object.keys(WRITE_TABLE_CARI).find(key => trimmed(parsedCariNomor?.[key]) !== "");
+        if (parsedCariNomor && (parsedCariNomor.spm || parsedCariNomor.spby || parsedCariNomor.drpp || parsedCariNomor.bupot || cariWriteTable)) {
 
             if (parsedCariNomor.spm && parsedCariNomor.spm !== "") {
                 // Search for SPM in column index 5 (column F)
@@ -3077,6 +3172,20 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                         fullData: []
                     });
                 }
+            } else if (cariWriteTable) {
+                const transIds = await transIdsFromWriteTable(spreadsheetId,
+                    cocokCari(WRITE_TABLE_CARI[cariWriteTable], trimmed(parsedCariNomor[cariWriteTable])));
+                const matched = drppRowsForTransIds(totalRows, transIds);
+                // Free text can match far more blocks than the unique SPM/DRPP numbers, so
+                // this branch pages its hits instead of shipping all of them at once
+                const start = (Number(page) - 1) * Number(limit);
+                const pageRows = matched.slice(start, start + Number(limit));
+                return res.json({
+                    data: pageRows.map(row => row.slice(0, -1)),
+                    realAllDRPPRows: matched.length,
+                    countData,
+                    fullData: pageRows,
+                });
             }
         }
 

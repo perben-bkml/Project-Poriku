@@ -117,8 +117,12 @@ function CekSisaGup() {
 
                     {diabaikan.length > 0 &&
                         <p className="gup-note">
-                            Tidak dihitung: {diabaikan.map(([label, count]) => `${count} pengajuan ${label}`).join(", ")}.
+                            Terdapat {diabaikan.map(([label, count]) => `${count} pengajuan ${label}`).join(", ")} yang tidak masuk pada perkiraan sisa GUP di atas.
                         </p>}
+
+                        <p className={"gup-note"}>
+                            Catatan: Mohon menghubungi admin keuangan untuk konfirmasi ketersediaan GUP di tanggal yang dipilih.
+                        </p>
 
                     {detail && <div className="gup-detail">
                         <div className="gup-detail-head">

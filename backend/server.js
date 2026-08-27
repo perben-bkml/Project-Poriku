@@ -1139,6 +1139,8 @@ const AJUAN_FLOWS = {
         antrianSheet: "Write Antrian",
         tableSheet: "Write Table",
         counterCell: "R1",
+        // R2 down; R1 is the id counter above, so a write here must never target row 1
+        tanggalSp2dColumn: "R",
         unitKerjaColumn: "L",
         lampiranColumn: "T",
         antrianLastColumn: "T",
@@ -2425,20 +2427,35 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         );
         forgetSisaGup(spreadsheetId); // Tanggal Acc decides which day the row books
 
-        // GUP/PTUP keep their Nomor SPP only here, so the mirror the PJK screen reads
-        // shows it blank without this. Written RAW and on its own - USER_ENTERED above
-        // would parse "00041" down to 41.
+        // One RAW batch across both sheets. RAW because USER_ENTERED above would parse
+        // "00041" down to 41 and coerce a date into a serial; batchUpdate takes ranges on
+        // any sheet, so this stays a single request however many of the cells apply.
         const mirrorMatch = matchMirrorAntrianRow(mirrorRows, allRows[rowIndex - 1], "update");
-        if (mirrorMatch) {
-            const { antrianSheet, pjk } = AJUAN_FLOWS.verif;
-            await writeRange(
-                sheets,
-                spreadsheetId,
-                `'${antrianSheet}'!${pjk.spp}${mirrorMatch.row}`,
-                [[formatNomorSpp(spp)]],
-                "RAW",
-            );
+        const { antrianSheet: verifSheet, pjk } = AJUAN_FLOWS.verif;
+        const cellAt = (sheet, column, row, value) => ({
+            range: `'${sheet}'!${column}${row}`,
+            values: [[value]],
+        });
+        const rawCells = [];
+        // GUP/PTUP keep their Nomor SPP only on 'Write Antrian', so the mirror the PJK
+        // screen reads shows it blank without this
+        if (mirrorMatch) rawCells.push(cellAt(verifSheet, pjk.spp, mirrorMatch.row, formatNomorSpp(spp)));
+        // Only when Buat DRPP was part of this save; an unrelated save carries no
+        // documentData and would otherwise clear these
+        if (monitoringDrppData) {
+            const sp2dValue = trimmed(tanggalSp2d);
+            // rowIndex 1 is the header, and R1 holds the id counter
+            if (rowIndex > 1) {
+                rawCells.push(cellAt(AJUAN_FLOWS.gup.antrianSheet, AJUAN_FLOWS.gup.tanggalSp2dColumn, rowIndex, sp2dValue));
+            }
+            // For GUP/PTUP the DRPP side decides Maju SPM, so a Nomor SPM here is what
+            // marks the mirror as gone to SPM
+            if (mirrorMatch) {
+                rawCells.push(cellAt(verifSheet, pjk.majuSpm, mirrorMatch.row, trimmed(spm) ? "yes" : ""));
+                rawCells.push(cellAt(verifSheet, pjk.tanggalSp2d, mirrorMatch.row, sp2dValue));
+            }
         }
+        if (rawCells.length) await writeRanges(sheets, spreadsheetId, rawCells, "RAW");
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {

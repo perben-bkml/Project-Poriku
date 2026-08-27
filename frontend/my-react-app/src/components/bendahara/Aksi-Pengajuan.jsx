@@ -30,7 +30,8 @@ function AksiPengajuan(props) {
     const [documentData, setDocumentData] = useState([{
         drpp: "", nominal: "", spp: "", spm: "",
     }])
-    const [tanggalSp2d, setTanggalSp2d] = useState("")
+    // Column R on 'Write Antrian', so reopening a transaction shows the date already saved
+    const [tanggalSp2d, setTanggalSp2d] = useState(() => props.fulldata?.[17] || "")
     // Only once the existing DRPP rows are known may a save mean "delete what is there"
     const [docsLoaded, setDocsLoaded] = useState(false)
     const [warning, setWarning] = useState("")

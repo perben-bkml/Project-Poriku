@@ -17,7 +17,7 @@ const TAB_KEY = 'daftarTabBendahara';
 // longer edited or deleted. The split follows the flow, not the tab - GUP KKP runs the
 // verifikasi flow and locks with LS even though it is listed under GUP/PTUP.
 const LOCKED_STATUS = {
-    gup: ["Sudah Diterbitkan DRPP", "Sudah Diajukan ke KPPN"],
+    gup: ["Sudah Diterbitkan DRPP", ...statusSudahMaju],
     verif: [...statusSudahVerifikasi, ...statusSudahMaju],
 };
 const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();

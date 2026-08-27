@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
-import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel } from "./head-data.js";
+import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
 import { PILOT, PILOT_JENIS_ALLOWED, isPilotUser } from "../../lib/pilot.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
@@ -104,6 +104,9 @@ function BuatPengajuan(props) {
     const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
     // GUP/PTUP keep the Bupot on their own row and the PJK on the mirror row, which the
     // daftar carries across separately. Every other jenis only ever has a PJK.
+    const statusStyle = daftarStatusStyle(props.passedData?.[8]);
+    const catatanBendahara = rowFlow === "gup" ? props.passedData?.[13] : "";
+    const catatanPjk = rowFlow === "gup" ? props.passedData?.[14] : props.passedData?.[13];
     const bupotLink = rowFlow === "gup" ? (props.passedData?.[9] || "") : "";
     const pjkLink = props.passedData?.[11] || (rowFlow && rowFlow !== "gup" ? props.passedData?.[9] || "" : "");
     const activeColumns = useMemo(
@@ -1116,22 +1119,22 @@ function BuatPengajuan(props) {
     ]);
 
     return (
-        <div className="buat-pengajuan bg-card" onMouseUp={handleCellMouseUp}>
+        <div className={`buat-pengajuan bg-card${isBuat ? "" : " buat-pengajuan-detail"}`} onMouseUp={handleCellMouseUp}>
             {componentType === "buat" ? (
             <div className="pengajuan-desc">
                 <p>Ketentuan Pengajuan Pencairan GUP/TUP (Wajib Dibaca!):</p>
                 <button onClick={handleKetentuanPopup}>Baca Ketentuan</button>
             </div> )
             :
-            (props.passedData && (<div className="pengajuan-desc pengajuan-desc-info">
-                <p>Nomor Antrian: <span/> {props.passedData[5]}</p>
-                <p>Tanggal Pengajuan: <span/> {props.passedData[6]}</p>
-                <p>Tanggal Disetujui: <span/> {props.passedData[7]}</p>
-                <p>Status Pengajuan: <span/> {props.passedData[8]}</p>
-                {props.passedData[13] &&
-                    <p className="desc-catatan" title={props.passedData[13]}>
-                        {props.passedData[10] === "gup" ? "Catatan Bendahara:" : "Catatan Verifikasi:"} <span/> {props.passedData[13]}
-                    </p>}
+            (props.passedData && (<div className="ajuan-info">
+                <span className="ajuan-info-label">Status Pengajuan:</span>
+                <span className="ajuan-info-status" style={{ backgroundColor: statusStyle.bg, color: statusStyle.fg }}>
+                    {props.passedData[8] || "\u2014"}
+                </span>
+                <span className="ajuan-info-label">Catatan Bendahara:</span>
+                <p className="ajuan-info-catatan">{catatanBendahara || "\u2014"}</p>
+                <span className="ajuan-info-label">Catatan Verifikator PJK:</span>
+                <p className="ajuan-info-catatan">{catatanPjk || "\u2014"}</p>
             </div>))
             }
             <div className="pengajuan-content">

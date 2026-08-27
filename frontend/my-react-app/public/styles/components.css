@@ -834,6 +834,12 @@
     grid-template-rows: 70px 1fr;
 }
 
+/* The 70px row is sized for the buat-mode Ketentuan bar; the detail block is taller and
+   would otherwise overflow its row and sit on top of the form */
+.buat-pengajuan-detail {
+    grid-template-rows: auto 1fr;
+}
+
 .pengajuan-desc {
     display: flex;
     align-items: center;
@@ -1096,22 +1102,41 @@
     padding-left: 20px;
 }
 
-/* Detail view only - the Catatan fields make five to six items compete for one row */
-.pengajuan-desc-info {
-    gap: 36px;
-    overflow: hidden;
+/* Detail view only. Mirrors .pengajuan-form-textdata below it - same label column, type
+   scale and weight - so the read-only fields read as part of the same form. */
+.ajuan-info {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    align-items: center;
+    row-gap: 14px;
+    margin: 18px 35px 4px 24px;
+    font-size: 1.2rem;
+    font-weight: 600;
 }
-.pengajuan-desc-info p {
-    margin-right: 0;
-    white-space: nowrap;
-    flex-shrink: 0;
+
+.ajuan-info-label {
+    display: flex;
+    align-items: center;
+    padding-left: 11px;
 }
-/* Free text of any length: give up width before the fixed fields do, full text on hover */
-.pengajuan-desc-info .desc-catatan {
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+
+.ajuan-info-status {
+    justify-self: start;
+    padding: 5px 18px;
+    border-radius: 20px;
+    font-size: 1rem;
+}
+
+.ajuan-info-catatan {
+    max-width: 700px;
+    margin: 0;
+    padding: 7px 12px;
+    border: 1px solid #C7CDD8;
+    border-radius: 4px;
+    background-color: #FDFDFD;
+    font-size: 1rem;
+    font-weight: 500;
+    overflow-wrap: break-word;
 }
 
 /* Styling Lihat-Antrian */

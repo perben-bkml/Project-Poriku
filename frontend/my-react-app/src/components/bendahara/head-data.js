@@ -113,6 +113,24 @@ const buktiSetorLabel = (entry) =>
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
+//Status pill colours, shared by the daftar table and the pengajuan detail view
+const DAFTAR_STATUS_STYLE = {
+    "dalam antrian":          { bg: "#E7ECF4", fg: "#41506B" },
+    "diajukan hari ini":      { bg: "#DCE9FF", fg: "#00449C" },
+    "sedang di verifikasi":   { bg: "#FFF1CF", fg: "#8A6100" },
+    "sudah di verifikasi":    { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "sudah diterbitkan drpp": { bg: "#D5EEF6", fg: "#0B6478" },
+    "sudah diajukan ke kppn": { bg: "#E5DEFA", fg: "#4B32A8" },
+};
+const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
+const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
+
+function daftarStatusStyle(status) {
+    const key = String(status ?? "").trim().toLowerCase();
+    if (key.includes("masalah")) return DAFTAR_STATUS_MASALAH;
+    return DAFTAR_STATUS_STYLE[key] || DAFTAR_STATUS_FALLBACK;
+}
+
 //Values are the keys JENIS_PAJAK_KOLOM in server.js resolves to a 'Write Table' column
 const jenisPajakOptions = [
     { value: "", label: "" },
@@ -210,5 +228,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle };
 

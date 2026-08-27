@@ -24,7 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle } from '../components/bendahara/head-data.js';
 import PropTypes from 'prop-types';
 
 const BUKTI_SETOR_STYLE = {
@@ -1149,23 +1149,6 @@ export function TableRekKoran(props) {
 // Daftar-Pengajuan.jsx
 // Status is free text off the sheet, so match on the lowered value and let anything
 // unrecognised fall back to neutral rather than rendering an unstyled pill.
-const DAFTAR_STATUS_STYLE = {
-    "dalam antrian":          { bg: "#E7ECF4", fg: "#41506B" },
-    "diajukan hari ini":      { bg: "#DCE9FF", fg: "#00449C" },
-    "sedang di verifikasi":   { bg: "#FFF1CF", fg: "#8A6100" },
-    "sudah di verifikasi":    { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "sudah diterbitkan drpp": { bg: "#D5EEF6", fg: "#0B6478" },
-    "sudah diajukan ke kppn": { bg: "#E5DEFA", fg: "#4B32A8" },
-};
-const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
-const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
-
-function daftarStatusStyle(status) {
-    const key = String(status ?? "").trim().toLowerCase();
-    if (key.includes("masalah")) return DAFTAR_STATUS_MASALAH;
-    return DAFTAR_STATUS_STYLE[key] || DAFTAR_STATUS_FALLBACK;
-}
-
 const DAFTAR_DETAIL_FIELDS = [
     { key: "spp", label: "Nomor SPP" },
     { key: "spm", label: "Nomor SPM" },
@@ -1266,7 +1249,7 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, o
                             </div>
                             {(row.catatan || row.pjkCatatan) &&
                                 <div className="dp-detail-notes">
-                                    {row.catatan && <p><span>Catatan Bendahara</span>{row.catatan}</p>}
+                                    {row.catatan && <p><span>{row.isGup ? "Catatan Bendahara" : "Catatan Verifikator PJK"}</span>{row.catatan}</p>}
                                     {row.pjkCatatan && <p><span>Catatan Verifikator PJK</span>{row.pjkCatatan}</p>}
                                 </div>}
                         </div>

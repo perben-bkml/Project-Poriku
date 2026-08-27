@@ -4,9 +4,10 @@ import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
 import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp } from '../bendahara/head-data.js';
 
-// Column indices on 'Write Antrian Verif'; 16 is the source id the backend appends
+// Column indices on 'Write Antrian Verif'; 18 is the source id the backend appends past R
 const DOK_VERIF = 15;
-const SOURCE_ID = 16;
+const TANGGAL_SP2D = 17;
+const SOURCE_ID = 18;
 const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
@@ -16,6 +17,11 @@ const SUBSTANSI = 9, KELENGKAPAN = 10;
 const DOK_HEAD = "Dok. Verifikasi";
 const INFO_DOK_COLUMNS = [...INFO_COLUMNS, DOK_VERIF];
 const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
+
+// Sudah Verifikasi's format with Tanggal SP2D slipped in after Nomor SPP
+const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
+const MAJU_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
+const MAJU_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
 
 // Generation takes 6-8s; the cap stops a wedged job polling forever
 const POLL_INTERVAL_MS = 2000;
@@ -28,7 +34,7 @@ const ditolak = row => [row[SUBSTANSI], row[KELENGKAPAN]]
 const TAB_KEY = 'pengujianPjkTab';
 
 function PengujianPJK(props) {
-    const [sections, setSections] = useState([[], [], []]);
+    const [sections, setSections] = useState([[], [], [], []]);
     const [pending, setPending] = useState(new Set());
     const [isLoading, setIsLoading] = useState(true);
     const [activeTitle, setActiveTitle] = useState(() => localStorage.getItem(TAB_KEY) || "");
@@ -87,6 +93,8 @@ function PengujianPJK(props) {
             empty: "Tidak ada pengajuan bermasalah."},
         {title: "Sudah Verifikasi", head: [...pjkHeadData, DOK_HEAD], columns: INFO_DOK_COLUMNS, rows: sections[2],
             empty: "Tidak ada pengajuan yang sudah diverifikasi."},
+        {title: "Sudah Maju", head: MAJU_HEAD, columns: MAJU_COLUMNS, rows: sections[3],
+            empty: "Tidak ada pengajuan yang sudah maju SPM."},
     ], [sections]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];

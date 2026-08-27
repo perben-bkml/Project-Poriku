@@ -1166,6 +1166,8 @@ const AJUAN_FLOWS = {
             // Link to the newest Hasil Verifikasi PDF. Past O, which is the lampiran and
             // the last column the antrian write path touches.
             dokVerif: "P",
+            majuSpm: "Q",
+            tanggalSp2d: "R",
             defaults: { substansi: "Belum", kelengkapan: "Belum Verif" },
         },
         // canonical index ('Write Antrian' layout) -> column on this sheet
@@ -1182,6 +1184,14 @@ const PJK_COLUMN = Object.fromEntries(
         .map(([name, letter]) => [name, letter.charCodeAt(0) - 65])
 );
 const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
+
+// Status column F on 'Write Antrian Verif'. The sheet owns that column; these are the
+// values the app has to recognise. Twin of daftarStatusLists in head-data.js.
+const STATUS_SUDAH_VERIFIKASI = [
+    "Sudah Di Verifikasi", "Sudah Verifikasi", "Verifikasi OK", "Verifikasi OK Dengan Catatan",
+];
+const STATUS_SUDAH_MAJU = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
+const PJK_STATUS_INDEX = 5; // column F
 
 // Jenis is stored as a label, so the flow a row belongs to is read back off it
 function resolveJenis(value) {
@@ -1219,6 +1229,10 @@ const ANTRIAN_PJK_INDEX = ANTRIAN_ROW_WIDTH + 1;
 const ANTRIAN_PJK_CATATAN_INDEX = ANTRIAN_ROW_WIDTH + 2;
 const ANTRIAN_DOK_VERIF_INDEX = ANTRIAN_ROW_WIDTH + 3;
 const ANTRIAN_HASIL_VERIF_ID_INDEX = ANTRIAN_ROW_WIDTH + 4;
+// The PJK verdicts. The daftar needs them because an OK Catatan keeps a row editable
+// however far its status has moved, and neither column is in the canonical layout.
+const ANTRIAN_SUBSTANSI_INDEX = ANTRIAN_ROW_WIDTH + 5;
+const ANTRIAN_KELENGKAPAN_INDEX = ANTRIAN_ROW_WIDTH + 6;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1301,6 +1315,8 @@ async function fetchMergedAntrianRows(spreadsheetId) {
             const canonical = toCanonicalAntrianRow(row, flow);
             if (flow.key === "verif") {
                 canonical[ANTRIAN_DOK_VERIF_INDEX] = row?.[PJK_COLUMN.dokVerif] ?? "";
+                canonical[ANTRIAN_SUBSTANSI_INDEX] = row?.[PJK_COLUMN.substansi] ?? "";
+                canonical[ANTRIAN_KELENGKAPAN_INDEX] = row?.[PJK_COLUMN.kelengkapan] ?? "";
                 const jenis = resolveJenis(canonical[ANTRIAN_JENIS_INDEX]);
                 if (jenis?.flow === "gup") { // mirror of a 'Write Antrian' row
                     mirrorByKey.set(mirrorRowKey(canonical[1], canonical[2]), canonical);
@@ -1323,6 +1339,8 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         row[ANTRIAN_PJK_CATATAN_INDEX] = mirror?.[16] || "";
         row[ANTRIAN_DOK_VERIF_INDEX] = mirror?.[ANTRIAN_DOK_VERIF_INDEX] || "";
         row[ANTRIAN_HASIL_VERIF_ID_INDEX] = mirror?.[0] || "";
+        row[ANTRIAN_SUBSTANSI_INDEX] = mirror?.[ANTRIAN_SUBSTANSI_INDEX] || "";
+        row[ANTRIAN_KELENGKAPAN_INDEX] = mirror?.[ANTRIAN_KELENGKAPAN_INDEX] || "";
         if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
     }
     return merged;
@@ -1336,10 +1354,10 @@ const JENIS_PENGAJUAN = {
     "gup": { sheetValue: "gup", verifValue: "GUP", flow: "gup", hasTable: true },
     "ptup": { sheetValue: "ptup", verifValue: "PTUP", flow: "gup", hasTable: true },
     "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true },
-    "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true },
-    "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true },
-    "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false },
-    "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false },
+    "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true, majuSpm: true },
+    "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true, majuSpm: true },
+    "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false, majuSpm: true },
+    "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false, majuSpm: true },
 };
 
 // Nomor SPP is stored zero padded to 5 digits. Anything not purely numeric is left alone
@@ -2293,7 +2311,8 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 
         // Function to filter arrays
         function filterByStatus(array, status) {
-            return array.filter(row => row.includes(status));
+            const wanted = Array.isArray(status) ? status : [status];
+            return array.filter(row => wanted.some(value => row.includes(value)));
         }
 
         // PJK status of each mirror row, keyed the same way delete and edit pair them
@@ -2317,7 +2336,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         };
 
         const sedangAll = filterByStatus(rowData, "Sedang Di Verifikasi");
-        const sudahAll = filterByStatus(rowData, "Sudah Di Verifikasi");
+        const sudahAll = filterByStatus(rowData, STATUS_SUDAH_VERIFIKASI);
         // Substansi/Kelengkapan appended past the 20 'Write Antrian' columns, so every
         // index the aksi page reads keeps its meaning
         const menungguPJK = [...sedangAll, ...sudahAll].filter(waitingPjk)
@@ -3751,9 +3770,9 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                // Through P, not antrianLastColumn: the Dok. Verifikasi link sits past
-                // the columns the antrian write path knows about
-                `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.dokVerif}`,
+                // Through R, not antrianLastColumn: Dok. Verifikasi and the SPM columns
+                // all sit past the columns the antrian write path knows about
+                `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.tanggalSp2d}`,
                 `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
             ],
         );
@@ -3768,8 +3787,8 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             ? sourceIdByKey.get(mirrorRowKey(row[1], row[2])) || ""
             : "";
 
-        // Index 16, appended past the sheet's own columns (A..P)
-        const width = PJK_COLUMN.dokVerif + 1;
+        // Appended past the sheet's own columns (A..R)
+        const width = PJK_COLUMN.tanggalSp2d + 1;
         const rows = (response.data.valueRanges[0].values || [])
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => Array.from({ length: width }, (_, i) => row[i] ?? ""))
@@ -3780,9 +3799,11 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
 
         // A row belongs to one section only, tested furthest stage first so it moves along
         // as it progresses and settles in Sudah Verifikasi
-        const informasi = [], sedangVerif = [], sudahVerif = [];
+        const informasi = [], sedangVerif = [], sudahVerif = [], sudahMaju = [];
         for (const row of rows) {
-            if (filled(row[PJK_COLUMN.selesaiVerif])
+            if (STATUS_SUDAH_MAJU.includes(trimmed(row[PJK_STATUS_INDEX]))) {
+                sudahMaju.push(row);
+            } else if (filled(row[PJK_COLUMN.selesaiVerif])
                 && isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan])) {
                 sudahVerif.push(row);
             } else if (filled(row[PJK_COLUMN.mulaiVerif])) {
@@ -3792,7 +3813,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             }
         }
 
-        res.json({ data: [informasi, sedangVerif, sudahVerif], pending: [...pendingHasilVerif.keys()] });
+        res.json({ data: [informasi, sedangVerif, sudahVerif, sudahMaju], pending: [...pendingHasilVerif.keys()] });
     } catch (error) {
         console.error("Error in /verifikasi/pengujian-pjk:", error);
         res.status(500).json({ error: "Failed to fetch data." });
@@ -3936,7 +3957,8 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
 app.post("/verifikasi/aksi-pjk", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { no_antri, mulai_verifikasi, tgl_selesai, substansi, kelengkapan, catatan } = req.body || {};
+        const { no_antri, mulai_verifikasi, tgl_selesai, substansi, kelengkapan, catatan,
+                maju_spm, tgl_sp2d } = req.body || {};
         if (!no_antri) {
             return res.status(400).json({ message: "Invalid or missing data." });
         }
@@ -3962,23 +3984,34 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         // Once a selesai date exists the mulai date is history and must not be rewritten
         const selesaiValue = tgl_selesai ?? "";
         const mulaiValue = mulai_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
+        // Only LS may reach SPM, so a posted maju_spm on any other jenis is ignored here
+        // rather than trusted from the client
+        const bolehMajuSpm = !!resolveJenis(previousRow[3])?.majuSpm;
+        const majuValue = bolehMajuSpm && maju_spm ? "yes" : "";
+        const sp2dValue = majuValue ? trimmed(tgl_sp2d) : "";
+
         const updates = [
             [`${pjk.selesaiVerif}${rowIndex}`, selesaiValue],
             [`${pjk.substansi}${rowIndex}`, substansi],
             [`${pjk.kelengkapan}${rowIndex}`, kelengkapan],
             [`${pjk.catatan}${rowIndex}`, catatan],
             selesaiValue === "" ? [`${pjk.mulaiVerif}${rowIndex}`, mulaiValue] : null,
+            bolehMajuSpm ? [`${pjk.majuSpm}${rowIndex}`, majuValue] : null,
+            // A date here would be coerced to a serial by USER_ENTERED, so only the
+            // clearing case rides this batch; the date itself goes below as RAW
+            bolehMajuSpm && sp2dValue === "" ? [`${pjk.tanggalSp2d}${rowIndex}`, ""] : null,
         ].filter(Boolean);
 
-        await writeRanges(
-            sheets,
-            spreadsheetId,
-            updates.map(([cell, value]) => ({
-                range: `'${verifFlow.antrianSheet}'!${cell}`,
-                values: [[value ?? ""]],
-            })),
-            "USER_ENTERED",
-        );
+        const toWrite = ([cell, value]) => ({
+            range: `'${verifFlow.antrianSheet}'!${cell}`,
+            values: [[value ?? ""]],
+        });
+
+        await writeRanges(sheets, spreadsheetId, updates.map(toWrite), "USER_ENTERED");
+        if (sp2dValue !== "") {
+            await writeRanges(sheets, spreadsheetId,
+                [toWrite([`${pjk.tanggalSp2d}${rowIndex}`, sp2dValue])], "RAW");
+        }
 
         // Only a changed verdict or note is worth a document - opening a row and saving
         // it untouched must not mint another revision

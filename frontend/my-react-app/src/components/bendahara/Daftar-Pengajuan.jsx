@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
 
@@ -18,7 +18,7 @@ const TAB_KEY = 'daftarTabBendahara';
 // verifikasi flow and locks with LS even though it is listed under GUP/PTUP.
 const LOCKED_STATUS = {
     gup: ["Sudah Diterbitkan DRPP", "Sudah Diajukan ke KPPN"],
-    verif: ["Sudah Di Verifikasi", "Sudah Verifikasi"],
+    verif: [...statusSudahVerifikasi, ...statusSudahMaju],
 };
 const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -63,7 +63,10 @@ function toTableRow(data, pending, lastPage) {
         pjkCatatan: data[22],
         hasilVerif: data[23],
         hasilVerifPending: pending.has(String(data[24])),
-        locked: LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7])),
+        // An OK Catatan verdict leaves something for the bendahara to fix, so the row stays
+        // editable however far its status has moved
+        locked: LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]))
+            && (isGup || ![data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN))),
         // Shape Bendahara-Page's handleInvisibleComponent destructures
         passData: {
             lastPage, keyword: data[0], antriNum: data[0], antriName: data[2], antriType: data[3],

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
-import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp } from "../bendahara/head-data.js";
+import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel } from "../bendahara/head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup from "../../ui/Popup.jsx";
@@ -10,9 +10,9 @@ const FIELD = {
     no: 0, timestamp: 1, nama: 2, jenis: 3, nominal: 4, spp: 6,
     unitKerja: 8, substansi: 9, kelengkapan: 10,
     mulaiVerif: 11, selesaiVerif: 12, catatan: 13, lampiran: 14,
-    dokVerif: 15,
-    // Appended by the backend: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
-    sourceId: 16,
+    dokVerif: 15, majuSpm: 16, tanggalSp2d: 17,
+    // Appended by the backend past R: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
+    sourceId: 18,
 };
 
 function AksiVerifPJK(props) {
@@ -28,10 +28,14 @@ function AksiVerifPJK(props) {
         kelengkapan: "",
         catatan: "",
         lampiran: "",
+        maju_spm: false,
+        tgl_sp2d: "",
     });
 
     // A GUP/PTUP block is the full table; every other jenis stores the cropped one
     const sourceId = props.fulldata[FIELD.sourceId];
+    // Only an LS pengajuan ever goes on to SPM
+    const bolehMajuSpm = !!jenisValueFromLabel(props.fulldata[FIELD.jenis])?.startsWith("ls-");
     const tableHeader = useMemo(
         () => sourceId
             ? columns
@@ -49,6 +53,8 @@ function AksiVerifPJK(props) {
             kelengkapan: props.fulldata[FIELD.kelengkapan] || pjkKelengkapanOptions[0].label,
             catatan: props.fulldata[FIELD.catatan],
             lampiran: props.fulldata[FIELD.lampiran],
+            maju_spm: String(props.fulldata[FIELD.majuSpm] ?? "").trim().toLowerCase() === "yes",
+            tgl_sp2d: props.fulldata[FIELD.tanggalSp2d] || "",
         });
 
         (async () => {
@@ -144,6 +150,18 @@ function AksiVerifPJK(props) {
                     </select>
                     <label htmlFor="catatan">Catatan</label>
                     <textarea id="catatan" className="type-btn span-row" name="catatan" defaultValue={pjkData.catatan} onChange={e => handleInputChange(e.target)}/>
+                    {bolehMajuSpm && <>
+                        <label htmlFor="maju-spm">Maju SPM</label>
+                        <input id="maju-spm" className="maju-spm-check" type="checkbox" checked={pjkData.maju_spm}
+                            onChange={e => setPjkData(prev => ({...prev, maju_spm: e.target.checked,
+                                tgl_sp2d: e.target.checked ? prev.tgl_sp2d : ""}))}/>
+                        {pjkData.maju_spm && <>
+                            <label className="maju-spm-date" htmlFor="tgl-sp2d">Tanggal SP2D</label>
+                            <input id="tgl-sp2d" className="type-btn" type="date" name="tgl_sp2d" value={pjkData.tgl_sp2d}
+                                onChange={e => handleInputChange(e.target)}
+                                onDoubleClick={() => handleInputChange({name: "tgl_sp2d", value: ""})}/>
+                        </>}
+                    </>}
                 </div>
 
                 <div className="lampiran-aksi-pengajuan">

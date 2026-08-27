@@ -113,14 +113,29 @@ const buktiSetorLabel = (entry) =>
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
+//Status values on 'Write Antrian Verif' column F, which the sheet owns. Twin of
+//STATUS_SUDAH_VERIFIKASI / STATUS_SUDAH_MAJU in server.js.
+const statusSudahVerifikasi = [
+    "Sudah Di Verifikasi", "Sudah Verifikasi", "Verifikasi OK", "Verifikasi OK Dengan Catatan",
+];
+const statusSudahMaju = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
+const OK_CATATAN = "OK Catatan";
+
 //Status pill colours, shared by the daftar table and the pengajuan detail view
+// Ordered as the row travels: neutral, blue, amber while in progress, then olive for
+// passed-with-notes, green for passed, teal and purple through DRPP/KPPN, and a solid
+// fill at SP2D - the only filled pill, because it is the one terminal state.
 const DAFTAR_STATUS_STYLE = {
-    "dalam antrian":          { bg: "#E7ECF4", fg: "#41506B" },
-    "diajukan hari ini":      { bg: "#DCE9FF", fg: "#00449C" },
-    "sedang di verifikasi":   { bg: "#FFF1CF", fg: "#8A6100" },
-    "sudah di verifikasi":    { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "sudah diterbitkan drpp": { bg: "#D5EEF6", fg: "#0B6478" },
-    "sudah diajukan ke kppn": { bg: "#E5DEFA", fg: "#4B32A8" },
+    "dalam antrian":                { bg: "#E7ECF4", fg: "#41506B" },
+    "diajukan hari ini":            { bg: "#DCE9FF", fg: "#00449C" },
+    "sedang di verifikasi":         { bg: "#FFF1CF", fg: "#8A6100" },
+    "verifikasi ok dengan catatan": { bg: "#E9F2C6", fg: "#55700D" },
+    "sudah di verifikasi":          { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "sudah verifikasi":             { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "verifikasi ok":                { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "sudah diterbitkan drpp":       { bg: "#D5EEF6", fg: "#0B6478" },
+    "sudah diajukan ke kppn":       { bg: "#E5DEFA", fg: "#4B32A8" },
+    "sudah sp2d":                   { bg: "#0F7A3D", fg: "#FFFFFF" },
 };
 const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
 const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
@@ -228,5 +243,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
 

@@ -1510,6 +1510,23 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-bottom: 10px;
 }
 
+/* Sits in the same grid as the selects above it, so it needs a size of its own rather
+   than the browser default checkbox */
+.maju-spm-check {
+    width: 22px;
+    height: 22px;
+    justify-self: start;
+    align-self: center;
+    accent-color: #00449C;
+    cursor: pointer;
+}
+
+/* The Catatan textarea spans two rows in column 2, so auto-placement would drop this
+   label into column 1 and leave its input stranded across the gap */
+.maju-spm-date {
+    grid-column: 3;
+}
+
 .aksi-content-docs {
     display: flex;
     flex-direction: column;

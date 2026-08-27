@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 //Import components
 import { WideTableCard } from '../../ui/cards.jsx';
+import BatasGup from './Batas-Gup.jsx';
 import { headData1, headData2, headData3, headData4, headDataPjk } from './head-data.js';
 import PropTypes from "prop-types";
 
@@ -84,6 +85,7 @@ function KelolaPengajuan(props) {
 
     return (
         <div className='kelola-container'>
+            <BatasGup />
             <div className='kelola-tabs' role='tablist'>
                 {sections.map(section => {
                     const isActive = section.card === active.card;

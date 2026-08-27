@@ -138,6 +138,12 @@ const rowsPerPageOptions = [10, 15, 20, 25];
 //For Cek-Sisa-Gup.jsx. Thresholds are absolute rupiah, not a share of the daily limit -
 //changing the limit does not move them.
 const formatRupiah = (nominal) => `Rp ${Math.round(nominal).toLocaleString('id-ID')}`;
+// "2026-08-20" -> "20 Agustus 2026". Sliced rather than parsed as a Date, which would
+// render the ISO string in the browser's zone and shift the day west of Greenwich.
+const formatTanggalPanjang = (iso) => {
+    const cocok = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    return cocok ? `${Number(cocok[3])} ${monthNames[Number(cocok[2])].title} ${cocok[1]}` : (iso || "");
+};
 const sisaGupBands = [
     { min: 250000000, className: "gup-band-hijau", label: "\u2265 250 juta" },
     { min: 200000000, className: "gup-band-kuning", label: "\u2265 200 juta" },
@@ -156,5 +162,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, sisaGupBands, hariKerja, sisaGupHeadData };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData };
 

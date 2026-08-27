@@ -1,10 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
 import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
-import { formatRupiah, sisaGupBands, hariKerja, sisaGupHeadData, monthNames } from "./head-data.js";
+import { formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, monthNames } from "./head-data.js";
 
 const bandOf = (sisa) => sisaGupBands.find(band => sisa >= band.min);
 const juta = (nominal) => `${Math.round(nominal / 1000000)} jt`;
+const labelSisa = (day) => day.tutup ? "Tutup"
+    : day.batas ? `${juta(day.sisa)} · Batas` : juta(day.sisa);
 
 // Every date is built in UTC. new Date("2026-08-01") parses as UTC midnight and renders in
 // the browser's zone, which shifts the weekday for anyone west of Greenwich.
@@ -56,11 +58,18 @@ function CekSisaGup() {
 
     const muatUlang = useCallback(() => { setTerpilih(""); muat(); }, [muat]);
 
+    // Past the admin's batas no GUP may be submitted, so those dates show as closed
+    // instead of advertising a remaining amount nobody can claim
     const days = useMemo(() => {
         if (!data) return [];
+        const batas = data.batasTanggal || "";
         return weekdaysOf(data.month).map(day => {
             const used = data.days[day.tanggal]?.used || 0;
-            return { ...day, used, sisa: data.limit - used };
+            return {
+                ...day, used, sisa: data.limit - used,
+                batas: day.tanggal === batas,
+                tutup: !!batas && day.tanggal > batas,
+            };
         });
     }, [data]);
 
@@ -96,6 +105,9 @@ function CekSisaGup() {
                                 <span className={`gup-legend-dot ${band.className}`} />{band.label}
                             </span>
                         ))}
+                        {data.batasTanggal && <span className="gup-legend-item">
+                            <span className="gup-legend-dot gup-dot-batas" />Batas pengajuan
+                        </span>}
                         <button type="button" className="gup-reload" onClick={muatUlang}>Muat ulang</button>
                     </div>
 
@@ -105,16 +117,26 @@ function CekSisaGup() {
                             <div className="gup-cell-empty" key={`pad-${index}`} />)}
                         {days.map(day => (
                             <button type="button" key={day.tanggal}
-                                className={`gup-cell ${bandOf(day.sisa).className}${day.tanggal === terpilih ? " gup-cell-active" : ""}`}
+                                className={`gup-cell ${day.tutup ? "gup-cell-tutup" : bandOf(day.sisa).className}`
+                                    + (day.batas ? " gup-cell-batas" : "")
+                                    + (day.tanggal === terpilih ? " gup-cell-active" : "")}
                                 aria-pressed={day.tanggal === terpilih}
-                                aria-label={`${day.tanggal}, sisa ${formatRupiah(day.sisa)}`}
+                                aria-label={day.tutup
+                                    ? `${day.tanggal}, di luar batas pengajuan GUP`
+                                    : `${day.tanggal}, sisa ${formatRupiah(day.sisa)}${day.batas ? ", batas pengajuan GUP" : ""}`}
                                 onClick={() => setTerpilih(current => current === day.tanggal ? "" : day.tanggal)}>
                                 <span className="gup-cell-day">{day.day}</span>
-                                <span className="gup-cell-sisa">{juta(day.sisa)}</span>
+                                <span className="gup-cell-sisa">{labelSisa(day)}</span>
                             </button>
                         ))}
                     </div>
 
+                    {data.batasTanggal &&
+                        <p className="gup-note gup-note-batas">
+                            Batas pengajuan GUP bulan ini :{" "}
+                            <strong className="gup-batas-tanggal">{formatTanggalPanjang(data.batasTanggal)}</strong>
+                        </p>}
+                        <br/>
                     {diabaikan.length > 0 &&
                         <p className="gup-note">
                             Terdapat {diabaikan.map(([label, count]) => `${count} pengajuan ${label}`).join(", ")} yang tidak masuk pada perkiraan sisa GUP di atas.

@@ -240,6 +240,8 @@ const ROUTE_ROLES = {
 
     // Kelola Pengajuan, Monitoring DRPP
     "GET /bendahara/kelola-ajuan": ADMIN,
+    "GET /bendahara/batas-gup": ADMIN,
+    "PUT /bendahara/batas-gup": ADMIN,
     "POST /bendahara/aksi-ajuan": ADMIN,
     "GET /bendahara/get-ajuan": ADMIN,
     "GET /bendahara/monitoring-drpp": ADMIN,
@@ -1027,15 +1029,33 @@ const isAkhirPekan = (iso) => [0, 6].includes(new Date(`${iso}T00:00:00Z`).getUT
 // the panel invites the very double booking it exists to prevent
 const forgetSisaGup = (spreadsheetId) => pembayaranBpCache.delete(`sisa-gup|${spreadsheetId}`);
 
+// An admin may close the month early - past the batas the grid grays the dates out and
+// says no GUP may be submitted there. Kept in Postgres so neither reading nor writing it
+// spends a Sheets call, one row per month so a year change cannot read the wrong batas.
+const UNDEFINED_TABLE = "42P01"; // migration 004 not applied yet
+const isBulan = (value) => /^\d{4}-\d{2}$/.test(value || "");
+
+async function readBatasGup(month) {
+    try {
+        const [row] = await sql`SELECT tanggal, diubah_oleh, updated_at FROM gup_batas_tanggal WHERE bulan = ${month}`;
+        return row ? { tanggal: row.tanggal, diubahOleh: row.diubah_oleh, updatedAt: row.updated_at } : null;
+    } catch (error) {
+        // The grid is useful without a batas, so a missing table degrades instead of 500ing
+        if (error.code === UNDEFINED_TABLE) return null;
+        throw error;
+    }
+}
+
 app.get("/bendahara/sisa-gup", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const month = /^\d{4}-\d{2}$/.test(req.query.month || "")
-            ? req.query.month
-            : getFormattedDate().fullDateFormat.slice(0, 7);
+        const month = isBulan(req.query.month) ? req.query.month : getFormattedDate().fullDateFormat.slice(0, 7);
 
-        const { rows, nominalTidakValid } = await cached(`sisa-gup|${spreadsheetId}`,
-            () => readGupSlotRows(spreadsheetId), SISA_GUP_TTL_MS);
+        // Deliberately outside the cache: an admin closing the month must take effect at once
+        const [{ rows, nominalTidakValid }, batas] = await Promise.all([
+            cached(`sisa-gup|${spreadsheetId}`, () => readGupSlotRows(spreadsheetId), SISA_GUP_TTL_MS),
+            readBatasGup(month),
+        ]);
 
         // The whole month ships at once so picking a date on the grid costs no round trip
         const days = {};
@@ -1055,11 +1075,53 @@ app.get("/bendahara/sisa-gup", async (req, res) => {
 
         return res.status(200).json({
             limit: GUP_DAILY_LIMIT, month, days,
+            batasTanggal: batas?.tanggal || "",
             diabaikan: { tanpaTanggal, akhirPekan, nominalTidakValid },
         });
     } catch (error) {
         console.error("Error in GET /bendahara/sisa-gup:", error);
         return res.status(500).json({ message: "Gagal memuat sisa GUP." });
+    }
+});
+
+app.get("/bendahara/batas-gup", async (req, res) => {
+    try {
+        const month = isBulan(req.query.month) ? req.query.month : getFormattedDate().fullDateFormat.slice(0, 7);
+        const batas = await readBatasGup(month);
+        return res.status(200).json({ month, tanggal: batas?.tanggal || "", diubahOleh: batas?.diubahOleh || "", updatedAt: batas?.updatedAt || null });
+    } catch (error) {
+        console.error("Error in GET /bendahara/batas-gup:", error);
+        return res.status(500).json({ message: "Gagal memuat batas tanggal GUP." });
+    }
+});
+
+// An empty tanggal clears the batas rather than storing a blank one
+app.put("/bendahara/batas-gup", async (req, res) => {
+    try {
+        const { month, tanggal } = req.body || {};
+        if (!isBulan(month)) return res.status(400).json({ message: "Bulan tidak valid." });
+        const iso = String(tanggal ?? "").trim();
+        if (iso && !iso.startsWith(`${month}-`)) {
+            return res.status(400).json({ message: "Tanggal harus berada di bulan yang sama." });
+        }
+        if (!iso) {
+            await sql`DELETE FROM gup_batas_tanggal WHERE bulan = ${month}`;
+            return res.status(200).json({ month, tanggal: "" });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return res.status(400).json({ message: "Tanggal tidak valid." });
+        await sql`
+            INSERT INTO gup_batas_tanggal (bulan, tanggal, diubah_oleh, updated_at)
+            VALUES (${month}, ${iso}, ${req.viewer.name}, NOW())
+            ON CONFLICT (bulan) DO UPDATE
+            SET tanggal = EXCLUDED.tanggal, diubah_oleh = EXCLUDED.diubah_oleh, updated_at = NOW()`;
+        return res.status(200).json({ month, tanggal: iso, diubahOleh: req.viewer.name });
+    } catch (error) {
+        if (error.code === UNDEFINED_TABLE) {
+            console.error("gup_batas_tanggal missing - apply migration 004.", error);
+            return res.status(500).json({ message: "Tabel batas GUP belum tersedia di database." });
+        }
+        console.error("Error in PUT /bendahara/batas-gup:", error);
+        return res.status(500).json({ message: "Gagal menyimpan batas tanggal GUP." });
     }
 });
 

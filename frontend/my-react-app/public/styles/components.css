@@ -238,10 +238,51 @@
 .gup-band-jingga { background-color: #FFDCC0; border-color: #F3C398; color: #9C4A06; }
 .gup-band-merah  { background-color: #FBE1DE; border-color: #F2BDB7; color: #BD1404; }
 
+/* Past the admin's batas nothing may be submitted, so the cell drops its band colour
+   entirely - a remaining amount nobody can claim is worse than no number at all */
+.gup-cell-tutup {
+    background-color: #F1F3F6;
+    border-color: #DFE3EA;
+    color: #98A1B0;
+}
+
+.gup-cell-tutup:hover {
+    transform: none;
+}
+
+/* The last date a GUP may be submitted. It overrides its band rather than ringing it: a
+   busy final day lands on the merah band, where a red ring on a red fill disappears. The
+   remaining amount stays printed on the cell, so dropping the band loses no information. */
+.gup-cell-batas {
+    background-color: #B3261E;
+    border-color: #8C1D18;
+    color: white;
+    box-shadow: 0 2px 10px rgba(179, 38, 30, 0.4);
+}
+
+.gup-cell-batas:hover {
+    background-color: #9F211A;
+}
+
+.gup-dot-batas {
+    background-color: #B3261E;
+}
+
 .gup-note {
     margin: 12px 0 0 0;
     font-size: 0.82rem;
     color: #7A8598;
+}
+
+.gup-note-batas {
+    margin-top: 16px;
+    font-size: 1rem;
+    color: #BD1404;
+}
+
+.gup-batas-tanggal {
+    font-size: 1.35rem;
+    font-weight: 700;
 }
 
 .gup-detail {
@@ -305,6 +346,49 @@
     color: #8A6100;
     font-size: 0.7rem;
     font-weight: 600;
+}
+
+/* Admin side of the same feature, on Kelola Pengajuan. Reuses the .gup-panel shell so the
+   two screens read as one feature. */
+.batas-panel {
+    margin-bottom: 10px;
+}
+
+.batas-body {
+    padding-top: 14px;
+}
+
+.batas-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.batas-input {
+    padding: 8px 12px;
+    border: 1px solid #D8DEE8;
+    border-radius: 8px;
+    background-color: white;
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: #00204A;
+}
+
+.batas-input:disabled,
+.gup-toggle:disabled,
+.batas-hapus:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.batas-hapus {
+    margin-left: 0;
+    color: #BD1404;
+}
+
+.batas-pesan {
+    color: #00449C;
 }
 
 /* Daftar-Pengajuan tab strip. Sits inside .bg-card rather than beside it, so only the

@@ -51,6 +51,12 @@ const MENU_ROLES = {
     "edit-dokumen-gaji": ["admin_gaji"],
 };
 
+// Verifikasi accounts do not handle DRPP, so those screens are closed to them whatever
+// their role. Matched on the login username, so the check has to sit above the master
+// admin short circuit in canOpen. Twin of DRPP_ROUTES in server.js.
+const DRPP_MENUS = ["monitoring-drpp", "aksi-drpp"];
+const tanpaDrpp = (username) => String(username ?? "").toLowerCase().includes("verifikasi");
+
 const AKRONIM = ["bp", "tup", "drpp", "spm", "pjk"];
 
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
@@ -84,7 +90,8 @@ function BendaharaPage(props) {
     const [dokumenGajiData, setDokumenGajiData] = useState(null);
 
 
-    const canOpen = (menu) => user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role);
+    const canOpen = (menu) => !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
+        && (user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role));
     const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 
     // Set buttonSelect when page renders

@@ -290,6 +290,16 @@ const ROUTE_ROLES_PREFIX = [
     { method: "DELETE", prefix: "/dokumen-gaji/", roles: GAJI },
 ];
 
+// Verifikasi accounts do not handle DRPP. This is matched on the login username rather
+// than the role, so it is checked before the master admin bypass below and is not
+// expressible in ROUTE_ROLES. Twin of DRPP_MENUS in src/pages/Bendahara-Page.jsx.
+const DRPP_ROUTES = new Set([
+    "GET /bendahara/monitoring-drpp",
+    "GET /bendahara/cek-drpp",
+    "POST /bendahara/aksi-drpp",
+]);
+const tanpaDrpp = (username) => String(username ?? "").toLowerCase().includes("verifikasi");
+
 const rolesForRoute = (method, path) => ROUTE_ROLES[`${method} ${path}`]
     || ROUTE_ROLES_PREFIX.find(route => route.method === method && path.startsWith(route.prefix))?.roles
     || [];
@@ -306,6 +316,9 @@ app.use((req, res, next) => {
         viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
     } catch {
         return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
+    }
+    if (DRPP_ROUTES.has(key) && tanpaDrpp(viewer.username)) {
+        return res.status(403).json({ message: "Akses ditolak." });
     }
     if (viewer.role !== MASTER_ROLE && !rolesForRoute(req.method, path).includes(viewer.role)) {
         return res.status(403).json({ message: "Akses ditolak." });
@@ -814,6 +827,8 @@ app.get("/check-auth", (req, res) => {
         res.status(200).json({ 
             user: {
                 name: decoded.name,
+                // The login id, which the DRPP hold on Bendahara-Page.jsx matches on
+                username: decoded.username,
                 role: decoded.role } 
             });
     } catch (error) {

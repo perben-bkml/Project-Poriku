@@ -34,8 +34,8 @@ const MENU_ROLES = {
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
 const MENU_BUTTONS = [
     {name: "realisasi", label: "Realisasi", Icon: PaymentsIcon},
-    {name: "kelola-PJK", label: "Kelola PJK", Icon: DashboardIcon},
     {name: "pengujian-PJK", label: "Pengujian PJK", Icon: FactCheckIcon},
+    {name: "kelola-PJK", label: "Kelola PJK", Icon: DashboardIcon},
     {name: "form-verifikasi", label: "Form Verifikasi", Icon: ChecklistRtlIcon},
     {name: "monitor-PJK", label: "Monitor PJK", Icon: ScreenSearchDesktopIcon},
 ];

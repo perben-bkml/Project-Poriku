@@ -63,4 +63,53 @@ const monthNames = [
     {title: "Desember", value: "12"},
 ]
 
-export { satkerNames, tableHead, userSatkerNames, monthNames }
+
+// The Excel layout POST /anggaran/unggah expects: one flat row per Akun Belanja with the
+// parent columns repeated, which is the shape a DIPA export already has. Twin of
+// ANGGARAN_JUDUL in server.js - the upload rejects a file whose first column is not
+// "Unit Kerja", so a change here needs the same change there.
+const anggaranKolomTemplate = [
+    "Unit Kerja", "Pagu Unit Kerja", "Kode MAK", "Uraian MAK", "Pagu MAK",
+    "Akun Belanja", "Pagu Akun",
+]
+
+// A row may stop at MAK (a ceiling not yet broken down) or at Unit Kerja, so the sample
+// shows both rather than only the full depth. Akun Belanja carries no uraian: the code is a
+// national standard, so the description would be the same text repeated on every unit kerja.
+const anggaranContohBaris = [
+    ["Biro Umum", "10000000000", "5735.RBM.002.051.0C", "Pembangunan Fasilitas", "2000000000", "533111", "800000000"],
+    ["Biro Umum", "10000000000", "5735.RBM.002.051.0C", "Pembangunan Fasilitas", "2000000000", "532111", "700000000"],
+    ["Biro Umum", "10000000000", "5735.RBM.002.052", "Operasional Perkantoran", "1500000000", "", ""],
+]
+
+
+// How an upload folds into the anggaran already stored. Twin of ANGGARAN_MODE in server.js -
+// the values are sent verbatim and an unknown one falls back to "perUnit" there.
+// "bahaya" marks the modes that can delete rows, so the form can colour the warning.
+const anggaranModes = [
+    {
+        value: "tambahan",
+        title: "Perbarui sebagian - hanya baris yang ada di berkas",
+        keterangan: "Baris di dalam berkas ditambah atau diperbarui. Tidak ada yang dihapus, " +
+            "dan pagu yang dikosongkan tetap seperti sebelumnya. Gunakan ini untuk mengubah " +
+            "satu atau beberapa Akun Belanja tanpa menulis ulang seluruh MAK.",
+        bahaya: false,
+    },
+    {
+        value: "perUnit",
+        title: "Ganti per unit kerja - unit di berkas ditulis ulang",
+        keterangan: "Unit kerja yang ada di berkas diganti seluruhnya, jadi MAK atau Akun " +
+            "Belanja yang tidak ikut tertulis akan dihapus. Unit kerja lain tidak tersentuh. " +
+            "Gunakan ini bila ada baris yang memang harus hilang.",
+        bahaya: true,
+    },
+    {
+        value: "seluruh",
+        title: "Ganti seluruh anggaran tahun ini",
+        keterangan: "Berkas menjadi satu-satunya isi anggaran tahun ini. Unit kerja yang tidak " +
+            "ada di dalam berkas akan dihapus. Gunakan hanya untuk mengganti DIPA satu tahun penuh.",
+        bahaya: true,
+    },
+]
+
+export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes }

@@ -1657,3 +1657,139 @@
 .dokumen-gaji-form .form-submit {
     margin-left: 0;
 }
+
+/* Anggaran (Verifikasi) --------------------------------------------------------
+   The upload form deliberately mirrors .dokumen-gaji-form - one column of label above
+   control - so the two admin upload screens read the same way. Card chrome stays
+   .bg-card/.wide-card-* to match Realisasi, which sits next to it in the menu. */
+.anggaran-form {
+    display: flex;
+    flex-direction: column;
+    max-width: 640px;
+    padding: 10px 35px;
+}
+
+.anggaran-form label {
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #00204A;
+}
+
+.anggaran-form .type-btn {
+    margin-bottom: 18px;
+    width: 100%;
+}
+
+.anggaran-form .form-submit {
+    margin-left: 0;
+}
+
+.anggaran-file {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+}
+
+.anggaran-note {
+    margin: 6px 0 0;
+    color: #5A6472;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.anggaran-intro {
+    margin: 0 0 18px;
+    color: #5A6472;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+/* The mode decides whether rows left out of the file get deleted, which is the one thing
+   the spreadsheet cannot say about itself. The two destructive modes say so in the same
+   red the blocking errors use, so the warning is not just more grey body text. */
+.anggaran-mode-note {
+    margin: -12px 0 18px;
+    color: #5A6472;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+.anggaran-mode-note.anggaran-bahaya {
+    color: #BD1404;
+}
+
+/* Blocking problems. Same shape as .docs-sp2d, in red rather than amber. */
+.anggaran-pesan {
+    margin: 0 35px 22px;
+    padding: 14px 18px 16px;
+    border: 1px solid #F0A9A9;
+    border-left: 6px solid #BD1404;
+    border-radius: 12px;
+    background: #FBEAEA;
+}
+
+.anggaran-pesan h3 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    color: #7A0B0B;
+}
+
+.anggaran-pesan ul,
+.anggaran-peringatan {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.85rem;
+    line-height: 1.7;
+}
+
+/* Amber, because a pratinjau has changed nothing yet and still needs a decision */
+.anggaran-pratinjau {
+    border-left: 6px solid #E8A33D;
+}
+
+.anggaran-pratinjau-body {
+    padding: 0 35px 10px;
+}
+
+.anggaran-ringkasan {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
+
+.anggaran-hapus {
+    color: #BD1404;
+}
+
+.anggaran-peringatan {
+    margin-bottom: 12px;
+    color: #5A6472;
+}
+
+.anggaran-belum {
+    margin: 0 0 4px;
+    color: #5A6472;
+    font-size: 0.85rem;
+}
+
+.anggaran-revisi-aktif {
+    margin-left: 12px;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: #5A6472;
+}
+
+.anggaran-riwayat {
+    margin: 0 35px 10px;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    line-height: 1.9;
+}
+
+.anggaran-riwayat-berlaku {
+    color: #0F9043;
+    font-weight: 500;
+}
+
+.anggaran-riwayat-meta {
+    color: #5A6472;
+}

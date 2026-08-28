@@ -23,6 +23,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "nodemon": "^3.1.14",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "read-excel-file": "^9.3.10"
   }
 }

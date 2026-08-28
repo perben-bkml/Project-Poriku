@@ -1424,3 +1424,151 @@ TableDaftarPengajuan.propTypes = {
     onEdit: PropTypes.func.isRequired,
     onDelete: PropTypes.func.isRequired,
 };
+
+// Anggaran.jsx - the pagu tree, Unit Kerja -> MAK -> Akun Belanja.
+// Positional arrays cannot express three levels, so unlike TableKelola this one takes the
+// nested objects GET /anggaran returns and keeps its own expand state per row. "Belum
+// dirinci" is the gap between a level's own pagu and what its children account for, which
+// is the whole reason pagu is stored at every level rather than only at the leaf.
+const ANGGARAN_HEAD = ["Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Terinci", "Belum Dirinci"];
+
+// Level indents rather than separate columns, so a deep row still reads as one line
+const indentSel = (level) => ({paddingLeft: `${16 + level * 28}px`, whiteSpace: "nowrap"});
+const sisaWarna = (nilai) => nilai < 0 ? "#BD1404" : "inherit";
+
+export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini."}) {
+    // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
+    // under another unit kerja
+    const [terbuka, setTerbuka] = useState({});
+    const toggle = (kunci) => setTerbuka(prev => ({...prev, [kunci]: !prev[kunci]}));
+
+    if (!anggaran || anggaran.length === 0) {
+        return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
+    }
+
+    return (
+        <TableContainer sx={realisasiContainer}>
+            <Table size="small">
+                <RealisasiHead heads={ANGGARAN_HEAD}/>
+                <TableBody>
+                    {anggaran.map(unit => {
+                        const unitBuka = !!terbuka[unit.unitKerja];
+                        return (
+                            <Fragment key={unit.unitKerja}>
+                                <TableRow hover>
+                                    <TableCell sx={{...indentSel(0), fontWeight: 600}}>
+                                        {unit.mak.length > 0 &&
+                                            <IconButton size="small" onClick={() => toggle(unit.unitKerja)}
+                                                        aria-label={unitBuka ? "Tutup" : "Buka"}>
+                                                {unitBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
+                                            </IconButton>}
+                                        {unit.unitKerja}
+                                    </TableCell>
+                                    <TableCell/>
+                                    <TableCell sx={{fontWeight: 600}}>{formatRupiah(unit.pagu)}</TableCell>
+                                    <TableCell>{formatRupiah(unit.terinci)}</TableCell>
+                                    <TableCell sx={{color: sisaWarna(unit.belumDirinci)}}>
+                                        {formatRupiah(unit.belumDirinci)}
+                                    </TableCell>
+                                </TableRow>
+
+                                {unitBuka && unit.mak.map(mak => {
+                                    const kunciMak = `${unit.unitKerja}|${mak.kode}`;
+                                    const makBuka = !!terbuka[kunciMak];
+                                    return (
+                                        <Fragment key={kunciMak}>
+                                            <TableRow hover>
+                                                <TableCell sx={indentSel(1)}>
+                                                    {mak.akun.length > 0 &&
+                                                        <IconButton size="small" onClick={() => toggle(kunciMak)}
+                                                                    aria-label={makBuka ? "Tutup" : "Buka"}>
+                                                            {makBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
+                                                        </IconButton>}
+                                                    {mak.kode}
+                                                </TableCell>
+                                                <TableCell>{dash(mak.uraian)}</TableCell>
+                                                <TableCell>{formatRupiah(mak.pagu)}</TableCell>
+                                                <TableCell>{formatRupiah(mak.terinci)}</TableCell>
+                                                <TableCell sx={{color: sisaWarna(mak.belumDirinci)}}>
+                                                    {formatRupiah(mak.belumDirinci)}
+                                                </TableCell>
+                                            </TableRow>
+                                            {makBuka && mak.akun.map(akun => (
+                                                <TableRow key={`${kunciMak}|${akun.kode}`} hover>
+                                                    <TableCell sx={indentSel(2)}>{akun.kode}</TableCell>
+                                                    {/* No uraian by design - an akun code is a national
+                                                        standard, so a dash would read as missing data */}
+                                                    <TableCell/>
+                                                    <TableCell>{formatRupiah(akun.pagu)}</TableCell>
+                                                    {/* an akun has no children, so it has nothing left to detail */}
+                                                    <TableCell/>
+                                                    <TableCell/>
+                                                </TableRow>
+                                            ))}
+                                        </Fragment>
+                                    );
+                                })}
+                            </Fragment>
+                        );
+                    })}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableAnggaranPohon.propTypes = {
+    anggaran: PropTypes.array,
+    kosong: PropTypes.string,
+};
+
+// The upload diff. Deliberately not paginated: an admin about to replace a budget should
+// scroll the whole list, and a "hapus" hiding on page 3 is exactly what must not happen.
+const AKSI_GAYA = {
+    tambah: {label: "Tambah", warna: "#0F9043", latar: "#9FFFC3"},
+    ubah:   {label: "Ubah",   warna: "#5E4C3B", latar: "#F0E0CC"},
+    hapus:  {label: "Hapus",  warna: "#8B0808", latar: "#F3B5B5"},
+};
+const TINGKAT_LABEL = {unit: "Unit Kerja", mak: "MAK", akun: "Akun"};
+
+export function TableSelisihAnggaran({perubahan}) {
+    if (!perubahan || perubahan.length === 0) {
+        return <p style={{margin: "20px 30px", opacity: 0.7}}>Tidak ada perubahan - berkas ini sama dengan anggaran yang berlaku.</p>;
+    }
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "520px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={["Aksi", "Tingkat", "Unit Kerja", "Kode MAK", "Akun", "Uraian", "Pagu Lama", "Pagu Baru", "Selisih"]}/>
+                <TableBody>
+                    {perubahan.map((row, index) => {
+                        const gaya = AKSI_GAYA[row.aksi] || AKSI_GAYA.ubah;
+                        return (
+                            <TableRow key={index} hover>
+                                <TableCell>
+                                    <span style={{
+                                        backgroundColor: gaya.latar, color: gaya.warna, fontWeight: 600,
+                                        padding: "2px 10px", borderRadius: "10px", fontSize: "0.8rem", whiteSpace: "nowrap",
+                                    }}>{gaya.label}</span>
+                                </TableCell>
+                                <TableCell>{TINGKAT_LABEL[row.tingkat] || row.tingkat}</TableCell>
+                                <TableCell>{row.unitKerja}</TableCell>
+                                <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
+                                <TableCell>{dash(row.kodeAkun)}</TableCell>
+                                <TableCell>{dash(row.uraianBaru || row.uraianLama)}</TableCell>
+                                <TableCell>{row.paguLama === null ? "-" : formatRupiah(row.paguLama)}</TableCell>
+                                <TableCell>{row.paguBaru === null ? "-" : formatRupiah(row.paguBaru)}</TableCell>
+                                <TableCell style={{color: sisaWarna(row.selisih), whiteSpace: "nowrap"}}>
+                                    {row.selisih > 0 ? "+" : ""}{formatRupiah(row.selisih)}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableSelisihAnggaran.propTypes = {
+    perubahan: PropTypes.array,
+};

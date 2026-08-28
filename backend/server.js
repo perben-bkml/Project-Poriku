@@ -11,6 +11,7 @@ import 'dotenv/config'
 import dateFormat from "dateformat";
 import multer from 'multer';
 import stream from 'stream';
+import readXlsxFile from 'read-excel-file/node';
 
 
 // Initialize tools
@@ -256,6 +257,16 @@ const ROUTE_ROLES = {
     "POST /verifikasi/verifikasi-form": ADMIN,
     "PATCH /verifikasi/code-anggaran": ADMIN,
     "POST /verifikasi/generate-pdf": ADMIN,
+
+    // Anggaran. The read scopes itself - role="user" only ever sees its own unit kerja,
+    // the same way realisasi-anggaran and /home/dashboard do. Everything that writes is
+    // admin only, and the delete carries revisiId in the query so this stays a plain
+    // lookup rather than needing a ROUTE_ROLES_PREFIX entry.
+    "GET /anggaran": ANY_ROLE,
+    "GET /anggaran/revisi": ADMIN,
+    "POST /anggaran/unggah": ADMIN,
+    "POST /anggaran/unggah/terapkan": ADMIN,
+    "DELETE /anggaran/unggah": ADMIN,
 
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
@@ -5360,6 +5371,685 @@ app.patch("/verifikasi/code-anggaran", async (req, res) => {
     } catch (error) {
         console.error("Error in /verifikasi/code-anggaran:", error);
         return res.status(500).json({ error: "Failed to update code anggaran" });
+    }
+});
+
+// --- Anggaran -----------------------------------------------------------------
+// The budget tree: Unit Kerja -> MAK -> Akun Belanja, in Postgres rather than a sheet,
+// because Code_Anggaran above is one flat row per satker with no room for a hierarchy.
+//
+// Pagu is stored at every level. A MAK routinely carries a ceiling before its akun are
+// detailed, and the screen reports the gap as "belum dirinci". The matching rule - that
+// children must not sum ABOVE their parent - cannot be a CHECK (it spans rows) or a
+// trigger (it would fire part way through the copy-forward insert, on a half built tree),
+// so it is enforced once, here, in the upload preview. That is sound only because the
+// Excel upload is the sole write path: there is no manual cell editing.
+//
+// History is full snapshots, not an edit log. Every upload is a revisi and reads filter to
+// the active one, so "pagu awal vs revisi 3" is a plain query. Adding manual editing later
+// breaks that and would need an append-only anggaran_riwayat beside it.
+
+const ANGGARAN_KOLOM = {
+    unitKerja: 0, paguUnit: 1,
+    kodeMak: 2, uraianMak: 3, paguMak: 4,
+    kodeAkun: 5, paguAkun: 6,
+};
+const ANGGARAN_JUDUL = [
+    "Unit Kerja", "Pagu Unit Kerja", "Kode MAK", "Uraian MAK", "Pagu MAK",
+    "Akun Belanja", "Pagu Akun",
+];
+const ANGGARAN_MAX_FILE_MB = 10;
+// Excel writes six leading-zero-safe digits as a number once a column is formatted as one,
+// so "533111" can arrive as 533111. Padded back rather than rejected.
+const normalisasiAkun = (nilai) => {
+    const teks = trimmed(nilai);
+    return /^\d{1,6}$/.test(teks) ? teks.padStart(6, "0") : teks;
+};
+
+// postgres.js hands BIGINT back as a string so no precision is lost in the driver. Rupiah
+// totals stay far below 2^53 even summed across every satker, so Number is safe here.
+const angkaPagu = (nilai) => Number(nilai ?? 0);
+
+const uploadAnggaran = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: ANGGARAN_MAX_FILE_MB * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        // Checked on the extension as well as the mimetype: browsers hand .xlsx over as
+        // application/octet-stream often enough that the mimetype alone rejects real files.
+        if (!/\.xlsx$/i.test(file.originalname || "")) return cb(new Error("Berkas harus berformat .xlsx."));
+        cb(null, true);
+    },
+});
+
+const handleAnggaranUpload = (req, res, next) => uploadAnggaran.single("berkas")(req, res, (err) => {
+    if (!err) return next();
+    return res.status(400).json({
+        message: err.code === "LIMIT_FILE_SIZE"
+            ? `Ukuran berkas melebihi ${ANGGARAN_MAX_FILE_MB} MB.`
+            : (err.message || "Berkas tidak valid."),
+    });
+});
+
+// read-excel-file 9.x always answers with [{ sheet, data }], for a Buffer and a path alike,
+// where older majors handed back the rows directly. Unwrapped defensively so a version
+// bump cannot quietly turn every row into undefined.
+async function bacaBarisExcel(buffer) {
+    const hasil = await readXlsxFile(buffer);
+    const pertama = Array.isArray(hasil) ? hasil[0] : null;
+    return pertama && !Array.isArray(pertama) && Array.isArray(pertama.data) ? pertama.data : (hasil || []);
+}
+
+// Rupiah cell -> whole rupiah. parseRupiah returns NaN for a value holding no digit at all,
+// which is what separates "typo" from "deliberately blank" here.
+//
+// Fractions are rejected rather than parsed, at both gates below, because parseRupiah strips
+// every non-digit: 1000000.5 would come back as 10000005, a tenfold overstatement with
+// nothing to show for it. Rupiah here is always whole - a fraction means the cell is wrong.
+function paguDariSel(nilai, label, baris, masalah) {
+    const pecahan = () => {
+        masalah.push({ baris, pesan: `${label} "${nilai}" mengandung pecahan - anggaran harus rupiah bulat.` });
+        return 0;
+    };
+
+    // An Excel cell formatted as a number arrives as a JS number, so a fraction is
+    // unambiguous here and never a thousands separator
+    if (typeof nilai === "number") {
+        if (!Number.isFinite(nilai) || !Number.isInteger(nilai)) return pecahan();
+        if (nilai < 0) {
+            masalah.push({ baris, pesan: `${label} "${nilai}" tidak boleh negatif.` });
+            return 0;
+        }
+        return nilai;
+    }
+
+    const teks = trimmed(nilai);
+    if (teks === "") return 0;
+    // "100.000.000" is Indonesian thousands and must pass, but a separator followed by only
+    // one or two final digits can only be a decimal - groups of thousands are always three.
+    if (/[.,]\d{1,2}$/.test(teks)) return pecahan();
+
+    const nominal = parseRupiah(teks);
+    if (Number.isNaN(nominal) || !Number.isInteger(nominal) || nominal < 0) {
+        masalah.push({ baris, pesan: `${label} "${teks}" bukan angka rupiah yang sah.` });
+        return 0;
+    }
+    return nominal;
+}
+
+// A repeated parent cell that disagrees with itself is a mistake in the file, never a
+// last-one-wins: silently taking either value would post a budget nobody typed. A blank or
+// zero on a later row is not a disagreement, it just repeats what the first row already said.
+const paguKosong = (nilai) => nilai === undefined || nilai === null || nilai === "" || nilai === 0;
+
+function tetapkanSekali(induk, kunci, nilai, label, baris, masalah, jalur) {
+    if (paguKosong(nilai)) return;
+    if (paguKosong(induk[kunci])) { induk[kunci] = nilai; return; }
+    if (induk[kunci] !== nilai) {
+        masalah.push({ baris, pesan: `${label} untuk ${jalur} berbeda antar baris: "${induk[kunci]}" lalu "${nilai}".` });
+    }
+}
+
+// One flat row per Akun Belanja with the parent columns repeated - the shape a DIPA export
+// already has. A row may stop at MAK (a ceiling with no detail yet) or at Unit Kerja.
+function susunPohonDariExcel(baris, unitDikenal) {
+    const masalah = [];
+    const peringatan = [];
+    const units = new Map();
+
+    if (baris.length === 0) {
+        masalah.push({ baris: 0, pesan: "Berkas kosong." });
+        return { units, masalah, peringatan };
+    }
+    const judul = (baris[0] || []).map(sel => trimmed(sel).toLowerCase());
+    if (judul[0] !== ANGGARAN_JUDUL[0].toLowerCase()) {
+        masalah.push({ baris: 1, pesan: `Baris pertama harus berisi judul kolom, dimulai "${ANGGARAN_JUDUL[0]}".` });
+        return { units, masalah, peringatan };
+    }
+
+    baris.slice(1).forEach((row, index) => {
+        const nomorBaris = index + 2;   // 1-based, and row 1 is the header
+        const namaUnit = trimmed(row?.[ANGGARAN_KOLOM.unitKerja]);
+        const kodeMak = trimmed(row?.[ANGGARAN_KOLOM.kodeMak]);
+        const kodeAkun = normalisasiAkun(row?.[ANGGARAN_KOLOM.kodeAkun]);
+
+        // A range read trails blank rows; one with nothing in it at all is not an error
+        if (namaUnit === "" && kodeMak === "" && kodeAkun === "") return;
+        if (namaUnit === "") {
+            masalah.push({ baris: nomorBaris, pesan: "Unit Kerja kosong." });
+            return;
+        }
+
+        const kunci = normalizeSatker(namaUnit);
+        const dikenal = unitDikenal.get(kunci);
+        if (!dikenal) {
+            // Ranked by how much of the name actually matches, not just the first word:
+            // "Biro Ummum" should suggest "Biro Umum" ahead of "Biro Perencanaan"
+            const samaDepan = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
+            const mirip = [...unitDikenal.values()]
+                .map(u => ({ nama: u.nama, skor: samaDepan(u.nama_kunci, kunci) }))
+                .filter(u => u.skor >= 3)
+                .sort((a, b) => b.skor - a.skor)
+                .slice(0, 3).map(u => u.nama);
+            masalah.push({
+                baris: nomorBaris,
+                pesan: `Unit Kerja "${namaUnit}" tidak dikenal.${mirip.length ? ` Mungkin maksud Anda: ${mirip.join(", ")}.` : ""}`,
+            });
+            return;
+        }
+
+        let unit = units.get(kunci);
+        if (!unit) {
+            unit = { unitKerjaId: dikenal.id, nama: dikenal.nama, pagu: 0, baris: nomorBaris, mak: new Map() };
+            units.set(kunci, unit);
+        }
+        tetapkanSekali(unit, "pagu",
+            paguDariSel(row?.[ANGGARAN_KOLOM.paguUnit], "Pagu Unit Kerja", nomorBaris, masalah),
+            "Pagu Unit Kerja", nomorBaris, masalah, dikenal.nama);
+
+        if (kodeMak === "") {
+            if (kodeAkun !== "") {
+                masalah.push({ baris: nomorBaris, pesan: `Akun Belanja "${kodeAkun}" diisi tanpa Kode MAK.` });
+            }
+            return;   // a unit kerja row with a pagu and no MAK yet
+        }
+
+        let mak = unit.mak.get(kodeMak);
+        if (!mak) {
+            mak = { kode: kodeMak, uraian: "", pagu: 0, baris: nomorBaris, akun: new Map() };
+            unit.mak.set(kodeMak, mak);
+        }
+        tetapkanSekali(mak, "uraian", trimmed(row?.[ANGGARAN_KOLOM.uraianMak]),
+            "Uraian MAK", nomorBaris, masalah, kodeMak);
+        tetapkanSekali(mak, "pagu",
+            paguDariSel(row?.[ANGGARAN_KOLOM.paguMak], "Pagu MAK", nomorBaris, masalah),
+            "Pagu MAK", nomorBaris, masalah, kodeMak);
+
+        if (kodeAkun === "") return;   // a MAK row with a ceiling and no detail yet
+        if (!/^\d{6}$/.test(kodeAkun)) {
+            masalah.push({ baris: nomorBaris, pesan: `Akun Belanja "${kodeAkun}" harus enam angka.` });
+            return;
+        }
+        if (mak.akun.has(kodeAkun)) {
+            masalah.push({ baris: nomorBaris, pesan: `Akun Belanja ${kodeAkun} muncul dua kali pada MAK ${kodeMak}.` });
+            return;
+        }
+        mak.akun.set(kodeAkun, {
+            kode: kodeAkun,
+            pagu: paguDariSel(row?.[ANGGARAN_KOLOM.paguAkun], "Pagu Akun", nomorBaris, masalah),
+            baris: nomorBaris,
+        });
+    });
+
+    return { units, masalah, peringatan };
+}
+
+// Only for message text - the frontend does its own formatting
+const formatRupiahServer = (nominal) => `Rp${Number(nominal || 0).toLocaleString("id-ID")}`;
+
+// Children may sum below their parent - that gap is the "belum dirinci" the view shows.
+// Summing above it is always an error: it is a budget that cannot be executed.
+//
+// Run against the MERGED tree, not the uploaded file, and restricted to the unit kerja the
+// file actually touched. In tambahan mode the file alone carries blank parents - a one line
+// akun upload states no Pagu MAK - so checking the file by itself would report every such
+// upload as busting a ceiling of zero. Untouched unit kerja are skipped because they were
+// already checked when they were uploaded, and an unrelated file must not be blocked by them.
+function periksaJumlahAnak(units, masalah, peringatan, kunciDisentuh = null) {
+    for (const [kunci, unit] of units) {
+        if (kunciDisentuh && !kunciDisentuh.has(kunci)) continue;
+        let totalMak = 0;
+        for (const mak of unit.mak.values()) {
+            let totalAkun = 0;
+            for (const akun of mak.akun.values()) totalAkun += akun.pagu;
+            if (totalAkun > mak.pagu) {
+                masalah.push({
+                    baris: mak.baris,
+                    pesan: `MAK ${mak.kode} (${unit.nama}): jumlah Akun Belanja ${formatRupiahServer(totalAkun)} melebihi pagu MAK ${formatRupiahServer(mak.pagu)}.`,
+                });
+            }
+            if (mak.pagu === 0) {
+                peringatan.push({ baris: mak.baris, pesan: `MAK ${mak.kode} (${unit.nama}) berpagu nol.` });
+            }
+            totalMak += mak.pagu;
+        }
+        if (unit.pagu === 0) {
+            peringatan.push({ baris: unit.baris, pesan: `${unit.nama} berpagu nol.` });
+        }
+        if (totalMak > unit.pagu) {
+            masalah.push({
+                baris: unit.baris,
+                pesan: `${unit.nama}: jumlah MAK ${formatRupiahServer(totalMak)} melebihi pagu unit kerja ${formatRupiahServer(unit.pagu)}.`,
+            });
+        }
+    }
+}
+
+async function bacaUnitDikenal() {
+    const rows = await sql`SELECT id, nama, nama_kunci FROM anggaran_unit_kerja WHERE aktif ORDER BY nama`;
+    return new Map(rows.map(row => [row.nama_kunci, row]));
+}
+
+async function bacaRevisiAktif(tahun) {
+    const [row] = await sql`
+        SELECT id, tahun, nomor_revisi, catatan, status, nama_berkas, dibuat_oleh, dibuat_pada, aktif_pada
+        FROM anggaran_revisi WHERE tahun = ${tahun} AND status = 'aktif' LIMIT 1`;
+    return row || null;
+}
+
+// The whole tree of one revisi in the same Map shape susunPohonDariExcel produces, so the
+// diff below never has to care which side came from a spreadsheet.
+async function bacaPohonRevisi(revisiId) {
+    const units = new Map();
+    if (!revisiId) return units;
+    const rows = await sql`
+        SELECT uk.id   AS unit_kerja_id, uk.nama, uk.nama_kunci,
+               au.pagu AS pagu_unit,
+               am.kode AS kode_mak, am.uraian AS uraian_mak, am.pagu AS pagu_mak,
+               aa.kode AS kode_akun, aa.pagu AS pagu_akun
+        FROM anggaran_unit au
+        JOIN anggaran_unit_kerja uk ON uk.id = au.unit_kerja_id
+        LEFT JOIN anggaran_mak  am ON am.anggaran_unit_id = au.id
+        LEFT JOIN anggaran_akun aa ON aa.anggaran_mak_id = am.id
+        WHERE au.revisi_id = ${revisiId}
+        ORDER BY uk.nama, am.kode, aa.kode`;
+
+    for (const row of rows) {
+        let unit = units.get(row.nama_kunci);
+        if (!unit) {
+            unit = { unitKerjaId: row.unit_kerja_id, nama: row.nama, pagu: angkaPagu(row.pagu_unit), baris: 0, mak: new Map() };
+            units.set(row.nama_kunci, unit);
+        }
+        if (!row.kode_mak) continue;
+        let mak = unit.mak.get(row.kode_mak);
+        if (!mak) {
+            mak = { kode: row.kode_mak, uraian: row.uraian_mak || "", pagu: angkaPagu(row.pagu_mak), baris: 0, akun: new Map() };
+            unit.mak.set(row.kode_mak, mak);
+        }
+        if (!row.kode_akun) continue;
+        mak.akun.set(row.kode_akun, {
+            kode: row.kode_akun, pagu: angkaPagu(row.pagu_akun), baris: 0,
+        });
+    }
+    return units;
+}
+
+// How an uploaded file is folded into the anggaran that is already there. Three modes,
+// because the two useful workflows pull in opposite directions: correcting one akun should
+// not require restating a unit's whole tree, and replacing a unit's tree must be able to
+// drop the rows the new file leaves out.
+//
+//   tambahan - merge. Rows in the file are added or updated at their own level and NOTHING
+//              is ever removed, so a one line file changes exactly one akun. A blank pagu
+//              means "leave as it is", which is why the parser keeps blank and zero apart.
+//              Deleting a row is impossible in this mode - that is what perUnit is for.
+//   perUnit  - a unit kerja named in the file is replaced wholesale, one not named is
+//              carried over untouched. The default, and the only mode that can delete a MAK
+//              or akun without touching other unit kerja.
+//   seluruh  - the file becomes the entire anggaran; unit kerja missing from it are dropped.
+const MODE_TAMBAHAN = "tambahan";
+const MODE_PER_UNIT = "perUnit";
+const MODE_SELURUH = "seluruh";
+const ANGGARAN_MODE = [MODE_TAMBAHAN, MODE_PER_UNIT, MODE_SELURUH];
+
+// Rebuilt rather than edited in place: `lama` is still needed intact to diff against, and a
+// merge that mutated it would report every change as no change.
+function gabungMak(makLama, makBaru) {
+    const akun = new Map(makLama.akun);
+    for (const [kode, item] of makBaru.akun) akun.set(kode, item);
+    return {
+        ...makLama,
+        uraian: makBaru.uraian || makLama.uraian,
+        pagu: paguKosong(makBaru.pagu) ? makLama.pagu : makBaru.pagu,
+        akun,
+    };
+}
+
+function gabungUnit(unitLama, unitBaru) {
+    const mak = new Map();
+    for (const [kode, item] of unitLama.mak) mak.set(kode, {...item, akun: new Map(item.akun)});
+    for (const [kode, item] of unitBaru.mak) {
+        const sebelum = mak.get(kode);
+        mak.set(kode, sebelum ? gabungMak(sebelum, item) : {...item, akun: new Map(item.akun)});
+    }
+    return {
+        ...unitLama,
+        pagu: paguKosong(unitBaru.pagu) ? unitLama.pagu : unitBaru.pagu,
+        mak,
+    };
+}
+
+function gabungPohon(lama, dariExcel, mode) {
+    if (mode === MODE_SELURUH) return new Map(dariExcel);
+
+    const baru = new Map(lama);
+    for (const [kunci, unit] of dariExcel) {
+        const sebelum = baru.get(kunci);
+        baru.set(kunci, mode === MODE_TAMBAHAN && sebelum ? gabungUnit(sebelum, unit) : unit);
+    }
+    return baru;
+}
+
+// Flattened so the frontend can render one list and the admin can read it top to bottom
+function hitungSelisih(lama, baru) {
+    const perubahan = [];
+    const kunciSemua = new Set([...lama.keys(), ...baru.keys()]);
+    let tidakBerubah = 0;
+
+    const catat = (aksi, tingkat, unitKerja, kodeMak, kodeAkun, sebelum, sesudah) => {
+        const paguLama = sebelum ? sebelum.pagu : null;
+        const paguBaru = sesudah ? sesudah.pagu : null;
+        perubahan.push({
+            aksi, tingkat, unitKerja, kodeMak: kodeMak || "", kodeAkun: kodeAkun || "",
+            uraianLama: sebelum ? (sebelum.uraian ?? "") : "", uraianBaru: sesudah ? (sesudah.uraian ?? "") : "",
+            paguLama, paguBaru,
+            selisih: (paguBaru ?? 0) - (paguLama ?? 0),
+        });
+    };
+
+    for (const kunci of kunciSemua) {
+        const unitLama = lama.get(kunci);
+        const unitBaru = baru.get(kunci);
+        const nama = (unitBaru || unitLama).nama;
+
+        if (!unitLama) catat("tambah", "unit", nama, "", "", null, unitBaru);
+        else if (!unitBaru) { catat("hapus", "unit", nama, "", "", unitLama, null); continue; }
+        else if (unitLama.pagu !== unitBaru.pagu) catat("ubah", "unit", nama, "", "", unitLama, unitBaru);
+        else tidakBerubah++;
+
+        const makLama = unitLama ? unitLama.mak : new Map();
+        const makBaru = unitBaru ? unitBaru.mak : new Map();
+        for (const kodeMak of new Set([...makLama.keys(), ...makBaru.keys()])) {
+            const ml = makLama.get(kodeMak);
+            const mb = makBaru.get(kodeMak);
+            if (!ml) catat("tambah", "mak", nama, kodeMak, "", null, mb);
+            else if (!mb) { catat("hapus", "mak", nama, kodeMak, "", ml, null); continue; }
+            else if (ml.pagu !== mb.pagu || ml.uraian !== mb.uraian) catat("ubah", "mak", nama, kodeMak, "", ml, mb);
+            else tidakBerubah++;
+
+            const akunLama = ml ? ml.akun : new Map();
+            const akunBaru = mb ? mb.akun : new Map();
+            for (const kodeAkun of new Set([...akunLama.keys(), ...akunBaru.keys()])) {
+                const al = akunLama.get(kodeAkun);
+                const ab = akunBaru.get(kodeAkun);
+                if (!al) catat("tambah", "akun", nama, kodeMak, kodeAkun, null, ab);
+                else if (!ab) catat("hapus", "akun", nama, kodeMak, kodeAkun, al, null);
+                else if (al.pagu !== ab.pagu) catat("ubah", "akun", nama, kodeMak, kodeAkun, al, ab);
+                else tidakBerubah++;
+            }
+        }
+    }
+
+    return {
+        perubahan,
+        ringkasan: {
+            tambah: perubahan.filter(p => p.aksi === "tambah").length,
+            ubah: perubahan.filter(p => p.aksi === "ubah").length,
+            hapus: perubahan.filter(p => p.aksi === "hapus").length,
+            tidakBerubah,
+        },
+    };
+}
+
+// Writes the whole tree of a draft revisi. Inside the caller's transaction, so a failure
+// part way leaves no half built revisi behind.
+async function tulisPohonRevisi(trx, revisiId, units) {
+    for (const unit of units.values()) {
+        const [barisUnit] = await trx`
+            INSERT INTO anggaran_unit (revisi_id, unit_kerja_id, pagu)
+            VALUES (${revisiId}, ${unit.unitKerjaId}, ${unit.pagu})
+            RETURNING id`;
+
+        const daftarMak = [...unit.mak.values()];
+        if (daftarMak.length === 0) continue;
+
+        // Bulk inserted per unit rather than a statement per row: a full DIPA runs to
+        // thousands of akun, and one round trip each would take the upload from seconds to
+        // minutes inside an open transaction. RETURNING kode pairs the new ids back up.
+        const barisMak = await trx`
+            INSERT INTO anggaran_mak ${trx(daftarMak.map(mak => ({
+                anggaran_unit_id: barisUnit.id, kode: mak.kode, uraian: mak.uraian, pagu: mak.pagu,
+            })), "anggaran_unit_id", "kode", "uraian", "pagu")}
+            RETURNING id, kode`;
+
+        const idMak = new Map(barisMak.map(row => [row.kode, row.id]));
+        const semuaAkun = daftarMak.flatMap(mak =>
+            [...mak.akun.values()].map(akun => ({
+                anggaran_mak_id: idMak.get(mak.kode), kode: akun.kode, pagu: akun.pagu,
+            })));
+        if (semuaAkun.length === 0) continue;
+
+        await trx`
+            INSERT INTO anggaran_akun ${trx(semuaAkun, "anggaran_mak_id", "kode", "pagu")}`;
+    }
+}
+
+// Map tree -> the nested JSON the screen renders. "belum dirinci" is the gap between a
+// level's own pagu and what its children account for, which is why pagu lives at each level.
+function pohonUntukTampilan(units) {
+    return [...units.values()]
+        .sort((a, b) => a.nama.localeCompare(b.nama))
+        .map(unit => {
+            const mak = [...unit.mak.values()]
+                .sort((a, b) => a.kode.localeCompare(b.kode))
+                .map(item => {
+                    const akun = [...item.akun.values()].sort((a, b) => a.kode.localeCompare(b.kode))
+                        .map(a => ({ kode: a.kode, pagu: a.pagu }));
+                    const terinci = akun.reduce((total, a) => total + a.pagu, 0);
+                    return { kode: item.kode, uraian: item.uraian, pagu: item.pagu, terinci, belumDirinci: item.pagu - terinci, akun };
+                });
+            const terinci = mak.reduce((total, m) => total + m.pagu, 0);
+            return { unitKerja: unit.nama, pagu: unit.pagu, terinci, belumDirinci: unit.pagu - terinci, mak };
+        });
+}
+
+const anggaranTahun = (req) => {
+    const tahun = parseInt(req.query.year, 10);
+    return Number.isInteger(tahun) && tahun > 2000 && tahun < 2100 ? tahun : null;
+};
+
+// Migrations here are applied by hand and will lag a deploy, so a missing table says so
+// instead of surfacing as a 500 - the same degradation readBatasGup does for migration 004.
+const anggaranBelumSiap = (error, res) => {
+    if (error.code !== UNDEFINED_TABLE) return false;
+    console.error("Tabel anggaran belum ada - terapkan migrasi 005.", error);
+    res.status(500).json({ message: "Tabel anggaran belum tersedia di database." });
+    return true;
+};
+
+app.get("/anggaran", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+
+        const revisi = await bacaRevisiAktif(tahun);
+        if (!revisi) {
+            return res.status(200).json({ tahun, revisi: null, anggaran: [] });
+        }
+        let units = await bacaPohonRevisi(revisi.id);
+
+        // Scoped the way GET /home/dashboard scopes itself: a "user" only ever sees its own
+        // satker, and the identity comes from the verified JWT, never from the query string.
+        if (req.viewer.role === "user") {
+            const kunci = normalizeSatker(req.viewer.name);
+            units = new Map([...units].filter(([namaKunci]) => namaKunci === kunci));
+        }
+
+        return res.status(200).json({
+            tahun,
+            revisi: { id: revisi.id, nomorRevisi: revisi.nomor_revisi, catatan: revisi.catatan, aktifPada: revisi.aktif_pada },
+            anggaran: pohonUntukTampilan(units),
+        });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in GET /anggaran:", error);
+        return res.status(500).json({ message: "Gagal memuat anggaran." });
+    }
+});
+
+app.get("/anggaran/revisi", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        const rows = await sql`
+            SELECT id, nomor_revisi, catatan, status, nama_berkas, dibuat_oleh, dibuat_pada, aktif_pada
+            FROM anggaran_revisi WHERE tahun = ${tahun}
+            ORDER BY status = 'draf' DESC, nomor_revisi DESC NULLS FIRST, dibuat_pada DESC`;
+        return res.status(200).json({
+            tahun,
+            revisi: rows.map(row => ({
+                id: row.id, nomorRevisi: row.nomor_revisi, catatan: row.catatan, status: row.status,
+                namaBerkas: row.nama_berkas, dibuatOleh: row.dibuat_oleh, dibuatPada: row.dibuat_pada,
+                aktifPada: row.aktif_pada,
+            })),
+        });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in GET /anggaran/revisi:", error);
+        return res.status(500).json({ message: "Gagal memuat daftar revisi." });
+    }
+});
+
+// Preview. The parsed file is persisted straight away as a revisi with status 'draf' rather
+// than cached behind a token: what the admin approves is then literally the rows that get
+// activated, activation is a single status flip, and a restart in between loses nothing.
+app.post("/anggaran/unggah", handleAnggaranUpload, async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        if (!req.file) return res.status(400).json({ message: "Berkas belum dipilih." });
+        const mode = ANGGARAN_MODE.includes(req.body?.mode) ? req.body.mode : MODE_PER_UNIT;
+
+        const unitDikenal = await bacaUnitDikenal();
+        if (unitDikenal.size === 0) {
+            return res.status(500).json({ message: "Daftar unit kerja kosong - terapkan migrasi 005." });
+        }
+
+        let baris;
+        try {
+            baris = await bacaBarisExcel(req.file.buffer);
+        } catch (error) {
+            console.error("Gagal membaca berkas anggaran:", error);
+            return res.status(400).json({ message: "Berkas tidak dapat dibaca sebagai .xlsx." });
+        }
+
+        const { units: dariExcel, masalah, peringatan } = susunPohonDariExcel(baris, unitDikenal);
+        // Returned before the sums are checked: a row whose pagu did not parse counts as 0,
+        // and checking totals against that reports a second, invented ceiling breach on top
+        // of the real error. Nothing is written either way, so there is no draft to clean up.
+        if (masalah.length > 0) {
+            return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah, peringatan });
+        }
+        if (dariExcel.size === 0) {
+            return res.status(400).json({ message: "Berkas tidak memuat satu pun baris anggaran." });
+        }
+
+        const revisiLama = await bacaRevisiAktif(tahun);
+        const pohonLama = await bacaPohonRevisi(revisiLama?.id);
+        const pohonBaru = gabungPohon(pohonLama, dariExcel, mode);
+
+        // Checked on the merged result, because in tambahan mode the file on its own carries
+        // blank parents and would look like it busts a ceiling of zero every time
+        periksaJumlahAnak(pohonBaru, masalah, peringatan, new Set(dariExcel.keys()));
+        if (masalah.length > 0) {
+            return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah, peringatan });
+        }
+
+        const { perubahan, ringkasan } = hitungSelisih(pohonLama, pohonBaru);
+
+        const draf = await sql.begin(async trx => {
+            const [revisi] = await trx`
+                INSERT INTO anggaran_revisi (tahun, status, nama_berkas, catatan, dibuat_oleh)
+                VALUES (${tahun}, 'draf', ${req.file.originalname || ""}, ${trimmed(req.body?.catatan)}, ${req.viewer.name})
+                RETURNING id, dibuat_pada`;
+            await tulisPohonRevisi(trx, revisi.id, pohonBaru);
+            return revisi;
+        });
+
+        return res.status(200).json({
+            revisiId: draf.id,
+            tahun,
+            namaBerkas: req.file.originalname || "",
+            mode,
+            ringkasan: { ...ringkasan, unitDisentuh: dariExcel.size },
+            perubahan,
+            masalah: [],
+            peringatan,
+        });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in POST /anggaran/unggah:", error);
+        return res.status(500).json({ message: "Gagal memproses berkas anggaran." });
+    }
+});
+
+// Activation. In one transaction because the three writes are only correct together: a
+// half applied flip would leave two active revisi for the year and double every pagu.
+// The partial unique index anggaran_revisi_satu_aktif is the backstop if it ever does.
+app.post("/anggaran/unggah/terapkan", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        const revisiId = parseInt(req.body?.revisiId, 10);
+        if (!Number.isInteger(revisiId)) return res.status(400).json({ message: "Revisi tidak valid." });
+
+        const hasil = await sql.begin(async trx => {
+            // Two drafts of the same year applied at once would lock different rows and so
+            // would not block each other, then both compute the same nomor_revisi. The
+            // unique constraints would reject the loser, but as a 500 rather than a queue -
+            // an advisory lock on the year serialises the whole activation instead.
+            await trx`SELECT pg_advisory_xact_lock(${tahun})`;
+            const [draf] = await trx`
+                SELECT id, tahun, status FROM anggaran_revisi
+                WHERE id = ${revisiId} FOR UPDATE`;
+            if (!draf) return { gagal: "Revisi tidak ditemukan." };
+            if (draf.tahun !== tahun) return { gagal: "Revisi berasal dari tahun yang berbeda." };
+            if (draf.status !== "draf") return { gagal: "Revisi ini sudah diterapkan atau sudah tidak berlaku." };
+
+            // Assigned here rather than at upload, so two admins previewing at once cannot
+            // both have claimed revisi 3 before either of them applied
+            const [{ berikutnya }] = await trx`
+                SELECT COALESCE(MAX(nomor_revisi) + 1, 0) AS berikutnya
+                FROM anggaran_revisi WHERE tahun = ${tahun} AND nomor_revisi IS NOT NULL`;
+
+            await trx`UPDATE anggaran_revisi SET status = 'lama' WHERE tahun = ${tahun} AND status = 'aktif'`;
+            const [aktif] = await trx`
+                UPDATE anggaran_revisi
+                SET status = 'aktif', nomor_revisi = ${berikutnya}, aktif_pada = NOW()
+                WHERE id = ${revisiId}
+                RETURNING id, nomor_revisi, aktif_pada`;
+            return { aktif };
+        });
+
+        if (hasil.gagal) return res.status(409).json({ message: hasil.gagal });
+        return res.status(200).json({
+            tahun,
+            revisiId: hasil.aktif.id,
+            nomorRevisi: hasil.aktif.nomor_revisi,
+            aktifPada: hasil.aktif.aktif_pada,
+            message: `Revisi ${hasil.aktif.nomor_revisi} berhasil diterapkan.`,
+        });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in POST /anggaran/unggah/terapkan:", error);
+        return res.status(500).json({ message: "Gagal menerapkan revisi anggaran." });
+    }
+});
+
+// Discarding a preview. Only ever a draft: an applied revisi is history and stays.
+// The revisi row is the only delete - the tree below it goes by ON DELETE CASCADE.
+app.delete("/anggaran/unggah", async (req, res) => {
+    try {
+        const revisiId = parseInt(req.query.revisiId, 10);
+        if (!Number.isInteger(revisiId)) return res.status(400).json({ message: "Revisi tidak valid." });
+        const dihapus = await sql`DELETE FROM anggaran_revisi WHERE id = ${revisiId} AND status = 'draf' RETURNING id`;
+        if (dihapus.length === 0) {
+            return res.status(409).json({ message: "Draf tidak ditemukan atau sudah diterapkan." });
+        }
+        return res.status(200).json({ revisiId, message: "Draf dibatalkan." });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in DELETE /anggaran/unggah:", error);
+        return res.status(500).json({ message: "Gagal membatalkan draf." });
     }
 });
 

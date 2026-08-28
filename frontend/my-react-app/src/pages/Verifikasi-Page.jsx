@@ -6,6 +6,7 @@ import AksiVerifPJK from "../components/verifikasi/Aksi-Verif-PJK.jsx";
 import FormVerifikasi from "../components/verifikasi/Form-Verifikasi.jsx";
 import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
 import Realisasi from "../components/verifikasi/Realisasi.jsx";
+import Anggaran from "../components/verifikasi/Anggaran.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -18,12 +19,14 @@ import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {NavLink} from "react-router-dom";
 
 // Single source of truth for both the sidebar and the access check, so the two cannot
 // drift. "master admin" is never listed - it opens everything.
 const MENU_ROLES = {
     "monitor-PJK": ["user"],
+    "anggaran": ["user", "admin", "admin_gaji"],
     "realisasi": ["admin", "admin_gaji"],
     "kelola-PJK": ["admin"],
     "pengujian-PJK": ["admin"],
@@ -34,6 +37,7 @@ const MENU_ROLES = {
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
 const MENU_BUTTONS = [
     {name: "realisasi", label: "Realisasi", Icon: PaymentsIcon},
+    {name: "anggaran", label: "Anggaran", Icon: AccountBalanceWalletIcon},
     {name: "pengujian-PJK", label: "Pengujian PJK", Icon: FactCheckIcon},
     {name: "kelola-PJK", label: "Kelola PJK", Icon: DashboardIcon},
     {name: "form-verifikasi", label: "Form Verifikasi", Icon: ChecklistRtlIcon},
@@ -91,6 +95,8 @@ function VerifikasiPage(props) {
         switch (buttonSelect) {
             case "realisasi":
                 return <Realisasi />;
+            case "anggaran":
+                return <Anggaran />;
             case "kelola-PJK":
                 return <KelolaPJK />;
             case "pengujian-PJK":

@@ -306,7 +306,7 @@ export default function Realisasi() {
             <div className="bg-card" style={{paddingBottom: '25px'}}>
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '30px', paddingBottom: '15px'}}>
                     <h2 className="wide-card-title" style={{paddingTop: '20px'}}>Realisasi Anggaran</h2>
-                    <input className="btn-submit btn-submit-wide" type="button" style={{marginTop: '20px', cursor: 'pointer'}}
+                    <input className="btn-submit btn-submit-wide" type="button" style={{marginTop: '20px', cursor: 'pointer', backgroundColor: '#00449C'}}
                            value={hideZeroBudget ? "Tampilkan Semua Unit Kerja" : "Sembunyikan Unit Kerja Tanpa Anggaran"}
                            onClick={toggleHideZeroBudget}/>
                 </div>

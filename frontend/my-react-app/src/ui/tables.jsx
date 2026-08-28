@@ -24,8 +24,14 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions } from '../components/bendahara/head-data.js';
+
+// dash() stringifies, so it must never reach a cell whose content is already a node -
+// Pengujian-PJK puts an <a> in Dok. Verifikasi and it would render as [object Object]
+const dashCell = (value) => value !== null && typeof value === "object" ? value : dash(value);
 import PropTypes from 'prop-types';
+
+const headLabel = (head) => typeof head === "string" ? head : head?.label ?? "";
 
 const BUKTI_SETOR_STYLE = {
     "Sudah Diunggah": { color: "#9FFFC3", textcolor: "#0F9043" },
@@ -37,7 +43,7 @@ const BUKTI_SETOR_STYLE = {
 // Cells are plain strings except Bukti Bayar, which arrives as {nama, url}
 const spmCell = (cell) => {
     if (!cell || typeof cell !== "object") return cell;
-    if (!cell.nama) return "-";
+    if (!cell.nama) return "";
     return cell.url
         ? <a href={cell.url} target="_blank" rel="noopener noreferrer">{cell.nama}</a>
         : cell.nama;
@@ -46,60 +52,64 @@ const spmCell = (cell) => {
 export function TableSpmBendahara(props) {
     // State for pagination
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-
-    // Pagination handlers
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
+    const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
     };
 
+    const head = props.tableData[0] || [];
+    const body = props.tableData.slice(1);
+    const jumlahHalaman = Math.ceil(body.length / rowsPerPage) || 1;
+    // Rows can drop away between searches while page still points past the end
+    const halaman = Math.min(page, jumlahHalaman - 1);
+
     return (
-        <>
-            <TableContainer sx={{ maxWidth: "94%", margin: "auto", marginTop:"20px", marginBottom:"20px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+        <div className="dp-table-card">
+            <div className="dp-toolbar">
+                <span className="dp-toolbar-info">Halaman {halaman + 1} dari {jumlahHalaman}</span>
+                <label className="dp-perpage">
+                    Baris per halaman
+                    <select value={rowsPerPage} onChange={handleChangeRowsPerPage}>
+                        {rowsPerPageOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </label>
+            </div>
+            <TableContainer className="dp-scroll">
                 <Table>
                     <TableHead>
-                        <TableRow sx={{ backgroundColor: "#00449C" }}>
-                            {props.tableData.length > 0 && props.tableData[0].map((col, colIndex) => (
-                                <TableCell className="table-cell head-data" key={colIndex} sx={{fontWeight: 550, color:"white", border: "none"}} align="center">{col}</TableCell>
+                        <TableRow>
+                            {head.map((col, colIndex) => (
+                                <TableCell key={colIndex} sx={{...HEAD_CELL,
+                                    ...(kolomGaya(col)?.textAlign ? {textAlign: "right"} : null)}}>{col}</TableCell>
                             ))}
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {props.tableData.length > 0 && props.tableData.slice(1)
-                            .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        {body
+                            .slice(halaman * rowsPerPage, halaman * rowsPerPage + rowsPerPage)
                             .map((row, rowIndex) => (
-                                <TableRow key={rowIndex}>
+                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: '#F7FAFF'}}}>
                                     {row.map((cell, cellIndex) => (
-                                        <TableCell className="table-cell" key={cellIndex}>{spmCell(cell)}</TableCell>
+                                        <TableCell key={cellIndex}
+                                                   sx={{...BODY_CELL, ...kolomGaya(head[cellIndex])}}>
+                                            {isStatusLabel(head[cellIndex]) && String(cell ?? "").trim()
+                                                ? <span className="dp-status" style={{
+                                                    backgroundColor: daftarStatusStyle(cell).bg,
+                                                    color: daftarStatusStyle(cell).fg }}>{cell}</span>
+                                                : dashCell(spmCell(cell))}
+                                        </TableCell>
                                     ))}
                                 </TableRow>
                             ))}
                     </TableBody>
                 </Table>
             </TableContainer>
-            <TablePagination
-                rowsPerPageOptions={[10, 25, 50]}
-                component="div"
-                count={props.tableData.length > 0 ? props.tableData.length - 1 : 0}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handleChangePage}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-                sx={{ 
-                    maxWidth: "94%", 
-                    margin: "auto",
-                    borderTop: '1px solid rgba(224, 224, 224, 1)',
-                    '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                        margin: 0
-                    }
-                }}
-            />
-        </>
+            {jumlahHalaman > 1 &&
+                <Pagination className="dp-pagination" size="medium" count={jumlahHalaman} page={halaman + 1}
+                            onChange={(event, value) => setPage(value - 1)} />}
+        </div>
     )
 }
 
@@ -158,6 +168,17 @@ export function TableKelola(props) {
         .map((row, index) => ({ row, index }))
         .filter(({ row }) => !props.filterActive || hasPajak(row));
 
+    // Computed out here because Row's own props shadow the table's. Kelola and monitor are
+    // both the layouts with an expand column and the two that carry the Daftar Pengajuan
+    // look; the aksi tables keep the original one. tableType rather than props.type because
+    // Row reads the state one, and a first render mismatch would put the toggle column in
+    // the header but not the body.
+    const gayaDaftar = tableType === "kelola" || tableType === "monitor";
+    const headLabels = (props.header || []).map(headLabel);
+    const kolomStatus = new Set(headLabels
+        .map((label, index) => isStatusLabel(label) ? index : -1)
+        .filter(index => index >= 0));
+
     // Inert without a sorot prop, so the six other screens using this table are untouched
     const sorot = props.sorot;
     const potongCell = (data, column) => sorot && sorot.columns.includes(column)
@@ -192,11 +213,6 @@ export function TableKelola(props) {
     if (!props.content || props.content.length === 0 || !props.fullContent || props.fullContent.length ===0) {
         return null
     }
-
-    // Pagination handlers
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
@@ -447,9 +463,11 @@ export function TableKelola(props) {
         return (
             <Fragment>
                 <TableRow onClick={handleRowClick}
-                    sx={tableType === 'aksi-drpp' ? {backgroundColor: getBackgroundColor(), cursor: 'pointer'} : null}>
+                    sx={tableType === 'aksi-drpp'
+                        ? {backgroundColor: getBackgroundColor(), cursor: 'pointer'}
+                        : gayaDaftar ? {'&:hover td': {backgroundColor: '#F7FAFF'}} : null}>
                     {tableType === "kelola" || tableType === "monitor"?
-                    <TableCell sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'} : null}>
+                    <TableCell sx={{ ...BODY_CELL, width: "44px", paddingRight: 0 }}>
                         <IconButton
                             aria-label="expand row"
                             size="small"
@@ -478,11 +496,14 @@ export function TableKelola(props) {
                                    showCheckbox={shouldShowCheckbox}
                                    isChecked={isItemChecked}
                                    onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
-                                   sx={tableType === 'monitor' ? {borderBottom: '2px solid rgb(214, 214, 214)'}
-                                       : (index === 1 || index === 19 ? {maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word', borderBottom: '2px solid rgb(214, 214, 214)'} : {borderBottom: '2px solid rgb(214, 214, 214)'})} >
+                                   sx={{ ...(gayaDaftar
+                                           ? { ...BODY_CELL, ...kolomGaya(headLabels[index]) }
+                                           : { borderBottom: '2px solid rgb(214, 214, 214)' }),
+                                       ...(tableType !== 'monitor' && (index === 1 || index === 19)
+                                       ? { maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word' } : null) }} >
                             {tableType === 'monitor' && BUKTI_SETOR_STYLE[data] ?
                                 <CustomColoredCell {...BUKTI_SETOR_STYLE[data]} data={data} /> :
-                            tableType === 'monitor' && (index === 0 || index === 4 || index === 5 || index === 8 || index === 9) ?
+                            tableType === 'monitor' && (index === 4 || index === 5 || index === 8 || index === 9) ?
                                 (data === "Sudah" && index === 8 || data === "Sudah" && index === 9 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
                                     (data === "Belum" && index === 8 || data === "Belum" && index === 9 ? <CustomColoredCell color={"#f27272"} data={data} /> :
                                         (data === "Ada Masalah" && index === 8 || data === "Ada Masalah" && index === 9 ? <CustomColoredCell color={"#eb3d3d"} data={data} /> :
@@ -491,7 +512,15 @@ export function TableKelola(props) {
                                          <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
                                 : potongan
                                 ? <>{potongan[0]}<mark className="sorot" ref={isSorotPertama ? sorotRef : null}>{potongan[1]}</mark>{potongan[2]}</>
-                                : data}
+                                : !gayaDaftar
+                                ? data
+                                : index === 0 && String(data ?? "").trim()
+                                ? <span className="dp-id">{data}</span>
+                                : kolomStatus.has(index) && String(data ?? "").trim()
+                                ? <span className="dp-status" style={{
+                                    backgroundColor: daftarStatusStyle(data).bg,
+                                    color: daftarStatusStyle(data).fg }}>{data}</span>
+                                : dashCell(data)}
                         </CopyableTableCell>
                         );
                     })}
@@ -510,32 +539,63 @@ export function TableKelola(props) {
         )
     }
 
+    // The daftar puts rows-per-halaman in a toolbar above the table and the pager below it,
+    // so the two tables read the same way. The aksi tables keep the MUI pagination bar they
+    // always had. Monitoring DRPP paginates on the server, so it drives the same controls
+    // through props instead: pass totalPages and the table stops slicing and asks the screen.
+    const terkontrol = typeof props.totalPages === "number";
+    const berhalaman = gayaDaftar && (terkontrol || props.type !== "monitor");
+    const jumlahHalaman = terkontrol
+        ? Math.max(props.totalPages, 1)
+        : Math.ceil(visibleRows.length / rowsPerPage) || 1;
+    // Rows can drop away under a filter while page still points past the end
+    const halaman = terkontrol ? props.page - 1 : Math.min(page, jumlahHalaman - 1);
+    const barisPerHalaman = terkontrol ? props.rowsPerPage : rowsPerPage;
+    const ubahBaris = terkontrol ? props.onRowsPerPageChange : handleChangeRowsPerPage;
+    const ubahHalaman = terkontrol
+        ? (event, value) => props.onPageChange(value)
+        : (event, value) => setPage(value - 1);
+
     return (
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative' }} className={gayaDaftar ? "dp-table-card" : undefined}>
+        {berhalaman &&
+        <div className="dp-toolbar">
+            <span className="dp-toolbar-info">Halaman {halaman + 1} dari {jumlahHalaman}</span>
+            <label className="dp-perpage">
+                Baris per halaman
+                <select value={barisPerHalaman} onChange={ubahBaris}>
+                    {rowsPerPageOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+            </label>
+        </div>}
         <TableContainer 
             ref={tableContainerRef}
-            sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900, overflowX: 'auto' }}
+            sx={gayaDaftar
+                ? { maxHeight: 900, overflowX: 'auto' }
+                : { maxWidth: "96%", margin: "auto", borderRadius: "10px",
+                    border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900, overflowX: 'auto' }}
             onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
-                    <TableRow sx={{backgroundColor: "#00449C"}}>
-                    {tableType === "kelola" || tableType === "monitor"?  <TableCell sx={{width: "30px", backgroundColor: "#00449C"}}></TableCell> : null}
+                    <TableRow sx={gayaDaftar ? null : {backgroundColor: "#00449C"}}>
+                    {gayaDaftar ? <TableCell sx={{...HEAD_CELL, width: "30px"}}></TableCell> : null}
                     {props.header.map((data, index) => (
                         <TableCell key={index} sx={{
-                            ...( tableType === "kelola" || tableType === "monitor"?
-                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}
-                            :
-                            { fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C", minWidth: data.minWidth}),
-                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: "#00449C" } )
-
+                            ...(gayaDaftar
+                                ? { ...HEAD_CELL,
+                                    ...(kolomGaya(headLabels[index])?.textAlign ? { textAlign: "right" } : null) }
+                                : { fontSize: "1rem", fontWeight: 550, color: "white",
+                                    backgroundColor: "#00449C", minWidth: data.minWidth }),
+                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: gayaDaftar ? "#F4F7FB" : "#00449C" } )
                             }}>
-                            {tableType === "kelola" || tableType === "monitor"?  data : data.label}</TableCell>
+                            {headLabel(data)}</TableCell>
                     ))}
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {visibleRows
-                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    {(terkontrol
+                        ? visibleRows
+                        : visibleRows.slice(halaman * rowsPerPage, halaman * rowsPerPage + rowsPerPage))
                         .map(({ row, index }) => (
                             <Row
                                 key={index}
@@ -561,21 +621,22 @@ export function TableKelola(props) {
                 { props.feature === "SudahVerif" &&
                 <TableFooter>
                     <TableRow>
-                        <TableCell colSpan={props.header ? props.header.length : 1}>
+                        <TableCell colSpan={props.header ? props.header.length : 1}
+                                   sx={{ ...BODY_CELL, backgroundColor: "#F4F7FB" }}>
                             <strong>Total yang dipilih: {numberFormats(sudahVerifSum)}</strong>
                         </TableCell>
                     </TableRow>
                 </TableFooter>
                 }
             </Table>
-            {props.type !== "monitor" &&
+            {!gayaDaftar &&
             <TablePagination
                 rowsPerPageOptions={[5, 10, 25]}
                 component="div"
                 count={visibleRows.length}
                 rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handleChangePage}
+                page={halaman}
+                onPageChange={(event, newPage) => setPage(newPage)}
                 onRowsPerPageChange={handleChangeRowsPerPage}
                 sx={{ 
                     borderTop: '1px solid rgba(224, 224, 224, 1)',
@@ -586,6 +647,9 @@ export function TableKelola(props) {
             />
             }
         </TableContainer>
+        {berhalaman && jumlahHalaman > 1 &&
+            <Pagination className="dp-pagination" size="medium" count={jumlahHalaman} page={halaman + 1}
+                        onChange={ubahHalaman} />}
         
         {/* Floating popup for AksiDrpp sum display */}
         {props.feature === "AksiDrpp" && checkedItems.size > 0 && (
@@ -614,6 +678,27 @@ export function TableKelola(props) {
 }
 
 TableKelola.propTypes = {
+    type: PropTypes.string,
+    header: PropTypes.array,
+    content: PropTypes.array,
+    fullContent: PropTypes.array,
+    loading: PropTypes.bool,
+    feature: PropTypes.string,
+    aksiLabel: PropTypes.string,
+    aksiTarget: PropTypes.string,
+    changeComponent: PropTypes.func,
+    aksiData: PropTypes.func,
+    coloredRow: PropTypes.object,
+    addColorData: PropTypes.func,
+    filterActive: PropTypes.bool,
+    filterColumns: PropTypes.arrayOf(PropTypes.number),
+    // Server side pagination, used by Monitoring DRPP. Passing totalPages switches the
+    // table from slicing its own rows to rendering the page the screen handed it.
+    page: PropTypes.number,
+    totalPages: PropTypes.number,
+    rowsPerPage: PropTypes.number,
+    onPageChange: PropTypes.func,
+    onRowsPerPageChange: PropTypes.func,
     // The active Cari term and the columns it may appear in; absent on every other screen
     sorot: PropTypes.shape({
         term: PropTypes.string.isRequired,
@@ -646,6 +731,11 @@ export function TableInfoAntri(props) {
         </TableContainer>
     )
 }
+
+TableInfoAntri.propTypes = {
+    header: PropTypes.array.isRequired,
+    body: PropTypes.array.isRequired,
+};
 
 // Monitor Data Gaji - last column renders as a Drive link instead of raw text
 export function TableDokumenGaji(props) {
@@ -1094,7 +1184,7 @@ export function TableRekKoran(props) {
             return canUpload
                 ? <Button size="small" startIcon={<UploadFileIcon/>} onClick={() => pick(row, month)}
                           sx={{textTransform: "none"}}>Unggah</Button>
-                : "-";
+                : dash("");
         }
         return (
             <>
@@ -1112,17 +1202,16 @@ export function TableRekKoran(props) {
     }
 
     return (
-        <TableContainer className="table-scroll-x"
-                        sx={{ maxWidth: "94%", margin: "auto", marginTop: "20px", marginBottom: "20px",
-                              borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+        <TableContainer className="table-scroll-x dp-table-card"
+                        sx={{ maxWidth: "94%", margin: "20px auto" }}>
             <input type="file" accept="application/pdf" ref={fileInput} onChange={handlePicked} hidden/>
             <Table>
                 <TableHead>
-                    <TableRow sx={{backgroundColor: "#00449C"}}>
+                    <TableRow>
                         {["Satker", "Nama Rekening", ...props.months].map((label, index) => (
                             <TableCell key={label} className={index < 2 ? `rk-freeze rk-freeze-${index + 1}` : undefined}
                                        align={index < 2 ? "left" : "center"}
-                                       sx={{fontWeight: 550, color: "white", backgroundColor: "#00449C", whiteSpace: "nowrap"}}
+                                       sx={{...HEAD_CELL}}
                                 >{label}</TableCell>
                         ))}
                     </TableRow>
@@ -1130,10 +1219,10 @@ export function TableRekKoran(props) {
                 <TableBody>
                     {props.rows.map(row => (
                         <TableRow key={row.rowNumber} hover>
-                            <TableCell className="rk-freeze rk-freeze-1" sx={{whiteSpace: "nowrap"}}>{row.satker}</TableCell>
-                            <TableCell className="rk-freeze rk-freeze-2" sx={{whiteSpace: "nowrap"}}>{row.namaRekening}</TableCell>
+                            <TableCell className="rk-freeze rk-freeze-1" sx={{...BODY_CELL, whiteSpace: "nowrap"}}>{row.satker}</TableCell>
+                            <TableCell className="rk-freeze rk-freeze-2" sx={{...BODY_CELL, whiteSpace: "nowrap"}}>{row.namaRekening}</TableCell>
                             {row.berkas.map((berkas, month) => (
-                                <TableCell key={month} align="center" sx={{whiteSpace: "nowrap"}}>
+                                <TableCell key={month} align="center" sx={{...BODY_CELL, whiteSpace: "nowrap"}}>
                                     {renderBerkas(row, month)}
                                 </TableCell>
                             ))}
@@ -1160,10 +1249,6 @@ const DAFTAR_DETAIL_FIELDS = [
 
 // toggle, No., Jenis, Nominal, Tgl. Antri, Status, Aksi - the rest are per tab or per role
 const DAFTAR_FIXED_COLUMNS = 7;
-const dash = (value) => {
-    const text = String(value ?? "").trim();
-    return text === "" ? "—" : text;
-};
 
 function DaftarBerkas({ label, url, pending }) {
     if (pending) return <span className="dp-file dp-file-pending">{label} · sedang dibuat…</span>;

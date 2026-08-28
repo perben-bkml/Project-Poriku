@@ -4,11 +4,9 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {Card} from "../../ui/cards.jsx";
 import { userSatkerNames } from "../verifikasi/head-data.js";
-import { placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, formatRibuan, jenisPajakOptions } from "./head-data.js";
+import { placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, formatRibuan, jenisPajakOptions, rowsPerPageOptions } from "./head-data.js";
 //Import Table
 import {TableKelola} from "../../ui/tables.jsx";
-//Import Pagination
-import Pagination from '@mui/material/Pagination';
 import PropTypes from 'prop-types';
 
 
@@ -50,6 +48,8 @@ export default function MonitoringDrpp(props) {
         return pageNumber > 0 ? pageNumber : 1;
     });
     const [totalPages, setTotalPages] = useState(0);
+    // Server side paging, so a change here refetches rather than re-slicing
+    const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
     const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
     const [filterSelect, setFilterSelect] = useState(() => {
         const savedFilter = localStorage.getItem('monitoring-drpp-filter');
@@ -57,19 +57,17 @@ export default function MonitoringDrpp(props) {
     });
     const [cariInput, setCariInput] = useState(CARI_KOSONG)
     const [cariSelect, setCariSelect] = useState({});
-    const [pageInput, setPageInput] = useState("");
 
     //Fetch Data
-    const rowsPerPage = 10;
-    async function fetchMonitoringData (page, status, search) {
+    async function fetchMonitoringData (page, limit, status, search) {
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/monitoring-drpp', { params:{ page, limit: rowsPerPage, filterKeyword: status, cariNomor: search }});
+            const response = await apiClient.get('/bendahara/monitoring-drpp', { params:{ page, limit, filterKeyword: status, cariNomor: search }});
             if (response.status === 200){
                 const { data: responseResult, realAllDRPPRows, countData, fullData } = response.data;
                 setMonitoringData(responseResult);
                 setFullDRPPData(fullData);
-                setTotalPages(Math.ceil(realAllDRPPRows / rowsPerPage));
+                setTotalPages(Math.ceil(realAllDRPPRows / limit));
                 setCardContent(countData);
             }
             setIsLoading(false);
@@ -79,8 +77,8 @@ export default function MonitoringDrpp(props) {
     }
 
     useEffect(() => {
-        fetchMonitoringData(currentPage, filterSelect, cariSelect);
-    }, [currentPage, filterSelect, cariSelect]);
+        fetchMonitoringData(currentPage, rowsPerPage, filterSelect, cariSelect);
+    }, [currentPage, rowsPerPage, filterSelect, cariSelect]);
 
     // Publish the active search so Aksi-Drpp can mark the cell that matched. The value
     // lives in 'Write Table', not in the DRPP row, so it cannot be shown on this screen.
@@ -113,6 +111,12 @@ export default function MonitoringDrpp(props) {
             setCurrentPage(value);
             localStorage.setItem('monitoring-drpp-pagination', value.toString());
         }
+    }
+
+    function handleRowsPerPageChange (event) {
+        setRowsPerPage(Number(event.target.value));
+        setCurrentPage(1);
+        localStorage.removeItem('monitoring-drpp-pagination');
     }
 
     // Handle Filter Changes
@@ -160,35 +164,6 @@ export default function MonitoringDrpp(props) {
         setCariSelect(cariInput)
     }
 
-    // Handle page input change
-    function handlePageInputChange (event) {
-        const value = event.target.value;
-        // Only allow numbers
-        if (/^\d*$/.test(value)) {
-            setPageInput(value);
-        }
-    }
-
-    // Handle go to page
-    function handleGoToPage () {
-        const pageNumber = parseInt(pageInput, 10);
-        if (pageNumber >= 1 && pageNumber <= totalPages) {
-            setCurrentPage(pageNumber);
-            localStorage.setItem('monitoring-drpp-pagination', pageNumber.toString());
-            setPageInput(""); // Clear input after successful navigation
-        } else {
-            // Reset input if invalid
-            setPageInput("");
-        }
-    }
-
-    // Handle Enter key press in page input
-    function handlePageInputKeyDown (event) {
-        if (event.key === 'Enter') {
-            handleGoToPage();
-        }
-    }
-
 
     return (
         <div>
@@ -231,64 +206,13 @@ export default function MonitoringDrpp(props) {
             <div className="bg-card">
                 {isLoading ? <LoadingAnimate /> :
                 <div className="lihat-antri-table" >
-                    <TableKelola type="monitor" header={placeholderTable} content={tableContent} fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData} />
+                    <TableKelola type="monitor" header={placeholderTable} content={tableContent}
+                        fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData}
+                        page={currentPage} totalPages={totalPages} rowsPerPage={rowsPerPage}
+                        onPageChange={value => handlePaginationChange(null, value)}
+                        onRowsPerPageChange={handleRowsPerPageChange} />
                 </div>
                 }
-                <div className="lihat-antri-pagination" style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto 1fr',
-                    alignItems: 'center',
-                    padding: '20px 0'
-                }}>
-                    <div></div>
-                    <Pagination 
-                        className="pagination" 
-                        size="medium" 
-                        count={totalPages} 
-                        page={currentPage} 
-                        onChange={handlePaginationChange}
-                        showFirstButton={true}
-                        showLastButton={true}
-                        siblingCount={1}
-                        boundaryCount={1}
-                    />
-                    <div className="goto-page" style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        justifySelf: 'end',
-                        paddingRight: '20px'
-                    }}>
-                        <span>Go to page:</span>
-                        <input 
-                            type="text" 
-                            value={pageInput}
-                            onChange={handlePageInputChange}
-                            onKeyDown={handlePageInputKeyDown}
-                            placeholder={`1-${totalPages}`}
-                            style={{
-                                width: '60px',
-                                padding: '4px 8px',
-                                border: '1px solid #ccc',
-                                borderRadius: '4px',
-                                textAlign: 'center'
-                            }}
-                        />
-                        <button 
-                            onClick={handleGoToPage}
-                            disabled={!pageInput || totalPages === 0}
-                            style={{
-                                padding: '4px 12px',
-                                border: '1px solid #ccc',
-                                borderRadius: '4px',
-                                backgroundColor: '#f5f5f5',
-                                cursor: pageInput && totalPages > 0 ? 'pointer' : 'not-allowed'
-                            }}
-                        >
-                            Go
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     )

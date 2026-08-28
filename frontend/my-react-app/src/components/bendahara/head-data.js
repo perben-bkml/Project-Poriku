@@ -139,6 +139,15 @@ const DAFTAR_STATUS_STYLE = {
     "sudah diterbitkan drpp":       { bg: "#D5EEF6", fg: "#0B6478" },
     "sudah diajukan ke kppn":       { bg: "#E5DEFA", fg: "#4B32A8" },
     "sudah sp2d":                   { bg: "#0F7A3D", fg: "#FFFFFF" },
+    // PJK verdicts (Substansi/Kelengkapan) and the bendahara's Pajak/Anggaran columns,
+    // which share the pill treatment now that TableKelola renders them the same way
+    "ok":                           { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "ok catatan":                   { bg: "#E9F2C6", fg: "#55700D" },
+    "ditolak":                      { bg: "#FBE1DE", fg: "#BD1404" },
+    "sudah":                        { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "belum":                        { bg: "#FFF1CF", fg: "#8A6100" },
+    "tidak ada pajak":              { bg: "#E7ECF4", fg: "#5A6472" },
+    "pajak manual":                 { bg: "#EFE4D6", fg: "#6B4E2E" },
 };
 const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
 const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
@@ -148,6 +157,57 @@ function daftarStatusStyle(status) {
     if (key.includes("masalah")) return DAFTAR_STATUS_MASALAH;
     return DAFTAR_STATUS_STYLE[key] || DAFTAR_STATUS_FALLBACK;
 }
+
+// Which columns TableKelola renders as a pill. Matched on the header label rather than a
+// per screen index list, so a column moving cannot leave the pill on the wrong cell.
+const STATUS_LABELS = new Set(["status", "substansi", "kelengkapan", "pajak", "anggaran"]);
+const isStatusLabel = (label) => {
+    const key = String(label ?? "").trim().toLowerCase();
+    // "Status Bayar Penerima" and "Status Pajak" on SPM-Bend read as statuses too
+    return STATUS_LABELS.has(key) || key.startsWith("status ");
+};
+
+// The Daftar Pengajuan table look, shared by every MUI table that carries it. Kept as sx
+// objects rather than CSS classes because those cells already take sx, and MUI's generated
+// styles are injected after the stylesheet and would win over a class rule.
+const HEAD_CELL = {
+    backgroundColor: "#F4F7FB",
+    color: "#5A6472",
+    fontSize: "0.71rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+    padding: "11px 14px",
+    borderBottom: "1px solid #E1E7EF",
+};
+
+const BODY_CELL = {
+    padding: "12px 14px",
+    borderBottom: "1px solid #F1F4F8",
+    fontSize: "0.9rem",
+    color: "#0a0f1b",
+};
+
+// The per column treatments Daftar Pengajuan gives its cells: Jenis bold and uppercased,
+// Nominal bold and right aligned, ids and dates on fixed width figures so they line up
+// column wise. Matched on the header label for the same reason the pills are - every
+// screen passes a different head array.
+const TABULAR = { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+const NUM_LABEL = /^(no\.|id |timestamp|tanggal|tgl\.|req\. tanggal|nomor )/;
+
+function kolomGaya(label) {
+    const key = String(label ?? "").trim().toLowerCase();
+    if (key === "jenis" || key.startsWith("jenis ")) return { fontWeight: 600, textTransform: "uppercase" };
+    if (key === "nominal" || key.startsWith("nilai ")) return { ...TABULAR, fontWeight: 600, textAlign: "right" };
+    return NUM_LABEL.test(key) ? TABULAR : null;
+}
+
+// Blank cells read as an em dash rather than an empty box
+const dash = (value) => {
+    const text = String(value ?? "").trim();
+    return text === "" ? "\u2014" : text;
+};
 
 //Values are the keys JENIS_PAJAK_KOLOM in server.js resolves to a 'Write Table' column
 const jenisPajakOptions = [
@@ -246,5 +306,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
 

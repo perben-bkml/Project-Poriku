@@ -2243,14 +2243,18 @@ input[type="number"]::-webkit-inner-spin-button {
 .table-scroll-x .bp-freeze,
 .table-scroll-x .rk-freeze {
     position: sticky;
-    background: white;
     box-sizing: border-box;
     z-index: 1;
 }
-.table-scroll-x thead .bp-freeze,
-.table-scroll-x thead .rk-freeze { background: #00449C; z-index: 3; }
-.table-scroll-x tbody tr:hover .bp-freeze,
-.table-scroll-x tbody tr:hover .rk-freeze { background: #F5F5F5; }
+.table-scroll-x .bp-freeze { background: white; }
+.table-scroll-x thead .bp-freeze { background: #00449C; z-index: 3; }
+.table-scroll-x tbody tr:hover .bp-freeze { background: #F5F5F5; }
+/* Rekening Koran took the Daftar Pengajuan look, and a sticky cell paints over whatever
+   it scrolls across, so each of its states has to repeat that palette. Pembayaran BP above
+   keeps the blue one. */
+.table-scroll-x .rk-freeze { background: #fdfdfd; }
+.table-scroll-x thead .rk-freeze { background: #F4F7FB; z-index: 3; }
+.table-scroll-x tbody tr:hover .rk-freeze { background: #F7FAFF; }
 .table-scroll-x .bp-freeze-1 { left: 0;     min-width: 80px;  max-width: 80px; }
 .table-scroll-x .bp-freeze-2 { left: 80px;  min-width: 150px; max-width: 150px; }
 .table-scroll-x .bp-freeze-3 {

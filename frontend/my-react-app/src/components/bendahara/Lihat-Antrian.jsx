@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import apiClient from "../../lib/apiClient";
 
 // Import components
-import { columns2 } from './head-data.js'
+import { columns2, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions } from './head-data.js'
 import LoadingAnimate from "../../ui/loading.jsx";
 
 // Import Material UI Table & Pagination
@@ -21,17 +21,19 @@ function LihatAntrian() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
 
-    // Fetching antrian data from Google Sheets
-    const rowsPerPage = 10;
-    async function fetchAntrianData (page) {
+    // Server side paging, so a rows-per-halaman change refetches rather than re-slicing.
+    // limit is an argument so this closes over no reactive state and the effect below can
+    // list its real dependencies.
+    async function fetchAntrianData (page, limit) {
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit: rowsPerPage, username: null, flow: "gup" }});
+            const response = await apiClient.get('/bendahara/antrian', { params:{ page, limit, username: null, flow: "gup" }});
             if (response.status === 200){
                 const { data: responseResult, realAllAntrianRows } = response.data;
                 setAntrianData(responseResult.map(row => row.slice(0, columns2.length)));
-                setTotalPages(Math.ceil(realAllAntrianRows / rowsPerPage)); //Calculate total page based on real data on gsheet
+                setTotalPages(Math.ceil(realAllAntrianRows / limit)); //Calculate total page based on real data on gsheet
             }
             setIsLoading(false);
         } catch (error) {
@@ -40,32 +42,58 @@ function LihatAntrian() {
     }
 
     useEffect( () => {
-        fetchAntrianData(currentPage)
-    }, [currentPage])
+        fetchAntrianData(currentPage, rowsPerPage)
+    }, [currentPage, rowsPerPage])
 
     // Handle Pagination
     function hanldePaginationChange (event, value) {
         setCurrentPage(value);
     }
 
+    function handleRowsPerPageChange (event) {
+        setRowsPerPage(Number(event.target.value));
+        setCurrentPage(1);
+    }
+
     return (
         <div className="bg-card">
+            <div className="dp-table-card">
+                <div className="dp-toolbar">
+                    <span className="dp-toolbar-info">
+                        {isLoading ? "Memuat data\u2026" : totalPages > 0 ? `Halaman ${currentPage} dari ${totalPages}` : "Tidak ada antrian"}
+                    </span>
+                    <label className="dp-perpage">
+                        Baris per halaman
+                        <select value={rowsPerPage} onChange={handleRowsPerPageChange}>
+                            {rowsPerPageOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                    </label>
+                </div>
             {isLoading ? <LoadingAnimate /> :
-            <div className="lihat-antri-table">
-                <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+            <div className="dp-scroll">
+                <TableContainer sx={{ backgroundColor: "#fdfdfd" }}>
                     <Table>
                         <TableHead>
-                            <TableRow sx={{ backgroundColor: "#00449C" }}>
+                            <TableRow>
                             {columns2.map((cols) => (
-                                <TableCell className="table-cell head-data" key={cols.id} sx={{fontWeight: 550, minWidth: cols.minWidth, fontSize:"1.1rem", color:"white", border:"none"}} align="center">{cols.label}</TableCell>                                            
+                                <TableCell key={cols.id} sx={{...HEAD_CELL, minWidth: cols.minWidth,
+                                    ...(kolomGaya(cols.label)?.textAlign ? {textAlign: "right"} : null)}}>{cols.label}</TableCell>
                             ))}
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {antrianData.map((rows, rowIndex) => (
-                                <TableRow key={rowIndex}>
+                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: '#F7FAFF'}}}>
                                     {rows.map((cells, cellIndex) => (
-                                        <TableCell className="table-cell" key={cellIndex}>{cells}</TableCell>
+                                        <TableCell key={cellIndex} sx={{...BODY_CELL, ...kolomGaya(columns2[cellIndex]?.label)}}>
+                                            {cellIndex === 0 && String(cells ?? "").trim()
+                                                ? <span className="dp-id">{cells}</span>
+                                                : isStatusLabel(columns2[cellIndex]?.label) && String(cells ?? "").trim()
+                                                ? <span className="dp-status" style={{
+                                                    backgroundColor: daftarStatusStyle(cells).bg,
+                                                    color: daftarStatusStyle(cells).fg }}>{cells}</span>
+                                                : dash(cells)}
+                                        </TableCell>
                                     ))}
                                 </TableRow>
                             ))}
@@ -74,8 +102,9 @@ function LihatAntrian() {
                 </TableContainer>
             </div>
             }
-            <div className="lihat-antri-pagination">
-                <Pagination className="pagination" size="medium" count={totalPages} onChange={hanldePaginationChange} />
+            {totalPages > 1 &&
+                <Pagination className="dp-pagination" size="medium" count={totalPages}
+                            page={currentPage} onChange={hanldePaginationChange} />}
             </div>
         </div>
     )

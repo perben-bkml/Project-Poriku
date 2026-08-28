@@ -25,9 +25,20 @@ const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toL
 // The columns between Tgl. Diproses and Status differ per tab: the verifikasi sheet has no
 // DRPP column at all, so an LS row can only ever show a blank there.
 const EXTRA_COLUMNS = {
-    gup: [{ label: "DRPP", field: "drpp" }, { label: "SPM", field: "spm" }],
-    ls: [{ label: "SPP", field: "spp" }],
+    gup: [
+        { label: "Tgl. Diproses", field: "tglProses" },
+        { label: "DRPP", field: "drpp" },
+        { label: "SPM", field: "spm" },
+    ],
+    ls: [
+        { label: "Substansi", field: "substansi", text: true },
+        { label: "Kelengkapan", field: "kelengkapan", text: true },
+        { label: "SPP", field: "spp" },
+    ],
 };
+
+// The verifikasi sheet has no Ketersediaan Anggaran column, so it is blank on every LS row
+const HIDDEN_DETAIL = { gup: [], ls: ["anggaran"] };
 
 // kategori is resolved server-side so the split counts every row, not just this page
 const TABS = [
@@ -57,6 +68,8 @@ function toTableRow(data, pending, lastPage) {
         mulaiVerif: data[14],
         selesaiVerif: data[15],
         catatan: data[16],
+        substansi: data[25],
+        kelengkapan: data[26],
         isGup,
         bupot: isGup ? data[19] : "",
         pjk: data[21] || (isGup ? "" : data[19]),
@@ -310,6 +323,7 @@ function DaftarPengajuan(props){
             <TableDaftarPengajuan
                 rows={rows}
                 extraColumns={EXTRA_COLUMNS[kategori]}
+                hiddenDetail={HIDDEN_DETAIL[kategori]}
                 loading={isLoading}
                 page={currentPage}
                 totalPages={totalPages}

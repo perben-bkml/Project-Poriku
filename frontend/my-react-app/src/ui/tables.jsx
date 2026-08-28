@@ -1158,8 +1158,8 @@ const DAFTAR_DETAIL_FIELDS = [
     { key: "selesaiVerif", label: "Selesai Verifikasi" },
 ];
 
-// toggle, No., Jenis, Nominal, Tgl. Antri, Tgl. Diproses, Status, Aksi - the rest are per tab
-const DAFTAR_FIXED_COLUMNS = 8;
+// toggle, No., Jenis, Nominal, Tgl. Antri, Status, Aksi - the rest are per tab
+const DAFTAR_FIXED_COLUMNS = 7;
 const dash = (value) => {
     const text = String(value ?? "").trim();
     return text === "" ? "—" : text;
@@ -1181,7 +1181,7 @@ DaftarBerkas.propTypes = {
     pending: PropTypes.bool,
 };
 
-const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, onDelete }) {
+const DaftarRow = memo(function DaftarRow({ row, extraColumns, hiddenDetail, onView, onEdit, onDelete }) {
     const [open, setOpen] = useState(false);
     const status = daftarStatusStyle(row.status);
     const promoted = extraColumns.map(column => column.field);
@@ -1199,9 +1199,8 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, o
                 <td className="dp-cell-jenis">{row.jenis}</td>
                 <td className="dp-num dp-cell-nominal">{dash(row.nominal)}</td>
                 <td className="dp-num">{dash(row.tglAjuan)}</td>
-                <td className="dp-num">{dash(row.tglProses)}</td>
                 {extraColumns.map(column =>
-                    <td key={column.field} className="dp-num">{dash(row[column.field])}</td>)}
+                    <td key={column.field} className={column.text ? "" : "dp-num"}>{dash(row[column.field])}</td>)}
                 <td>
                     <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>{dash(row.status)}</span>
                     {row.hasilVerifPending && <span className="dp-status-note">Hasil verif. dibuat…</span>}
@@ -1234,7 +1233,9 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, o
                     <Collapse in={open} timeout={160} unmountOnExit>
                         <div className="dp-detail">
                             <dl className="dp-detail-grid">
-                                {DAFTAR_DETAIL_FIELDS.filter(field => !promoted.includes(field.key)).map(field => (
+                                {DAFTAR_DETAIL_FIELDS
+                                    .filter(field => !promoted.includes(field.key) && !hiddenDetail.includes(field.key))
+                                    .map(field => (
                                     <div className="dp-detail-item" key={field.key}>
                                         <dt>{field.label}</dt>
                                         <dd>{dash(row[field.key])}</dd>
@@ -1263,13 +1264,15 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, onView, onEdit, o
 DaftarRow.propTypes = {
     row: PropTypes.object.isRequired,
     extraColumns: PropTypes.array.isRequired,
+    hiddenDetail: PropTypes.array.isRequired,
     onView: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
     onDelete: PropTypes.func.isRequired,
 };
 
 export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
-                                       extraColumns, onPageChange, onRowsPerPageChange, onView, onEdit, onDelete }) {
+                                       extraColumns, hiddenDetail = [], onPageChange, onRowsPerPageChange,
+                                       onView, onEdit, onDelete }) {
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1292,7 +1295,6 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                             <th>Jenis</th>
                             <th className="dp-th-right">Nominal</th>
                             <th>Tgl. Antri</th>
-                            <th>Tgl. Diproses</th>
                             {extraColumns.map(column => <th key={column.field}>{column.label}</th>)}
                             <th>Status</th>
                             <th className="dp-th-right">Aksi</th>
@@ -1305,7 +1307,7 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                                 ? <tr><td colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
                                 : rows.map(row => (
                                     <DaftarRow key={row.key} row={row} extraColumns={extraColumns}
-                                        onView={onView} onEdit={onEdit} onDelete={onDelete} />
+                                        hiddenDetail={hiddenDetail} onView={onView} onEdit={onEdit} onDelete={onDelete} />
                                 ))}
                     </tbody>
                 </table>
@@ -1324,6 +1326,7 @@ TableDaftarPengajuan.propTypes = {
     rowsPerPage: PropTypes.number.isRequired,
     rowsPerPageOptions: PropTypes.array.isRequired,
     extraColumns: PropTypes.array.isRequired,
+    hiddenDetail: PropTypes.array,
     onPageChange: PropTypes.func.isRequired,
     onRowsPerPageChange: PropTypes.func.isRequired,
     onView: PropTypes.func.isRequired,

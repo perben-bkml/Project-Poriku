@@ -1,3 +1,4 @@
+import PropTypes from "prop-types";
 import { TableKelola } from "./tables"
 
 
@@ -17,7 +18,10 @@ export function WideTableCard(props) {
 
     return (
         <div className="bg-card wide-card">
-            <h2 className="wide-card-title">{title}</h2>
+            <div className="wide-card-head">
+                <h2 className="wide-card-title">{title}</h2>
+                {props.actions}
+            </div>
             <div className="wide-card-content">
                 <TableKelola type="kelola"
                     feature={props.feature !== undefined ? props.feature : (title === "Sudah Verifikasi" ? "SudahVerif" : undefined)}
@@ -28,6 +32,20 @@ export function WideTableCard(props) {
         </div>
     )
 }
+
+WideTableCard.propTypes = {
+    title: PropTypes.string,
+    actions: PropTypes.node,
+    feature: PropTypes.string,
+    aksiLabel: PropTypes.string,
+    aksiTarget: PropTypes.string,
+    loading: PropTypes.bool,
+    tableHead: PropTypes.array,
+    tableContent: PropTypes.array,
+    fullContent: PropTypes.array,
+    changeComponent: PropTypes.func,
+    aksiData: PropTypes.func,
+};
 // Home.jsx - lite realisasi dashboard
 export function RealisasiCircle({percent, size = 190, stroke = 18}) {
     const value = Math.min(Math.max(percent || 0, 0), 100);

@@ -57,6 +57,9 @@ const jenisPengajuan = [
 // a verifikasi flow: a one row table cropped from the full one, or no table at all.
 const jenisTabelPenuh = ["gup", "ptup"];
 const jenisTanpaTabel = ["ls-pegawai", "ls-platform"];
+
+// Jenis the verifikator may push on to SPM. Twin of majuSpm in JENIS_PENGAJUAN.
+const jenisMajuSpm = new Set(["gup-kkp", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);
 const ringkasColumns = [0, 1, 2, 4];
 const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
 
@@ -243,5 +246,5 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
 

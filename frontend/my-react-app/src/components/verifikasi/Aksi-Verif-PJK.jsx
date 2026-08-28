@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
-import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel } from "../bendahara/head-data.js";
+import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm } from "../bendahara/head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup from "../../ui/Popup.jsx";
@@ -35,7 +35,7 @@ function AksiVerifPJK(props) {
     // A GUP/PTUP block is the full table; every other jenis stores the cropped one
     const sourceId = props.fulldata[FIELD.sourceId];
     // Only an LS pengajuan ever goes on to SPM
-    const bolehMajuSpm = !!jenisValueFromLabel(props.fulldata[FIELD.jenis])?.startsWith("ls-");
+    const bolehMajuSpm = jenisMajuSpm.has(jenisValueFromLabel(props.fulldata[FIELD.jenis]));
     const tableHeader = useMemo(
         () => sourceId
             ? columns

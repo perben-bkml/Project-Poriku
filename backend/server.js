@@ -226,9 +226,9 @@ const ROUTE_ROLES = {
     "GET /auth/status": ANY_ROLE,
 
     // Daftar Pengajuan, Buat Pengajuan, Lihat Antrian
-    "GET /bendahara/antrian": USER,
-    "GET /bendahara/sisa-gup": USER,
-    "GET /bendahara/filter-date": USER,
+    "GET /bendahara/antrian": USER_ADMIN,
+    "GET /bendahara/sisa-gup": USER_ADMIN,
+    "GET /bendahara/filter-date": USER_ADMIN,
     "POST /bendahara/buat-ajuan": USER,
     "PATCH /bendahara/edit-table": USER,
     "DELETE /bendahara/delete-ajuan": USER,
@@ -881,18 +881,24 @@ app.get("/bendahara/antrian-gaji", async (req, res) => {
 })
 
 
+// Whose rows a request may see. The name comes off the token, never the query: a "user"
+// is scoped to its own satker, an admin sees every satker, and Lihat-Antrian sends no
+// username at all and gets the whole queue.
+const antrianOwner = (req) =>
+    req.query.username && req.viewer?.role === "user" ? req.viewer.name : null;
+
 // Render data antrian
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 5, username, flow, kategori } = req.query;
+        const { page = 1, limit = 5, flow, kategori } = req.query;
 
         // Both antrian sheets, already projected onto the canonical layout
         let filteredRows = await fetchMergedAntrianRows(spreadsheetId);
 
-        // Filter rows where column L matches username (if username don't exist it will handle Lihat-Antrian)
-        if (username) {
-            filteredRows = filteredRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
+        const owner = antrianOwner(req);
+        if (owner) {
+            filteredRows = filteredRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === owner);
         }
         // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
         if (flow) {
@@ -932,13 +938,13 @@ app.get("/bendahara/filter-date", async (req, res) => {
 
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { username } = req.query;
+        const owner = antrianOwner(req);
 
         // Same merged source as /bendahara/antrian, so a filtered row carries the flow
         // tag and the full canonical width the unfiltered list gives
         let allRows = await fetchMergedAntrianRows(spreadsheetId);
-        if (username) {
-            allRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === username);
+        if (owner) {
+            allRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === owner);
         }
         if (kategori) {
             allRows = allRows.filter(row => antrianKategori(row) === kategori);
@@ -1355,7 +1361,7 @@ async function fetchMergedAntrianRows(spreadsheetId) {
 const JENIS_PENGAJUAN = {
     "gup": { sheetValue: "gup", verifValue: "GUP", flow: "gup", hasTable: true },
     "ptup": { sheetValue: "ptup", verifValue: "PTUP", flow: "gup", hasTable: true },
-    "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true },
+    "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true, majuSpm: true },
     "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true, majuSpm: true },
     "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true, majuSpm: true },
     "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false, majuSpm: true },
@@ -3816,12 +3822,11 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
 
         // A row belongs to one section only, tested furthest stage first so it moves along
         // as it progresses and settles in Sudah Verifikasi
-        const informasi = [], sedangVerif = [], sudahVerif = [], sudahMaju = [];
+        const informasi = [], sedangVerif = [], sudahVerif = [];
         for (const row of rows) {
-            if (STATUS_SUDAH_MAJU.includes(trimmed(row[PJK_STATUS_INDEX]))) {
-                sudahMaju.push(row);
-            } else if (filled(row[PJK_COLUMN.selesaiVerif])
-                && isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan])) {
+            if (STATUS_SUDAH_MAJU.includes(trimmed(row[PJK_STATUS_INDEX]))
+                || (filled(row[PJK_COLUMN.selesaiVerif])
+                    && isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan]))) {
                 sudahVerif.push(row);
             } else if (filled(row[PJK_COLUMN.mulaiVerif])) {
                 sedangVerif.push(row);
@@ -3830,7 +3835,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             }
         }
 
-        res.json({ data: [informasi, sedangVerif, sudahVerif, sudahMaju], pending: [...pendingHasilVerif.keys()] });
+        res.json({ data: [informasi, sedangVerif, sudahVerif], pending: [...pendingHasilVerif.keys()] });
     } catch (error) {
         console.error("Error in /verifikasi/pengujian-pjk:", error);
         res.status(500).json({ error: "Failed to fetch data." });

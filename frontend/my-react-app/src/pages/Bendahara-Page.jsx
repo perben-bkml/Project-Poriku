@@ -32,9 +32,10 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 // Single source of truth for both the sidebar and the access check, so the two cannot
 // drift. "master admin" is never listed - it opens everything.
 const MENU_ROLES = {
-    "daftar-pengajuan": ["user"],
+    // Admin gets the daftar read only: every satker, view detail, no edit or delete
+    "daftar-pengajuan": ["user", "admin"],
     "buat-pengajuan": ["user"],
-    "detail-pengajuan": ["user"],
+    "detail-pengajuan": ["user", "admin"],
     "edit-pengajuan": ["user"],
     "lihat-antrian": ["user"],
     "SPM-bendahara": ["user", "admin"],

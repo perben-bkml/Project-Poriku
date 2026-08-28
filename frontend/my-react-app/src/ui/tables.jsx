@@ -1158,7 +1158,7 @@ const DAFTAR_DETAIL_FIELDS = [
     { key: "selesaiVerif", label: "Selesai Verifikasi" },
 ];
 
-// toggle, No., Jenis, Nominal, Tgl. Antri, Status, Aksi - the rest are per tab
+// toggle, No., Jenis, Nominal, Tgl. Antri, Status, Aksi - the rest are per tab or per role
 const DAFTAR_FIXED_COLUMNS = 7;
 const dash = (value) => {
     const text = String(value ?? "").trim();
@@ -1181,10 +1181,11 @@ DaftarBerkas.propTypes = {
     pending: PropTypes.bool,
 };
 
-const DaftarRow = memo(function DaftarRow({ row, extraColumns, hiddenDetail, onView, onEdit, onDelete }) {
+const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hiddenDetail, onView, onEdit, onDelete }) {
     const [open, setOpen] = useState(false);
     const status = daftarStatusStyle(row.status);
-    const promoted = extraColumns.map(column => column.field);
+    const promoted = [...jenisColumns, ...extraColumns].map(column => column.field);
+    const span = DAFTAR_FIXED_COLUMNS + jenisColumns.length + extraColumns.length;
 
     return (
         <Fragment>
@@ -1197,6 +1198,7 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, hiddenDetail, onV
                 </td>
                 <td><span className="dp-id">{row.id}</span></td>
                 <td className="dp-cell-jenis">{row.jenis}</td>
+                {jenisColumns.map(column => <td key={column.field}>{dash(row[column.field])}</td>)}
                 <td className="dp-num dp-cell-nominal">{dash(row.nominal)}</td>
                 <td className="dp-num">{dash(row.tglAjuan)}</td>
                 {extraColumns.map(column =>
@@ -1229,7 +1231,7 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, hiddenDetail, onV
                 </td>
             </tr>
             <tr className="dp-detail-row">
-                <td className="dp-detail-cell" colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length}>
+                <td className="dp-detail-cell" colSpan={span}>
                     <Collapse in={open} timeout={160} unmountOnExit>
                         <div className="dp-detail">
                             <dl className="dp-detail-grid">
@@ -1263,6 +1265,7 @@ const DaftarRow = memo(function DaftarRow({ row, extraColumns, hiddenDetail, onV
 
 DaftarRow.propTypes = {
     row: PropTypes.object.isRequired,
+    jenisColumns: PropTypes.array.isRequired,
     extraColumns: PropTypes.array.isRequired,
     hiddenDetail: PropTypes.array.isRequired,
     onView: PropTypes.func.isRequired,
@@ -1271,8 +1274,9 @@ DaftarRow.propTypes = {
 };
 
 export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
-                                       extraColumns, hiddenDetail = [], onPageChange, onRowsPerPageChange,
-                                       onView, onEdit, onDelete }) {
+                                       jenisColumns = [], extraColumns, hiddenDetail = [], onPageChange,
+                                       onRowsPerPageChange, onView, onEdit, onDelete }) {
+    const span = DAFTAR_FIXED_COLUMNS + jenisColumns.length + extraColumns.length;
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1293,6 +1297,7 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                             <th className="dp-cell-toggle"><span className="dp-sr-only">Rincian</span></th>
                             <th>No.</th>
                             <th>Jenis</th>
+                            {jenisColumns.map(column => <th key={column.field}>{column.label}</th>)}
                             <th className="dp-th-right">Nominal</th>
                             <th>Tgl. Antri</th>
                             {extraColumns.map(column => <th key={column.field}>{column.label}</th>)}
@@ -1302,11 +1307,11 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                     </thead>
                     <tbody>
                         {loading
-                            ? <tr><td colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
+                            ? <tr><td colSpan={span} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
                             : rows.length === 0
-                                ? <tr><td colSpan={DAFTAR_FIXED_COLUMNS + extraColumns.length} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
+                                ? <tr><td colSpan={span} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
                                 : rows.map(row => (
-                                    <DaftarRow key={row.key} row={row} extraColumns={extraColumns}
+                                    <DaftarRow key={row.key} row={row} jenisColumns={jenisColumns} extraColumns={extraColumns}
                                         hiddenDetail={hiddenDetail} onView={onView} onEdit={onEdit} onDelete={onDelete} />
                                 ))}
                     </tbody>
@@ -1325,6 +1330,7 @@ TableDaftarPengajuan.propTypes = {
     totalPages: PropTypes.number.isRequired,
     rowsPerPage: PropTypes.number.isRequired,
     rowsPerPageOptions: PropTypes.array.isRequired,
+    jenisColumns: PropTypes.array,
     extraColumns: PropTypes.array.isRequired,
     hiddenDetail: PropTypes.array,
     onPageChange: PropTypes.func.isRequired,

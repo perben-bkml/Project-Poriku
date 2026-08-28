@@ -40,6 +40,10 @@ const EXTRA_COLUMNS = {
 // The verifikasi sheet has no Ketersediaan Anggaran column, so it is blank on every LS row
 const HIDDEN_DETAIL = { gup: [], ls: ["anggaran"] };
 
+// Only an admin sees more than one satker, so the column is only informative there
+const UNIT_KERJA_COLUMN = [{ label: "Unit Kerja", field: "unitKerja" }];
+const NO_COLUMN = [];
+
 // kategori is resolved server-side so the split counts every row, not just this page
 const TABS = [
     { kategori: "gup", label: "GUP/PTUP" },
@@ -48,7 +52,7 @@ const TABS = [
 
 // Canonical 'Write Antrian' indices. 20+ are appended server-side past ANTRIAN_ROW_WIDTH,
 // so every index below keeps its meaning on both antrian sheets.
-function toTableRow(data, pending, lastPage) {
+function toTableRow(data, pending, lastPage, readOnly) {
     // Lampiran (19) is the Bupot on a GUP/PTUP row and the PJK on every other jenis, whose
     // PJK index the server just copies from it. Same split Buat-Pengajuan.jsx makes.
     const isGup = data[20] === "gup";
@@ -58,6 +62,7 @@ function toTableRow(data, pending, lastPage) {
         jenis: String(data[3] ?? "").toUpperCase(),
         nominal: data[4],
         tglAjuan: data[1],
+        unitKerja: data[11],
         tglProses: data[6],
         drpp: data[8],
         status: data[7],
@@ -78,7 +83,7 @@ function toTableRow(data, pending, lastPage) {
         hasilVerifPending: pending.has(String(data[24])),
         // An OK Catatan verdict leaves something for the bendahara to fix, so the row stays
         // editable however far its status has moved
-        locked: LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]))
+        locked: readOnly || LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]))
             && (isGup || ![data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN))),
         // Shape Bendahara-Page's handleInvisibleComponent destructures
         passData: {
@@ -93,6 +98,7 @@ function toTableRow(data, pending, lastPage) {
 function DaftarPengajuan(props){
     //Context
     const { user } = useContext(AuthContext)
+    const isAdmin = user.role !== "user";
 
     // States
     const [antrianData, setAntrianData] = useState([]);
@@ -203,8 +209,8 @@ function DaftarPengajuan(props){
     }, [pending, currentPage, fetchAntrianData]);
 
     const rows = useMemo(
-        () => antrianData.map(data => toTableRow(data, pending, currentPage)),
-        [antrianData, pending, currentPage]
+        () => antrianData.map(data => toTableRow(data, pending, currentPage, isAdmin)),
+        [antrianData, pending, currentPage, isAdmin]
     );
 
     // Handling Pagination Change
@@ -322,6 +328,7 @@ function DaftarPengajuan(props){
             </div>
             <TableDaftarPengajuan
                 rows={rows}
+                jenisColumns={isAdmin ? UNIT_KERJA_COLUMN : NO_COLUMN}
                 extraColumns={EXTRA_COLUMNS[kategori]}
                 hiddenDetail={HIDDEN_DETAIL[kategori]}
                 loading={isLoading}

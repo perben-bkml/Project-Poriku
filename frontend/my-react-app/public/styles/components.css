@@ -1425,15 +1425,6 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 1rem;
 }
 
-/* Mirrors .bg-card's width and side margins so the action lines up with the right
-   edge of the cards below instead of the window */
-.pjk-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    width: 94%;
-    margin: 0 50px 10px 50px;
-}
-
 .wide-card {
     margin-top: 40px;
     margin-bottom: 40px;
@@ -1441,6 +1432,20 @@ input[type="number"]::-webkit-inner-spin-button {
 .wide-card-title {
     margin-left: 30px;
     font-size: 2rem;
+}
+/* The title shares its row with the card's actions. Padding on the right mirrors the
+   title's own left margin so the buttons stop level with the table below. */
+.wide-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-right: 30px;
+}
+.wide-card-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
 }
 .wide-card-content {
     margin-bottom: 20px;
@@ -1863,11 +1868,6 @@ input[type="number"]::-webkit-inner-spin-button {
         height: auto;
         margin: 5px 30px 20px 30px;
         padding-bottom: 20px;
-    }
-
-    .pjk-toolbar {
-        max-width: 1280px;
-        margin: 0 30px 10px 30px;
     }
 
     .kelola-tabs {

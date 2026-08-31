@@ -917,10 +917,27 @@ const antrianOwner = (req) =>
     req.query.username && req.viewer?.role === "user" ? req.viewer.name : null;
 
 // Render data antrian
+// GUP/PTUP are tracked by Nomor SPM, everything else by Nomor SPP, so one box searches
+// whichever number the row's own kategori makes meaningful. Digits only on both sides, so
+// "00041" and "41" agree and a stray prefix cannot miss.
+const nomorAntrianKolom = (row) => antrianKategori(row) === "gup" ? 10 : 9;
+
+function cariNomorAntrian(rows, cari) {
+    const teks = String(cari ?? "");
+    // No digits at all means no search; digits that normalise away (a bare "0") are still a
+    // search, and one nothing matches - returning the full list there reads as a broken filter
+    if (!/\d/.test(teks)) return rows;
+    const dicari = teks.replace(/\D/g, "").replace(/^0+/, "");
+    return rows.filter(row => {
+        const nilai = String(row[nomorAntrianKolom(row)] ?? "").replace(/\D/g, "").replace(/^0+/, "");
+        return nilai !== "" && nilai === dicari;
+    });
+}
+
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 5, flow, kategori } = req.query;
+        const { page = 1, limit = 5, flow, kategori, cariNomor, unitKerja } = req.query;
 
         // Both antrian sheets, already projected onto the canonical layout
         let filteredRows = await fetchMergedAntrianRows(spreadsheetId);
@@ -928,7 +945,12 @@ app.get("/bendahara/antrian", async (req, res) => {
         const owner = antrianOwner(req);
         if (owner) {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === owner);
+        } else if (trimmed(unitKerja)) {
+            // Only meaningful for a viewer not already pinned to one satker
+            const dicari = normalizeSatker(unitKerja);
+            filteredRows = filteredRows.filter(row => normalizeSatker(row[ANTRIAN_UNIT_KERJA_INDEX]) === dicari);
         }
+        filteredRows = cariNomorAntrian(filteredRows, cariNomor);
         // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
         if (flow) {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
@@ -974,10 +996,14 @@ app.get("/bendahara/filter-date", async (req, res) => {
         let allRows = await fetchMergedAntrianRows(spreadsheetId);
         if (owner) {
             allRows = allRows.filter(row => row[ANTRIAN_UNIT_KERJA_INDEX] === owner);
+        } else if (trimmed(req.query.unitKerja)) {
+            const dicari = normalizeSatker(req.query.unitKerja);
+            allRows = allRows.filter(row => normalizeSatker(row[ANTRIAN_UNIT_KERJA_INDEX]) === dicari);
         }
         if (kategori) {
             allRows = allRows.filter(row => antrianKategori(row) === kategori);
         }
+        allRows = cariNomorAntrian(allRows, req.query.cariNomor);
 
         // Filter rows whose timestamp matches the date prefix
         const filteredRows = sortAntrianLatestFirst(
@@ -4031,7 +4057,7 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
 app.post("/verifikasi/aksi-pjk", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { no_antri, mulai_verifikasi, tgl_selesai, substansi, kelengkapan, catatan,
+        const { no_antri, mulai_verifikasi, substansi, kelengkapan, catatan,
                 maju_spm, tgl_sp2d } = req.body || {};
         if (!no_antri) {
             return res.status(400).json({ message: "Invalid or missing data." });
@@ -4055,8 +4081,14 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         }
         const previousRow = rows[rowIndex - 1] || [];
 
-        // Once a selesai date exists the mulai date is history and must not be rewritten
-        const selesaiValue = tgl_selesai ?? "";
+        // Stamped by the system, not typed: the date a row first reached OK/OK Catatan on both
+        // verdicts. previousRow already holds it, so keeping the original costs no extra read.
+        const sudahLulus = PJK_VERIFIED_VALUES.includes(trimmed(substansi))
+            && PJK_VERIFIED_VALUES.includes(trimmed(kelengkapan));
+        const selesaiSebelumnya = trimmed(previousRow[PJK_COLUMN.selesaiVerif]);
+        const selesaiValue = sudahLulus
+            ? (selesaiSebelumnya || getFormattedDate().fullDateFormat)
+            : "";
         const mulaiValue = mulai_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
         // Only LS may reach SPM, so a posted maju_spm on any other jenis is ignored here
         // rather than trusted from the client
@@ -6076,6 +6108,8 @@ async function tandaiMak(req, rows) {
                 tanda[teks] = { sebab: pemilik.length > 0 ? SEBAB_UNIT_LAIN : SEBAB_MAK_HILANG, pemilik };
             } else if (kodeAkun && !mak.akun.has(kodeAkun)) {
                 tanda[teks] = { sebab: SEBAB_AKUN_BARU, pemilik: [] };
+            } else {
+                tanda[teks] = { sebab: SEBAB_COCOK, pemilik: [] };
             }
         }
         return Object.keys(tanda).length > 0 ? tanda : null;
@@ -6267,6 +6301,7 @@ async function tandaiRealisasiUsang(tahun) {
 // different answers, and only one of them is a faulty claim. A MAK found under another unit
 // kerja is not by itself a violation - codes like "...994.001" plausibly sit under every unit
 // with their own pagu - so what makes it one is being absent from the submitting unit.
+const SEBAB_COCOK = "cocok";
 const SEBAB_AKUN_BARU = "akun-belum-dirinci";
 const SEBAB_UNIT_LAIN = "klaim-unit-lain";
 const SEBAB_MAK_HILANG = "mak-tidak-ada";

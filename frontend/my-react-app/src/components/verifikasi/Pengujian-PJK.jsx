@@ -2,10 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey } from "../bendahara/head-data.js";
+import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 
 // Column indices on 'Write Antrian Verif'; 18 is the source id the backend appends past R
+// Rows are already in hand, so both controls filter locally and cost no Sheets read
+const normalSatker = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+
 const DOK_VERIF = 15;
 const TANGGAL_SP2D = 17;
 const SOURCE_ID = 18;
@@ -14,6 +18,7 @@ const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
 const NOMINAL = 4;
 const SUBSTANSI = 9, KELENGKAPAN = 10;
+const UNIT_KERJA = 8;
 
 // Informasi Pengajuan has nothing verified yet, so it is the one section without the link
 const DOK_HEAD = "Dok. Verifikasi";
@@ -41,6 +46,9 @@ function PengujianPJK(props) {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTitle, setActiveTitle] = useState(() => localStorage.getItem(TAB_KEY) || "");
     const [isExporting, setIsExporting] = useState(false);
+    const [cariInput, setCariInput] = useState("");
+    const [cariNomor, setCariNomor] = useState("");
+    const [unitKerja, setUnitKerja] = useState("");
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
     async function fetchPjk({quiet = false} = {}) {
@@ -100,9 +108,12 @@ function PengujianPJK(props) {
             empty: "Tidak ada pengajuan yang sedang diverifikasi."},
         {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(ditolak), alert: true,
             empty: "Tidak ada pengajuan bermasalah."},
-        {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, rows: sections[2],
+        {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
+            rows: sections[2].filter(row =>
+                (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
+                && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))),
             empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
-    ], [sections]);
+    ], [sections, cariNomor, unitKerja]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];
 
@@ -126,6 +137,30 @@ function PengujianPJK(props) {
         setActiveTitle(title);
         localStorage.setItem(TAB_KEY, title);
     };
+
+    // Rendered by both the table card and the empty card: a filter that matched nothing is
+    // exactly when it has to stay reachable
+    const cariBar = active.cari ? (
+        <form className="bar-cari bar-cari-pjk"
+              onSubmit={event => (event.preventDefault(), setCariNomor(cariInput.trim()))}>
+            <label htmlFor="pjk-cari-spp">Cari Nomor SPP</label>
+            <input id="pjk-cari-spp" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
+                   value={cariInput} placeholder="mis. 00041"
+                   onChange={event => setCariInput(event.target.value)}/>
+            <label htmlFor="pjk-unit">Unit Kerja</label>
+            <select id="pjk-unit" className="type-btn" value={unitKerja}
+                    onChange={event => setUnitKerja(event.target.value)}>
+                <option value="">Semua Unit Kerja</option>
+                {userSatkerNames.slice(1).map(item => (
+                    <option key={item.value} value={item.title}>{item.title}</option>
+                ))}
+            </select>
+            <button className="spm-button" type="submit">Cari</button>
+            {(cariNomor || unitKerja) &&
+                <button className="spm-button" type="button"
+                        onClick={() => (setCariInput(""), setCariNomor(""), setUnitKerja(""))}>Reset</button>}
+        </form>
+    ) : null;
 
     // Rendered by both the table card and the empty card, so the actions never vanish
     const aksi = (
@@ -163,10 +198,12 @@ function PengujianPJK(props) {
                         <h2 className='wide-card-title'>{active.title}</h2>
                         {aksi}
                     </div>
+                    {cariBar}
                     <p className='kelola-empty'>{active.empty}</p>
                 </div>
             ) : (
                 <WideTableCard key={active.title} title={active.title} feature="PJK" actions={aksi}
+                    toolbar={cariBar}
                     aksiLabel="Verif" aksiTarget="aksi-verif-PJK"
                     tableHead={active.head}
                     tableContent={project(active.rows, active.columns)}

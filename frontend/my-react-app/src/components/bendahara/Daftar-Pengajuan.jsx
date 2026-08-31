@@ -5,6 +5,7 @@ import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
 import { rowsPerPageOptions, monthNames, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
+import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
 
@@ -107,6 +108,9 @@ function DaftarPengajuan(props){
     const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
     const [totalPages, setTotalPages] = useState(0);
     const [filterSelect, setFilterSelect] = useState("")
+    const [cariInput, setCariInput] = useState("")
+    const [cariNomor, setCariNomor] = useState("")
+    const [unitKerja, setUnitKerja] = useState("")
     const [datePrefix, setDatePrefix] = useState("");
     const [kategori, setKategori] = useState(() => {
         const saved = localStorage.getItem(TAB_KEY);
@@ -134,6 +138,28 @@ function DaftarPengajuan(props){
         if (props.alertMessage) showAlert(props.alertMessage, "success");
     }, [props.userPagination, props.alertMessage, showAlert]);
 
+    // Admins see every satker, so only they have anything to narrow. A "user" is already
+    // pinned to its own unit kerja by the route.
+    const bisaFilterUnit = String(user?.role ?? "").includes("admin");
+
+    function cariSubmit(event) {
+        event.preventDefault();
+        setCurrentPage(1);
+        setCariNomor(cariInput.trim());
+    }
+
+    function gantiUnitKerja(nilai) {
+        setCurrentPage(1);
+        setUnitKerja(nilai);
+    }
+
+    function hapusCari() {
+        setCurrentPage(1);
+        setCariInput("");
+        setCariNomor("");
+        setUnitKerja("");
+    }
+
     const applyResult = useCallback((result) => {
         setAntrianData(result.data);
         setPending(new Set(result.pending));
@@ -146,7 +172,7 @@ function DaftarPengajuan(props){
     // Every view is served from cache first and revalidated behind it, so switching back to a
     // tab or page costs no Sheets read - the route re-reads both antrian sheets on every call.
     const fetchAntrianData = useCallback(async (page, { quiet = false } = {}) => {
-        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}`;
+        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}`;
         // A quiet refresh only ever follows a change, and a delete shifts rows across pages
         if (quiet) cacheRef.current.clear();
         const cached = quiet ? null : cacheRef.current.get(key);
@@ -157,7 +183,7 @@ function DaftarPengajuan(props){
             setIsLoading(true);
         }
 
-        const params = { page, limit: rowsPerPage, username: user.name, kategori };
+        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja };
         try {
             const { data } = datePrefix
                 ? await apiClient.get('/bendahara/filter-date', { params: { ...params, datePrefix } })
@@ -188,7 +214,7 @@ function DaftarPengajuan(props){
         } finally {
             setIsLoading(false); // otherwise a failed fetch leaves the spinner up for good
         }
-    }, [datePrefix, rowsPerPage, kategori, user.name, showAlert, applyResult]);
+    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, showAlert, applyResult]);
 
     useEffect(() => {
         fetchAntrianData(currentPage);
@@ -314,6 +340,28 @@ function DaftarPengajuan(props){
                         </select>}
                     {filterSelect === "date" &&
                         <input className="filter-input1" type="date" onChange={handleFilterInputChange} />}
+                </form>
+                <form className="bar-cari" onSubmit={cariSubmit}>
+                    <label htmlFor="cari-nomor">
+                        Cari {kategori === "gup" ? "Nomor SPM" : "Nomor SPP"}
+                    </label>
+                    <input id="cari-nomor" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
+                           value={cariInput} placeholder={kategori === "gup" ? "mis. 00123" : "mis. 00041"}
+                           onChange={event => setCariInput(event.target.value)} />
+                    {bisaFilterUnit &&
+                        <>
+                            <label htmlFor="filter-unit">Unit Kerja</label>
+                            <select id="filter-unit" className="type-btn" value={unitKerja}
+                                    onChange={event => gantiUnitKerja(event.target.value)}>
+                                <option value="">Semua Unit Kerja</option>
+                                {userSatkerNames.slice(1).map(item => (
+                                    <option key={item.value} value={item.title}>{item.title}</option>
+                                ))}
+                            </select>
+                        </>}
+                    <button className="spm-button" type="submit">Cari</button>
+                    {(cariNomor || unitKerja) &&
+                        <button className="spm-button" type="button" onClick={hapusCari}>Reset</button>}
                 </form>
             </div>
             <div>

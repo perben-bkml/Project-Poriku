@@ -111,10 +111,18 @@ const anggaranModes = [
     },
 ]
 
+// Export layout for the Anggaran tree. Wider than anggaranKolomTemplate on purpose: the
+// extra columns are what the screen shows, and a file carrying them is a report, not
+// something Unggah Anggaran could parse back.
+const anggaranKolomEkspor = [
+    "Unit Kerja", "Pagu Unit Kerja", "Kode MAK", "Uraian MAK", "Pagu MAK",
+    "Akun Belanja", "Pagu Akun", "Terpakai", "Sisa", "Belum Dirinci", "Keterangan",
+]
+
 // LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
 // their nominal can never be attributed to an akun. Said out loud on the screen rather than
 // left for someone to discover by reconciling by hand.
-const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku. LS Pegawai dan LS PPP belum tercatat karena belum ada tabel."
+const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku"
 
 // Twin of the SEBAB_* constants in server.js. "akun-belum-dirinci" never reaches these
 // panels - it is folded into its MAK - so it is not listed here.
@@ -136,6 +144,7 @@ const anggaranAwalKeterangan = "Upload pada bagian ini akan mencatat manual real
 // How a Kode MAK cell is marked on Aksi-Pengajuan and Aksi-Verif-PJK. Keys are the SEBAB_*
 // values server.js returns as tandaMak.
 const anggaranTandaMak = {
+    "cocok":              {label: "MAK sesuai", bg: "#D6F5E1", fg: "#0F7A3D"},
     "klaim-unit-lain":    {label: "MAK unit lain", bg: "#FBE1DE", fg: "#BD1404"},
     "mak-tidak-ada":      {label: "MAK tidak terdaftar", bg: "#FBE1DE", fg: "#BD1404"},
     "akun-belum-dirinci": {label: "Akun belum dirinci", bg: "#FFF1CF", fg: "#8A6100"},
@@ -143,6 +152,7 @@ const anggaranTandaMak = {
 
 const tandaMakPesan = (tanda) => {
     if (!tanda) return "";
+    if (tanda.sebab === "cocok") return "Kode MAK dan Akun Belanja cocok dengan anggaran yang berlaku.";
     if (tanda.sebab === "klaim-unit-lain") {
         return `Kode MAK ini terdaftar di ${tanda.pemilik.join(", ")}, bukan unit kerja yang mengajukan.`;
     }
@@ -150,4 +160,4 @@ const tandaMakPesan = (tanda) => {
     return "Akun Belanja ini belum dirinci di DIPA untuk MAK tersebut.";
 }
 
-export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan, anggaranTandaMak, tandaMakPesan }
+export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan, anggaranTandaMak, tandaMakPesan, anggaranKolomEkspor }

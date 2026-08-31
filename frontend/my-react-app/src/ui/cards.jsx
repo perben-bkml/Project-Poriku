@@ -22,6 +22,7 @@ export function WideTableCard(props) {
                 <h2 className="wide-card-title">{title}</h2>
                 {props.actions}
             </div>
+            {props.toolbar}
             <div className="wide-card-content">
                 <TableKelola type="kelola"
                     feature={props.feature !== undefined ? props.feature : (title === "Sudah Verifikasi" ? "SudahVerif" : undefined)}
@@ -36,6 +37,7 @@ export function WideTableCard(props) {
 WideTableCard.propTypes = {
     title: PropTypes.string,
     actions: PropTypes.node,
+    toolbar: PropTypes.node,
     feature: PropTypes.string,
     aksiLabel: PropTypes.string,
     aksiTarget: PropTypes.string,

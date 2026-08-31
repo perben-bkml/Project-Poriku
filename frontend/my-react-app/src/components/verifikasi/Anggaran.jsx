@@ -5,8 +5,9 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {AuthContext} from "../../lib/AuthContext.jsx";
 import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian,
-    anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan} from "./head-data.js";
-import {unduhExcel, selTeks} from "../../lib/excel.js";
+    anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan,
+    anggaranKolomEkspor} from "./head-data.js";
+import {unduhExcel, selTeks, selAngka} from "../../lib/excel.js";
 import {formatRupiah} from "../bendahara/head-data.js";
 // Import Tables
 import {TableAnggaranPohon, TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
@@ -80,6 +81,40 @@ export default function Anggaran() {
     async function unduhTemplate() {
         const baris = anggaranContohBaris.map(row => row.map(sel => selTeks(sel, true)));
         await unduhExcel("Template Anggaran.xlsx", anggaranKolomTemplate, baris, [22, 18, 22, 28, 18, 14, 18]);
+    }
+
+    // Flattened one row per akun with the parent columns repeated, the shape the tree reads
+    // top to bottom. A row with no pagu of its own writes "-" rather than 0, which would
+    // read as a real ceiling of nothing.
+    async function unduhAnggaran() {
+        const baris = [];
+        const sel = (nilai) => nilai === null || nilai === undefined ? selTeks("-") : selAngka(String(nilai));
+        for (const unit of data?.anggaran || []) {
+            const induk = [selTeks(unit.unitKerja), sel(unit.pagu)];
+            if (unit.mak.length === 0) {
+                baris.push([...induk, selTeks(""), selTeks(""), selTeks("-"), selTeks(""), selTeks("-"),
+                    sel(unit.terpakai), sel(unit.sisa), sel(unit.belumDirinci), selTeks("")]);
+                continue;
+            }
+            for (const mak of unit.mak) {
+                const makSel = [selTeks(mak.kode, true), selTeks(mak.uraian), sel(mak.pagu)];
+                const catatanMak = mak.luarPagu ? `milik ${(mak.pemilik || []).join(", ")}` : "";
+                if (mak.akun.length === 0) {
+                    baris.push([...induk, ...makSel, selTeks(""), selTeks("-"),
+                        sel(mak.terpakai), sel(mak.sisa), sel(mak.belumDirinci), selTeks(catatanMak)]);
+                    continue;
+                }
+                for (const akun of mak.akun) {
+                    const catatan = akun.takDirinci ? "belum dirinci di DIPA"
+                        : akun.luarPagu ? catatanMak : "";
+                    baris.push([...induk, ...makSel, selTeks(akun.kode, true), sel(akun.pagu),
+                        sel(akun.terpakai), sel(akun.sisa), selTeks("-"), selTeks(catatan)]);
+                }
+            }
+        }
+        if (baris.length === 0) return showAlert("warning", "Tidak ada anggaran untuk diunduh.");
+        await unduhExcel(`Anggaran ${data?.tahun || ""}.xlsx`, anggaranKolomEkspor, baris,
+            [22, 16, 22, 26, 16, 12, 14, 14, 14, 14, 24]);
     }
 
     // Preview. The server persists the parsed file as a draft revisi and answers with the
@@ -208,6 +243,11 @@ export default function Anggaran() {
 
     const revisiAktif = data?.revisi;
     const takDikenal = data?.tidakDikenal || [];
+    // A unit kerja the admin has not uploaded a pagu for yet, and one whose account name
+    // matches no unit kerja at all, both land here as an empty tree
+    const pesanKosong = canUnggah
+        ? "Belum ada anggaran untuk tahun ini."
+        : "Anggaran unit kerja Anda untuk tahun ini belum diunggah oleh admin.";
     const override = data?.override;
     const klaimUnitLain = data?.klaimUnitLain || [];
     // The age of a stored number has to be visible, or nobody can tell whether it is current
@@ -331,6 +371,9 @@ export default function Anggaran() {
                     </h2>
                     <div className="wide-card-actions">
                         <span className="anggaran-sinkron">{labelSinkron}</span>
+                        <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel"
+                               disabled={isLoading || !(data?.anggaran || []).length}
+                               onClick={unduhAnggaran}/>
                         {override &&
                             <span className="anggaran-sinkron">
                                 Realisasi s.d. {override.tanggalBatas} dari unggahan
@@ -345,7 +388,8 @@ export default function Anggaran() {
                     </div>
                 </div>
                 <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
-                {isLoading ? <LoadingAnimate/> : <TableAnggaranPohon anggaran={data?.anggaran || []}/>}
+                {isLoading ? <LoadingAnimate/> :
+                    <TableAnggaranPohon anggaran={data?.anggaran || []} kosong={pesanKosong}/>}
             </div>
 
             {/* Realisasi already booked before Poriku started recording it. Uploaded once,
@@ -399,7 +443,7 @@ export default function Anggaran() {
 
             {/* The faulty claims, kept apart from the rest: a unit kerja using another unit's
                 MAK is a compliance problem, not the data-entry problem the panel below holds. */}
-            {klaimUnitLain.length > 0 &&
+            {canUnggah && klaimUnitLain.length > 0 &&
                 <div className="bg-card wide-card-content">
                     <div className="wide-card-head">
                         <h2 className="wide-card-title">Klaim MAK Unit Lain</h2>
@@ -413,7 +457,7 @@ export default function Anggaran() {
 
             {/* Belanja that matched no MAK in the active revisi. Reported rather than dropped,
                 because money that vanishes from the report is money nobody goes looking for. */}
-            {takDikenal.length > 0 &&
+            {canUnggah && takDikenal.length > 0 &&
                 <div className="bg-card wide-card-content">
                     <div className="wide-card-head">
                         <h2 className="wide-card-title">Belanja Tanpa Anggaran</h2>

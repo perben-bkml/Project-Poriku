@@ -135,10 +135,11 @@ function AksiVerifPJK(props) {
                         <option value="FALSE">Belum</option>
                         <option value="TRUE">Iya</option>
                     </select>
-                    <label htmlFor="tgl-selesai">Tanggal Selesai Verifikasi</label>
-                    <input id="tgl-selesai" className="type-btn" type="date" name="tgl_selesai" value={pjkData.tgl_selesai || ""}
-                        onChange={e => handleInputChange(e.target)}
-                        onDoubleClick={() => handleInputChange({name: "tgl_selesai", value: ""})}/>
+                    <label>Tanggal Selesai Verifikasi</label>
+                    <span className="type-btn nilai-otomatis"
+                          title="Terisi otomatis saat Substansi dan Kelengkapan PJK sudah OK atau OK Catatan">
+                        {pjkData.tgl_selesai || "otomatis"}
+                    </span>
                     <label htmlFor="substansi">Substansi PJK</label>
                     <select id="substansi" className="type-btn" name="substansi" value={pjkData.substansi}
                         onChange={e => (applyOptionColor(e.target, pjkStatusOptions), handleInputChange(e.target))}>

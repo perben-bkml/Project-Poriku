@@ -510,7 +510,7 @@
     flex-wrap: wrap;
     gap: 8px;
     width: 94%;
-    margin: 14px auto 0 auto;
+    margin: 50px auto 0 auto;
 }
 
 /* Daftar-Pengajuan table. Replaces the per-row card layout: the card could only show
@@ -2318,4 +2318,48 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 0.68rem;
     font-weight: 500;
     opacity: 0.85;
+}
+
+/* Occupies the grid cell an input used to, so the 4x4 aksi-content-label layout is unchanged */
+.nilai-otomatis {
+    width: 220px;
+    box-sizing: border-box;
+    background-color: #F1F3F7;
+    color: #5A6472;
+    border: 1px dashed #C9D0DB;
+    cursor: default;
+    display: flex;
+    align-items: center;
+}
+
+/* Search + Unit Kerja bar on Daftar-Pengajuan and Pengujian-PJK. Controls are .type-btn, the
+   same shape the aksi and unggah forms use, so the row reads as part of the app rather than
+   a bolted-on toolbar. */
+.bar-cari {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-top: 16px;
+}
+
+/* .type-btn is 230px, right for a unit kerja name and far too wide for a document number */
+.bar-cari-nomor {
+    width: 150px;
+}
+
+/* The shared 50px is sized for the old inline run and leaves a hole in a gap-based row */
+.bar-cari .spm-button {
+    margin-left: 0;
+}
+
+/* Inside the card, under its title and above the table, on the same 35px gutter the head and
+   the table content already sit on */
+.bar-cari-pjk {
+    margin: 22px 0;
+    /* 30px matches .wide-card-title's own left margin, so the bar starts level with the title */
+    padding: 0 30px;
+    /* Daftar-Pengajuan inherits this from .pengajuan-filter; here there is no wrapper to take
+       it from, and the labels must read at the same size on both screens */
+    font-size: 1.2rem;
 }

@@ -9,6 +9,20 @@ export async function unduhExcel(namaFile, head, baris, lebar = []) {
     }).toFile(namaFile);
 }
 
+
+// Multi-sheet variant. write-excel-file takes an array of {data, sheet, columns} when a
+// workbook has more than one tab; the SBM template needs two, and their ORDER is what the
+// upload parser matches on, since the tab name is whatever the admin's Excel calls it.
+export async function unduhExcelBanyakSheet(namaFile, sheets) {
+    const { default: writeExcelFile } = await import('write-excel-file/browser');
+    await writeExcelFile(sheets.map(({ nama, head, baris, lebar = [] }) => ({
+        sheet: nama,
+        data: [head.map(label => ({ value: String(label ?? ""), fontWeight: 'bold' })), ...baris],
+        columns: head.map((_, index) => ({ width: lebar[index] || 16 })),
+        stickyRowsCount: 1,
+    }))).toFile(namaFile);
+}
+
 // Sheets hands back the value as the sheet displays it, so a rupiah cell arrives as
 // "3.500.000". Excel can only sum it as a real number, but a value carrying a decimal
 // comma would be multiplied by 100 if the separators were simply stripped, so that one

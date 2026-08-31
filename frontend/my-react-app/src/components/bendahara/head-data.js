@@ -311,5 +311,49 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
+//For Kelola-Kkp.jsx - the Standar Biaya Masukan reference and the two kalkulator.
+// The Excel layout POST /kkp/sbm/unggah expects: two sheets, matched by ORDER rather than
+// by tab name. Twins of SBM_JUDUL_TIKET and SBM_JUDUL_HOTEL in server.js - the upload
+// rejects a sheet whose first column is not the one named here.
+const sbmKolomTiket = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
+const sbmKolomHotel = ["Provinsi", "Eselon I", "Eselon II", "Eselon III/Golongan IV",
+    "Eselon IV/Golongan III/II/I"];
+
+// A city repeats across rows by design: the key is the ordered pair, so a return leg is a
+// separate row and may be priced differently.
+const sbmContohTiket = [
+    ["Jakarta", "Surabaya", "3.500.000", "1.800.000"],
+    ["Surabaya", "Jakarta", "3.400.000", "1.750.000"],
+    ["Jakarta", "Makassar", "5.200.000", "2.600.000"],
+];
+const sbmContohHotel = [
+    ["DKI Jakarta", "8.720.000", "1.490.000", "992.000", "730.000"],
+    ["Jawa Timur", "4.400.000", "1.605.000", "664.000", "480.000"],
+];
+
+// value is the key the API returns inside `tarif`, so the dropdown selection indexes the
+// price directly and a change to the display order cannot re-point every tariff.
+const sbmKelasPesawat = [
+    {value: "bisnis", title: "Bisnis"},
+    {value: "ekonomi", title: "Ekonomi"},
+];
+const sbmGolonganHotel = [
+    {value: "eselon_1", title: "Eselon I"},
+    {value: "eselon_2", title: "Eselon II"},
+    {value: "eselon_3", title: "Eselon III/Golongan IV"},
+    {value: "eselon_4", title: "Eselon IV/Golongan III/II/I"},
+];
+
+const sbmTiketHeadData = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
+const sbmHotelHeadData = ["Provinsi", ...sbmGolonganHotel.map(item => item.title)];
+
+const sbmUnggahKeterangan = "Satu berkas .xlsx berisi dua sheet: Tiket Pesawat lalu Tarif Hotel, " +
+    "dalam urutan itu. Nominal harus rupiah bulat - pemisah ribuan (3.500.000 atau 3,500,000) boleh, " +
+    "pecahan ditolak. Menerapkan berkas baru akan mengganti seluruh data SBM tahun berjalan.";
+
+const kalkulatorKeterangan = "Setiap baris dihitung sendiri, jadi satu perjalanan dapat memuat orang " +
+    "dengan kelas atau golongan yang berbeda. Hasil hanya tampil di layar dan tidak disimpan.";
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan };
 

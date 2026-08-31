@@ -1850,3 +1850,104 @@
 .anggaran-riwayat-meta {
     color: #5A6472;
 }
+
+/* --- Kelola KKP -------------------------------------------------------------
+   The two kalkulator sit side by side on a wide screen and stack below it: each
+   is a self-contained list of line items, so nothing lines up across the pair
+   and a split at any width is safe. */
+.kkp-kalkulator {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    margin: 0 30px;
+}
+
+@media (max-width: 1400px) {
+    .kkp-kalkulator {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.kkp-blok-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.kkp-sub {
+    margin: 18px 0 8px 0;
+    font-size: 1rem;
+    color: #00449C;
+}
+
+/* Inside .anggaran-pratinjau the subheads sit above a full width table, which has
+   its own 30px gutter, so they need the same one to line up with it */
+.anggaran-pratinjau .kkp-sub {
+    margin-left: 30px;
+}
+
+/* .type-btn is sized for a full width form field; in a table cell it has to fit
+   the column instead */
+.kkp-sel,
+.kkp-angka {
+    width: 100%;
+    min-width: 120px;
+    padding: 6px 8px;
+    font-size: 0.9rem;
+}
+
+.kkp-angka {
+    min-width: 80px;
+}
+
+.kkp-belum {
+    color: #8A6100;
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+
+.kkp-total {
+    margin: 12px 0 0 0;
+    text-align: right;
+    color: #5A6472;
+}
+
+.kkp-total strong {
+    margin-left: 10px;
+    color: #0a0f1b;
+    font-size: 1.05rem;
+}
+
+.kkp-grand {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+    margin: 24px 30px 0 30px;
+    padding: 14px 20px;
+    border-radius: 10px;
+    background-color: #F4F7FB;
+    border: 1px solid #E1E7EF;
+}
+
+.kkp-grand strong {
+    font-size: 1.3rem;
+    color: #00449C;
+}
+
+.kkp-catatan {
+    margin: 10px 30px 0 30px;
+    text-align: right;
+    color: #8A6100;
+    font-size: 0.85rem;
+}
+
+/* Sits inside .wide-card-actions, which is a flex row of buttons */
+.kkp-cari {
+    width: 200px;
+    margin: 0;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+}

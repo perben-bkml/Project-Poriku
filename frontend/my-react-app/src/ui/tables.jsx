@@ -24,7 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel } from '../components/bendahara/head-data.js';
 import { anggaranSebabLabel, anggaranTandaMak, tandaMakPesan } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
@@ -1697,6 +1697,122 @@ export function TableKlaimUnitLain({baris}) {
 
 TableKlaimUnitLain.propTypes = {
     baris: PropTypes.array,
+};
+
+
+// Kelola-Kkp.jsx - the two SBM reference tables. Filtered by the screen rather than paged:
+// the list is a few hundred rows an admin scans for one rute or provinsi, and a page break
+// hides exactly the row being looked for.
+export function TableSbmTiket({baris, kosong = "Belum ada data SBM Tiket Pesawat."}) {
+    if (!baris || baris.length === 0) return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={sbmTiketHeadData}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.kotaAsal)}</TableCell>
+                            <TableCell>{dash(row.kotaTujuan)}</TableCell>
+                            <TableCell>{formatRupiah(row.tarif.bisnis)}</TableCell>
+                            <TableCell>{formatRupiah(row.tarif.ekonomi)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableSbmTiket.propTypes = {
+    baris: PropTypes.array,
+    kosong: PropTypes.string,
+};
+
+export function TableSbmHotel({baris, kosong = "Belum ada data SBM Tarif Hotel."}) {
+    if (!baris || baris.length === 0) return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={sbmHotelHeadData}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.provinsi)}</TableCell>
+                            {sbmGolonganHotel.map(({value}) => (
+                                <TableCell key={value}>{formatRupiah(row.tarif[value])}</TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableSbmHotel.propTypes = {
+    baris: PropTypes.array,
+    kosong: PropTypes.string,
+};
+
+// The kalkulator line items. Not a reference list but an editable form laid out as a table,
+// so the controls live here with the columns they belong to rather than in the screen.
+export function TableKalkulatorRincian({baris, kolom, onUbah, onHapus}) {
+    return (
+        <TableContainer sx={{...realisasiContainer, maxWidth: "100%"}}>
+            <Table size="small">
+                <RealisasiHead heads={[...kolom.map(item => item.label), "Subtotal", ""]}/>
+                <TableBody>
+                    {baris.map(row => (
+                        <TableRow key={row.id}>
+                            {kolom.map(({key, pilihan, min}) => {
+                                // Kota Tujuan is offered per row from the Kota Asal already picked, so
+                                // pilihan may be a function of the row rather than one fixed list
+                                const opsi = typeof pilihan === "function" ? pilihan(row) : pilihan;
+                                return (
+                                    <TableCell key={key}>
+                                        {opsi
+                                            ? <select className="type-btn kkp-sel" value={row[key]}
+                                                      onChange={event => onUbah(row.id, key, event.target.value)}>
+                                                <option value="">- pilih -</option>
+                                                {opsi.map(item => (
+                                                    <option key={item.value} value={item.value}>{item.title}</option>
+                                                ))}
+                                              </select>
+                                            : <input className="type-btn kkp-angka" type="number" min={min ?? 1}
+                                                     value={row[key]}
+                                                     onChange={event => onUbah(row.id, key, event.target.value)}/>}
+                                    </TableCell>
+                                );
+                            })}
+                            <TableCell sx={{whiteSpace: "nowrap", fontWeight: 600}}>
+                                {row.subtotal === null
+                                    ? <span className="kkp-belum">belum lengkap</span>
+                                    : formatRupiah(row.subtotal)}
+                            </TableCell>
+                            <TableCell align="center">
+                                <Tooltip title="Hapus baris">
+                                    <span>
+                                        <IconButton size="small" disabled={baris.length === 1}
+                                                    onClick={() => onHapus(row.id)}>
+                                            <DeleteForeverIcon sx={{fontSize: 22, color: baris.length === 1 ? "#C9CFD8" : "#BD1404"}}/>
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableKalkulatorRincian.propTypes = {
+    baris: PropTypes.array.isRequired,
+    kolom: PropTypes.array.isRequired,
+    onUbah: PropTypes.func.isRequired,
+    onHapus: PropTypes.func.isRequired,
 };
 
 // The upload diff. Deliberately not paginated: an admin about to replace a budget should

@@ -271,6 +271,14 @@ const ROUTE_ROLES = {
     "POST /anggaran/realisasi/override": ADMIN,
     "DELETE /anggaran/realisasi/override": ADMIN,
 
+    // Kelola KKP. Reference data an admin maintains and only an admin calculates against,
+    // so unlike /anggaran the read is admin only too. The delete carries unggahanId in the
+    // query so this stays a plain lookup rather than a ROUTE_ROLES_PREFIX entry.
+    "GET /kkp/sbm": ADMIN,
+    "POST /kkp/sbm/unggah": ADMIN,
+    "POST /kkp/sbm/unggah/terapkan": ADMIN,
+    "DELETE /kkp/sbm/unggah": ADMIN,
+
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
@@ -6808,6 +6816,280 @@ app.delete("/anggaran/realisasi/override", async (req, res) => {
         if (anggaranBelumSiap(error, res)) return;
         console.error("Error in DELETE /anggaran/realisasi/override:", error);
         return res.status(500).json({ message: "Gagal menghapus realisasi awal." });
+    }
+});
+
+// --- Kelola KKP: Standar Biaya Masukan ----------------------------------------
+// The SBM reference the two kalkulator on Kelola KKP look up: airfare per Kota Asal/Kota
+// Tujuan pair, and hotel tariff per Provinsi across four golongan. In Postgres because the
+// calculators price a whole itinerary as it is typed, and a Sheets read per lookup would
+// hit the rate limiter long before the screen felt usable.
+//
+// Both tables arrive in one .xlsx as two sheets, matched by POSITION: read-excel-file 9.x
+// hands back every sheet, but the tab name is whatever the admin's Excel called it.
+//
+// The upload is previewed before it takes effect, so the parsed file is persisted straight
+// away as a 'draf' and Terapkan is a single status flip - what the admin approved is
+// literally what activates. Unlike anggaran there is no revisi history and no merge modes:
+// SBM is reissued whole each year rather than edited incrementally, so Terapkan drops the
+// year's previous unggahan outright.
+//
+// The year is the one apiClient injects into every request, read by anggaranTahun above.
+
+const SBM_JUDUL_TIKET = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
+const SBM_JUDUL_HOTEL = [
+    "Provinsi", "Eselon I", "Eselon II", "Eselon III/Golongan IV", "Eselon IV/Golongan III/II/I",
+];
+// Column order in sbm_hotel. The four are fixed by the SBM regulation - a fifth golongan
+// would be a new regulation, and a migration either way.
+const SBM_GOLONGAN = ["eselon_1", "eselon_2", "eselon_3", "eselon_4"];
+
+const sbmBelumSiap = (error, res) => {
+    if (error.code !== UNDEFINED_TABLE) return false;
+    console.error("Tabel SBM belum ada - terapkan migrasi 009.", error);
+    res.status(500).json({ message: "Tabel SBM belum tersedia di database." });
+    return true;
+};
+
+// bacaBarisExcel takes the first sheet only; the SBM template needs both, in order
+async function bacaSheetExcel(buffer) {
+    const hasil = await readXlsxFile(buffer);
+    if (!Array.isArray(hasil)) return [];
+    return hasil.map(item => Array.isArray(item?.data) ? item.data : (Array.isArray(item) ? item : []));
+}
+
+function sbmJudulCocok(baris, judul, sheet, masalah) {
+    const kepala = (baris[0] || []).map(sel => trimmed(sel).toLowerCase());
+    if (kepala[0] === judul[0].toLowerCase()) return true;
+    masalah.push({ baris: 1, pesan: `${sheet}: baris pertama harus berisi judul kolom, dimulai "${judul[0]}".` });
+    return false;
+}
+
+// A repeated key that disagrees with itself is a mistake in the file, never a last-one-wins:
+// two fares for one rute would have the calculator quoting whichever row was read last.
+// An identical repeat is harmless and stays silent.
+function sbmTambah(peta, kunci, baru, nominal, sheet, label, nomorBaris, masalah) {
+    const lama = peta.get(kunci);
+    if (!lama) { peta.set(kunci, baru); return; }
+    if (nominal.some(field => lama[field] !== baru[field])) {
+        masalah.push({ baris: nomorBaris, pesan: `${sheet}: ${label} muncul lebih dari sekali dengan nominal berbeda.` });
+    }
+}
+
+// One row per rute. A city repeats across rows by design - the key is the ordered pair,
+// so Jakarta-Surabaya and Surabaya-Jakarta are two rute that may well be priced apart.
+function susunTiketDariExcel(baris, masalah) {
+    const sheet = "Sheet 1 (Tiket Pesawat)";
+    const peta = new Map();
+    if (!sbmJudulCocok(baris, SBM_JUDUL_TIKET, sheet, masalah)) return peta;
+
+    baris.slice(1).forEach((row, index) => {
+        const nomorBaris = index + 2;
+        const asal = trimmed(row?.[0]);
+        const tujuan = trimmed(row?.[1]);
+        // A range read trails blank rows; one with nothing in it at all is not an error
+        if (asal === "" && tujuan === "") return;
+        if (asal === "" || tujuan === "") {
+            masalah.push({ baris: nomorBaris, pesan: `${sheet}: Kota Asal dan Kota Tujuan harus terisi keduanya.` });
+            return;
+        }
+        const asalKunci = normalizeSatker(asal);
+        const tujuanKunci = normalizeSatker(tujuan);
+        if (asalKunci === tujuanKunci) {
+            masalah.push({ baris: nomorBaris, pesan: `${sheet}: Kota Asal dan Kota Tujuan sama ("${asal}").` });
+            return;
+        }
+        sbmTambah(peta, `${asalKunci}>${tujuanKunci}`, {
+            kota_asal: asal, kota_asal_kunci: asalKunci,
+            kota_tujuan: tujuan, kota_tujuan_kunci: tujuanKunci,
+            bisnis: paguDariSel(row?.[2], `${sheet}: Bisnis`, nomorBaris, masalah),
+            ekonomi: paguDariSel(row?.[3], `${sheet}: Ekonomi`, nomorBaris, masalah),
+        }, ["bisnis", "ekonomi"], sheet, `Rute ${asal} - ${tujuan}`, nomorBaris, masalah);
+    });
+    return peta;
+}
+
+function susunHotelDariExcel(baris, masalah) {
+    const sheet = "Sheet 2 (Tarif Hotel)";
+    const peta = new Map();
+    if (!sbmJudulCocok(baris, SBM_JUDUL_HOTEL, sheet, masalah)) return peta;
+
+    baris.slice(1).forEach((row, index) => {
+        const nomorBaris = index + 2;
+        const provinsi = trimmed(row?.[0]);
+        if (provinsi === "") return;
+        const provinsiKunci = normalizeSatker(provinsi);
+        const tarif = {};
+        SBM_GOLONGAN.forEach((kolom, urutan) => {
+            tarif[kolom] = paguDariSel(row?.[urutan + 1], `${sheet}: ${SBM_JUDUL_HOTEL[urutan + 1]}`, nomorBaris, masalah);
+        });
+        sbmTambah(peta, provinsiKunci, { provinsi, provinsi_kunci: provinsiKunci, ...tarif },
+            SBM_GOLONGAN, sheet, `Provinsi ${provinsi}`, nomorBaris, masalah);
+    });
+    return peta;
+}
+
+const bentukTiket = (row) => ({
+    kotaAsal: row.kota_asal, kotaTujuan: row.kota_tujuan,
+    tarif: { bisnis: angkaPagu(row.bisnis), ekonomi: angkaPagu(row.ekonomi) },
+});
+// Keyed rather than positional so the dropdown's own value indexes the tariff directly and
+// a column added to the display order cannot silently re-point every price
+const bentukHotel = (row) => ({
+    provinsi: row.provinsi,
+    tarif: Object.fromEntries(SBM_GOLONGAN.map(kolom => [kolom, angkaPagu(row[kolom])])),
+});
+
+async function bacaSbmAktif(tahun) {
+    const [aktif] = await sql`
+        SELECT id, nama_berkas, dibuat_oleh, aktif_pada
+        FROM sbm_unggahan WHERE tahun = ${tahun} AND status = 'aktif'`;
+    if (!aktif) return null;
+    const [tiket, hotel] = await Promise.all([
+        sql`SELECT kota_asal, kota_tujuan, bisnis, ekonomi FROM sbm_tiket
+            WHERE unggahan_id = ${aktif.id} ORDER BY kota_asal, kota_tujuan`,
+        sql`SELECT provinsi, eselon_1, eselon_2, eselon_3, eselon_4 FROM sbm_hotel
+            WHERE unggahan_id = ${aktif.id} ORDER BY provinsi`,
+    ]);
+    return { aktif, tiket: tiket.map(bentukTiket), hotel: hotel.map(bentukHotel) };
+}
+
+app.get("/kkp/sbm", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+
+        const data = await bacaSbmAktif(tahun);
+        if (!data) return res.status(200).json({ tahun, unggahan: null, tiket: [], hotel: [] });
+        return res.status(200).json({
+            tahun,
+            unggahan: {
+                namaBerkas: data.aktif.nama_berkas, dibuatOleh: data.aktif.dibuat_oleh,
+                aktifPada: data.aktif.aktif_pada,
+            },
+            tiket: data.tiket,
+            hotel: data.hotel,
+        });
+    } catch (error) {
+        if (sbmBelumSiap(error, res)) return;
+        console.error("Error in GET /kkp/sbm:", error);
+        return res.status(500).json({ message: "Gagal memuat data SBM." });
+    }
+});
+
+// Preview. Shares the anggaran multer - same field name, same .xlsx filter, same 10 MB cap.
+app.post("/kkp/sbm/unggah", handleAnggaranUpload, async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        if (!req.file) return res.status(400).json({ message: "Berkas belum dipilih." });
+
+        let sheets;
+        try {
+            sheets = await bacaSheetExcel(req.file.buffer);
+        } catch (error) {
+            console.error("Gagal membaca berkas SBM:", error);
+            return res.status(400).json({ message: "Berkas tidak dapat dibaca sebagai .xlsx." });
+        }
+        if (sheets.length < 2) {
+            return res.status(400).json({
+                message: "Berkas harus memuat dua sheet: Tiket Pesawat lalu Tarif Hotel. Gunakan Unduh Template.",
+            });
+        }
+
+        const masalah = [];
+        const tiket = susunTiketDariExcel(sheets[0], masalah);
+        const hotel = susunHotelDariExcel(sheets[1], masalah);
+        // Nothing is written when the file is rejected, so there is no draft to clean up
+        if (masalah.length > 0) return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah });
+        if (tiket.size === 0 && hotel.size === 0) {
+            return res.status(400).json({ message: "Berkas tidak memuat satu pun baris SBM." });
+        }
+
+        const draf = await sql.begin(async trx => {
+            const [unggahan] = await trx`
+                INSERT INTO sbm_unggahan (tahun, status, nama_berkas, dibuat_oleh)
+                VALUES (${tahun}, 'draf', ${req.file.originalname || ""}, ${req.viewer.name})
+                RETURNING id`;
+            if (tiket.size > 0) {
+                await trx`INSERT INTO sbm_tiket ${trx([...tiket.values()].map(row => ({ unggahan_id: unggahan.id, ...row })),
+                    "unggahan_id", "kota_asal", "kota_asal_kunci", "kota_tujuan", "kota_tujuan_kunci", "bisnis", "ekonomi")}`;
+            }
+            if (hotel.size > 0) {
+                await trx`INSERT INTO sbm_hotel ${trx([...hotel.values()].map(row => ({ unggahan_id: unggahan.id, ...row })),
+                    "unggahan_id", "provinsi", "provinsi_kunci", ...SBM_GOLONGAN)}`;
+            }
+            return unggahan;
+        });
+
+        // The parsed tables come back so the preview shows the prices themselves, not just
+        // a count: a mis-shifted column is only obvious once the numbers are on screen.
+        return res.status(200).json({
+            unggahanId: draf.id,
+            tahun,
+            namaBerkas: req.file.originalname || "",
+            ringkasan: { tiket: tiket.size, hotel: hotel.size },
+            tiket: [...tiket.values()].map(bentukTiket),
+            hotel: [...hotel.values()].map(bentukHotel),
+            masalah: [],
+        });
+    } catch (error) {
+        if (sbmBelumSiap(error, res)) return;
+        console.error("Error in POST /kkp/sbm/unggah:", error);
+        return res.status(500).json({ message: "Gagal memproses berkas SBM." });
+    }
+});
+
+app.post("/kkp/sbm/unggah/terapkan", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        const unggahanId = parseInt(req.body?.unggahanId, 10);
+        if (!Number.isInteger(unggahanId)) return res.status(400).json({ message: "Unggahan tidak valid." });
+
+        const hasil = await sql.begin(async trx => {
+            // Two admins applying at once would lock different rows and so would not block
+            // each other, then both try to be the year's single active upload. The two-key
+            // form keeps this out of the anggaran lock space, which uses the bigint form.
+            await trx`SELECT pg_advisory_xact_lock(9, ${tahun})`;
+            const [draf] = await trx`SELECT id, tahun, status FROM sbm_unggahan WHERE id = ${unggahanId} FOR UPDATE`;
+            if (!draf) return { gagal: "Unggahan tidak ditemukan." };
+            if (draf.tahun !== tahun) return { gagal: "Unggahan berasal dari tahun yang berbeda." };
+            if (draf.status !== "draf") return { gagal: "Unggahan ini sudah diterapkan." };
+
+            // SBM is reissued whole, so the year's previous table goes rather than being
+            // kept as history; sbm_tiket and sbm_hotel follow it by ON DELETE CASCADE.
+            await trx`DELETE FROM sbm_unggahan WHERE tahun = ${tahun} AND status = 'aktif'`;
+            const [aktif] = await trx`
+                UPDATE sbm_unggahan SET status = 'aktif', aktif_pada = NOW()
+                WHERE id = ${unggahanId} RETURNING id, aktif_pada`;
+            return { aktif };
+        });
+
+        if (hasil.gagal) return res.status(409).json({ message: hasil.gagal });
+        return res.status(200).json({
+            tahun, unggahanId: hasil.aktif.id, aktifPada: hasil.aktif.aktif_pada,
+            message: "Data SBM berhasil diterapkan.",
+        });
+    } catch (error) {
+        if (sbmBelumSiap(error, res)) return;
+        console.error("Error in POST /kkp/sbm/unggah/terapkan:", error);
+        return res.status(500).json({ message: "Gagal menerapkan data SBM." });
+    }
+});
+
+// Discarding a preview. Only ever a draft - an applied upload is the live table.
+app.delete("/kkp/sbm/unggah", async (req, res) => {
+    try {
+        const unggahanId = parseInt(req.query.unggahanId, 10);
+        if (!Number.isInteger(unggahanId)) return res.status(400).json({ message: "Unggahan tidak valid." });
+        const dihapus = await sql`DELETE FROM sbm_unggahan WHERE id = ${unggahanId} AND status = 'draf' RETURNING id`;
+        if (dihapus.length === 0) return res.status(409).json({ message: "Draf tidak ditemukan atau sudah diterapkan." });
+        return res.status(200).json({ unggahanId, message: "Draf dibatalkan." });
+    } catch (error) {
+        if (sbmBelumSiap(error, res)) return;
+        console.error("Error in DELETE /kkp/sbm/unggah:", error);
+        return res.status(500).json({ message: "Gagal membatalkan draf." });
     }
 });
 

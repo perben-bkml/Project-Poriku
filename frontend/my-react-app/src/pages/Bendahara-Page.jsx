@@ -13,6 +13,7 @@ import MonitorPerubahanGaji from "../components/bendahara/Monitor-Perubahan-Gaji
 import KirimDokumenGaji from "../components/bendahara/Kirim-Dokumen-Gaji.jsx";
 import PembayaranBp from "../components/bendahara/Pembayaran-Bp.jsx";
 import PembayaranTup from "../components/bendahara/Pembayaran-Tup.jsx";
+import KelolaKkp from "../components/bendahara/Kelola-Kkp.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -28,6 +29,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import CalculateIcon from '@mui/icons-material/Calculate';
 
 // Single source of truth for both the sidebar and the access check, so the two cannot
 // drift. "master admin" is never listed - it opens everything.
@@ -46,6 +48,8 @@ const MENU_ROLES = {
     "monitor-data-gaji": ["admin", "admin_gaji"],
     "pembayaran-bp": ["admin"],
     "pembayaran-tup": ["admin"],
+    // SBM is reference data an admin maintains and only an admin calculates against
+    "kelola-kkp": ["admin"],
     // Writing dokumen gaji stays with the roles the backend lets write it
     "input-dokumen-gaji": ["admin_gaji"],
     "edit-dokumen-gaji": ["admin_gaji"],
@@ -57,7 +61,7 @@ const MENU_ROLES = {
 const DRPP_MENUS = ["monitoring-drpp", "aksi-drpp"];
 const tanpaDrpp = (username) => String(username ?? "").toLowerCase().includes("verifikasi");
 
-const AKRONIM = ["bp", "tup", "drpp", "spm", "pjk"];
+const AKRONIM = ["bp", "tup", "drpp", "spm", "pjk", "kkp"];
 
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
 const MENU_BUTTONS = [
@@ -69,6 +73,7 @@ const MENU_BUTTONS = [
     {name: "SPM-bendahara", label: "SPM Bendahara", Icon: FindInPageIcon},
     {name: "monitor-data-gaji", label: "Monitor Data Gaji", Icon: PaymentsIcon},
     {name: "pembayaran-bp", label: "Pembayaran BP", Icon: ReceiptLongIcon},
+    {name: "kelola-kkp", label: "Kelola KKP", Icon: CalculateIcon},
 ];
 
 function BendaharaPage(props) {
@@ -176,6 +181,7 @@ function BendaharaPage(props) {
                 return <KirimDokumenGaji type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             case "pembayaran-bp":     return <PembayaranBp changeComponent={setButtonSelect} />
             case "pembayaran-tup":    return <PembayaranTup changeComponent={setButtonSelect} />
+            case "kelola-kkp":        return <KelolaKkp />
             case "edit-dokumen-gaji":
                 return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:

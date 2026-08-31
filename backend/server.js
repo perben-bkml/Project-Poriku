@@ -6224,7 +6224,7 @@ async function rinciKlaim(tahun, klaim, override) {
             unitKerja: induk.unitKerja, kodeMak: row.kode_mak, kodeAkun: row.kode_akun,
             pemilik: induk.pemilik, transId: row.trans_id, alur: row.alur,
             nama: row.nama, nomorSpp: row.nomor_spp,
-            realisasi: Number(row.realisasi), komitmen: Number(row.komitmen),
+            terpakai: Number(row.realisasi) + Number(row.komitmen),
         });
     }
     // A claim carried by the uploaded baseline has no line item to name, so it would vanish
@@ -6234,10 +6234,10 @@ async function rinciKlaim(tahun, klaim, override) {
         rinci.push({
             unitKerja: row.unitKerja, kodeMak: row.kodeMak, kodeAkun: row.kodeAkun,
             pemilik: row.pemilik, transId: "", alur: "awal", nama: "", nomorSpp: "",
-            realisasi: row.realisasi, komitmen: row.komitmen,
+            terpakai: row.komitmen + row.realisasi,
         });
     }
-    return rinci.sort((a, b) => (b.komitmen + b.realisasi) - (a.komitmen + a.realisasi));
+    return rinci.sort((a, b) => b.terpakai - a.terpakai);
 }
 
 async function bacaSinkronRealisasi(tahun) {
@@ -6437,7 +6437,9 @@ function susunTampilan(units, belanja) {
 
     const berat = (row) => row.komitmen + row.realisasi;
     const bermasalah = [...belanja.values()].filter(row => row.sebab);
-    const panel = bermasalah.filter(row => !row.hanyaAwal).sort((a, b) => berat(b) - berat(a));
+    const panel = bermasalah.filter(row => !row.hanyaAwal)
+        .sort((a, b) => berat(b) - berat(a))
+        .map(row => ({ ...row, terpakai: berat(row) }));
     return {
         anggaran,
         klaimUnitLain: panel.filter(row => row.sebab === SEBAB_UNIT_LAIN),

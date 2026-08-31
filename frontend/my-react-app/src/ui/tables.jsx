@@ -1643,7 +1643,7 @@ export function TableRealisasiTakDikenal({baris}) {
     return (
         <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
             <Table size="small" stickyHeader>
-                <RealisasiHead heads={["Unit Kerja", "Kode MAK", "Akun", "Sebab", "Realisasi", "Komitmen", "Baris"]}/>
+                <RealisasiHead heads={["Unit Kerja", "Kode MAK", "Akun", "Sebab", "Terpakai", "Baris"]}/>
                 <TableBody>
                     {baris.map((row, index) => (
                         <TableRow key={index} hover>
@@ -1651,8 +1651,7 @@ export function TableRealisasiTakDikenal({baris}) {
                             <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
                             <TableCell>{dash(row.kodeAkun)}</TableCell>
                             <TableCell>{anggaranSebabLabel[row.sebab] || dash(row.sebab)}</TableCell>
-                            <TableCell>{formatRupiah(row.realisasi)}</TableCell>
-                            <TableCell>{formatRupiah(row.komitmen)}</TableCell>
+                            <TableCell>{formatRupiah(row.terpakai)}</TableCell>
                             <TableCell>{row.baris}</TableCell>
                         </TableRow>
                     ))}
@@ -1674,7 +1673,7 @@ export function TableKlaimUnitLain({baris}) {
     return (
         <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
             <Table size="small" stickyHeader>
-                <RealisasiHead heads={["Unit Kerja Pengaju", "Kode MAK", "Akun", "Terdaftar di", "Nama", "Nomor SPP", "Realisasi", "Komitmen"]}/>
+                <RealisasiHead heads={["Unit Kerja Pengaju", "Kode MAK", "Akun", "Terdaftar di", "Nama", "Nomor SPP", "Terpakai"]}/>
                 <TableBody>
                     {baris.map((row, index) => (
                         <TableRow key={index} hover>
@@ -1687,8 +1686,7 @@ export function TableKlaimUnitLain({baris}) {
                                 ? <span className="anggaran-tanda-baru">unggahan realisasi awal</span>
                                 : dash(row.nama)}</TableCell>
                             <TableCell>{dash(formatNomorSpp(row.nomorSpp))}</TableCell>
-                            <TableCell>{formatRupiah(row.realisasi)}</TableCell>
-                            <TableCell>{formatRupiah(row.komitmen)}</TableCell>
+                            <TableCell>{formatRupiah(row.terpakai)}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

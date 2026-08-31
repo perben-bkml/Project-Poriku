@@ -5,8 +5,9 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {AuthContext} from "../../lib/AuthContext.jsx";
 import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian,
-    anggaranSebabKeterangan, anggaranKlaimKeterangan} from "./head-data.js";
+    anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan} from "./head-data.js";
 import {unduhExcel, selTeks} from "../../lib/excel.js";
+import {formatRupiah} from "../bendahara/head-data.js";
 // Import Tables
 import {TableAnggaranPohon, TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
 
@@ -31,6 +32,10 @@ export default function Anggaran() {
     const [isUnggah, setIsUnggah] = useState(false);
     const [isTerapkan, setIsTerapkan] = useState(false);
     const [isSegarkan, setIsSegarkan] = useState(false);
+    const bukuRef = useRef(null);
+    const [tanggalBatas, setTanggalBatas] = useState("");
+    const [modeAwal, setModeAwal] = useState("perUnit");
+    const [isAwal, setIsAwal] = useState(false);
     // The diff waiting for a decision, and the blocking problems of a rejected file
     const [pratinjau, setPratinjau] = useState(null);
     const [masalah, setMasalah] = useState([]);
@@ -144,6 +149,47 @@ export default function Anggaran() {
         }
     }
 
+    async function kirimRealisasiAwal(event) {
+        event.preventDefault();
+        const berkas = bukuRef.current?.files?.[0];
+        if (!berkas) return showAlert("warning", "Pilih berkas .xlsx terlebih dahulu.");
+        if (berkas.size > ANGGARAN_MAX_MB * 1024 * 1024) {
+            return showAlert("warning", `Ukuran berkas melebihi ${ANGGARAN_MAX_MB} MB.`);
+        }
+        const formData = new FormData();
+        formData.append('berkas', berkas);
+        formData.append('tanggalBatas', tanggalBatas);
+        formData.append('mode', modeAwal);
+        try {
+            setIsAwal(true);
+            const response = await apiClient.post('/anggaran/realisasi/override', formData,
+                {headers: {'Content-Type': 'multipart/form-data'}});
+            if (bukuRef.current) bukuRef.current.value = "";
+            showAlert("success", response.data.message || "Realisasi awal disimpan.");
+            await fetchAnggaran(true);
+        } catch (error) {
+            const body = error?.response?.data;
+            showAlert("error", body?.masalah?.length
+                ? `${body.message} Baris ${body.masalah[0].baris}: ${body.masalah[0].pesan}`
+                : body?.message || "Gagal menyimpan realisasi awal.");
+        } finally {
+            setIsAwal(false);
+        }
+    }
+
+    async function hapusRealisasiAwal() {
+        try {
+            setIsAwal(true);
+            await apiClient.delete('/anggaran/realisasi/override');
+            showAlert("info", "Realisasi awal dihapus.");
+            await fetchAnggaran(true);
+        } catch (error) {
+            showAlert("error", error?.response?.data?.message || "Gagal menghapus realisasi awal.");
+        } finally {
+            setIsAwal(false);
+        }
+    }
+
     // diam=true when this is housekeeping before a fresh upload, not the admin pressing Batal
     async function batalkanDraf(diam = false) {
         if (!pratinjau) return;
@@ -162,6 +208,7 @@ export default function Anggaran() {
 
     const revisiAktif = data?.revisi;
     const takDikenal = data?.tidakDikenal || [];
+    const override = data?.override;
     const klaimUnitLain = data?.klaimUnitLain || [];
     // The age of a stored number has to be visible, or nobody can tell whether it is current
     const labelSinkron = data?.sinkron?.disegarkanPada
@@ -284,6 +331,10 @@ export default function Anggaran() {
                     </h2>
                     <div className="wide-card-actions">
                         <span className="anggaran-sinkron">{labelSinkron}</span>
+                        {override &&
+                            <span className="anggaran-sinkron">
+                                Realisasi s.d. {override.tanggalBatas} dari unggahan
+                            </span>}
                         {canUnggah &&
                             <input className="btn-aksi btn-aksi-wide" type="button"
                                    value={isSegarkan ? "Menyegarkan..." : "Segarkan Realisasi"}
@@ -296,6 +347,55 @@ export default function Anggaran() {
                 <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
                 {isLoading ? <LoadingAnimate/> : <TableAnggaranPohon anggaran={data?.anggaran || []}/>}
             </div>
+
+            {/* Realisasi already booked before Poriku started recording it. Uploaded once,
+                with a cutoff date; everything after that date is computed from pengajuan. */}
+            {canUnggah &&
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Realisasi (Override)</h2>
+                        <div className="wide-card-actions">
+                            {override &&
+                                <span className="anggaran-sinkron">
+                                    Berlaku s.d. {override.tanggalBatas} - {override.baris} baris
+                                </span>}
+                            {override?.takCocok > 0 &&
+                                <span className="anggaran-lencana-klaim"
+                                      title="Nominal di berkas yang kode MAK-nya tidak ada di anggaran berlaku, jadi tidak mengurangi pagu mana pun">
+                                    {formatRupiah(override.takCocok)} tidak cocok
+                                </span>}
+                            {override &&
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="Hapus"
+                                       disabled={isAwal} onClick={hapusRealisasiAwal}/>}
+                        </div>
+                    </div>
+                    <form className="anggaran-form" onSubmit={kirimRealisasiAwal}>
+                        <p className="anggaran-intro">{anggaranAwalKeterangan}</p>
+
+                        <label htmlFor="tanggal-batas">Realisasi Tercatat Sampai Tanggal</label>
+                        <input type="date" id="tanggal-batas" name="tanggalBatas" className="type-btn"
+                               value={tanggalBatas} required
+                               onChange={event => setTanggalBatas(event.target.value)}/>
+
+                        <label htmlFor="berkas-awal">Berkas Realisasi (.xlsx, maks. {ANGGARAN_MAX_MB} MB)</label>
+                        <div className="anggaran-file">
+                            <input type="file" id="berkas-awal" name="berkas" accept=".xlsx" ref={bukuRef} required/>
+                        </div>
+
+                        <label htmlFor="mode-awal">Cara Menerapkan</label>
+                        <select id="mode-awal" name="mode" className="type-btn" value={modeAwal}
+                                onChange={event => setModeAwal(event.target.value)}>
+                            {anggaranModes.map(item => (
+                                <option key={item.value} value={item.value}>{item.title}</option>
+                            ))}
+                        </select>
+
+                        <div className="form-submit">
+                            <input type="submit" className="btn-submit-wide" name="simpan-awal"
+                                   value={isAwal ? "Menyimpan..." : "Simpan Realisasi"} disabled={isAwal}/>
+                        </div>
+                    </form>
+                </div>}
 
             {/* The faulty claims, kept apart from the rest: a unit kerja using another unit's
                 MAK is a compliance problem, not the data-entry problem the panel below holds. */}

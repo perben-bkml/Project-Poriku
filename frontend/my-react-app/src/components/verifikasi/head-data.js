@@ -131,4 +131,6 @@ const anggaranKlaimKeterangan = "Pengajuan berikut memakai Kode MAK yang terdaft
     "milik unit kerja yang mengajukan. Nominalnya tidak mengurangi pagu siapa pun sampai kode MAK diperbaiki " +
     "atau MAK tersebut memang dialokasikan ke unit kerja ini lewat revisi anggaran."
 
-export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan }
+const anggaranAwalKeterangan = "Upload pada bagian ini akan mencatat manual realisasi anggaran. Format excel yang digunakan sama dengan bagian Unggah Anggaran."
+
+export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan }

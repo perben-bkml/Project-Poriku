@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
-import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
+import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
 import { PILOT, PILOT_JENIS_ALLOWED, isPilotUser } from "../../lib/pilot.js";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
@@ -97,6 +97,11 @@ function BuatPengajuan(props) {
     const isBuat = componentType === "buat";
     const isTabelPenuh = jenisTabelPenuh.includes(ajuan);
     const isTanpaTabel = jenisTanpaTabel.includes(ajuan);
+    const isBanyakBaris = jenisBanyakBaris.includes(ajuan);
+    const bisaAturBaris = isTabelPenuh || isBanyakBaris;
+    // Rows submitted before these jenis had a table have no block on the sheet. Editing one
+    // must leave it that way rather than send a table the backend has nowhere to put.
+    const [tabelAda, setTabelAda] = useState(true);
     const nomorSppRequired = !isTabelPenuh && componentType !== "lihat";
     const canUploadPjk = isPilotUser(user) || String(user?.role ?? "").includes("admin");
     const showUploadGroup = componentType !== "lihat" && (isTabelPenuh || canUploadPjk);
@@ -135,11 +140,12 @@ function BuatPengajuan(props) {
     // Only applies while composing - a reopened row already arrives in its own shape.
     useEffect(() => {
         if (!isBuat || isTabelPenuh) return;
-        setRowNum(1);
         setTanggalAjuan("");
+        if (isBanyakBaris) return;
+        setRowNum(1);
         setTableData(prevData => [[1, ...(prevData[0] || initialRow).slice(1)]]);
         setPage(0);
-    }, [isBuat, isTabelPenuh]);
+    }, [isBuat, isTabelPenuh, isBanyakBaris]);
 
     //Auto size textarea tag height after fetching data
     const textAreaRefs = useRef([]); // Stores references to each textarea
@@ -170,6 +176,7 @@ function BuatPengajuan(props) {
             const tableKeyword = `TRANS_ID:${props.passedData[0]}`
             const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword, flow: rowFlow } })
             if (response.status === 200) {
+                setTabelAda(true);
                 // The verifikasi sheet stores only the ringkas columns, but every row held
                 // in state is full width - scatter them back to the positions they edit at
                 const fetched = response.data.data || [];
@@ -190,8 +197,11 @@ function BuatPengajuan(props) {
             }
             setIsLoading2(false);
         } catch (error) {
+            // 400 here means the pengajuan predates its jenis having a table
+            setTabelAda(false);
             console.log("Failed sending Keyword.", error)
         }
+        setIsLoading2(false);
     }
     useEffect(() => {
         const newComponentType = props.type;
@@ -934,7 +944,7 @@ function BuatPengajuan(props) {
         // Converting column info into data, then insert in existing tableData. Cropped to
         // the flow's own columns the same way a new pengajuan is.
         const tableHead = activeColumns.map(colIndex => (!isTabelPenuh && ringkasLabels[colIndex]) || columns[colIndex].label)
-        const sendTable = isTanpaTabel ? [] : [tableHead, ...tableData.map(row => activeColumns.map(colIndex => row[colIndex] ?? ""))]
+        const sendTable = (isTanpaTabel || !tabelAda) ? [] : [tableHead, ...tableData.map(row => activeColumns.map(colIndex => row[colIndex] ?? ""))]
         const antriPosition = parseInt(props.passedData[5]);
 
 
@@ -1084,7 +1094,7 @@ function BuatPengajuan(props) {
                 </TableContainer>
 
                 {/* Add pagination controls */}
-                {isTabelPenuh && <TablePagination
+                {bisaAturBaris && <TablePagination
                     rowsPerPageOptions={[10, 25, 50, 100]}
                     component="div"
                     count={tableData.length}
@@ -1195,7 +1205,7 @@ function BuatPengajuan(props) {
                     <div className="pengajuan-form-tabledata">
                         <div className="pengajuan-form-tableinfo">
                             <p>Input Data Pengajuan</p>
-                            {isTabelPenuh && <>
+                            {bisaAturBaris && <>
                             <label>Tentukan Jumlah Row Tabel:</label>
                             <input type="number" value={rowNum > 0 ? rowNum : ""}
                                 onChange={handleRowChange} onBlur={handleRowBlur}

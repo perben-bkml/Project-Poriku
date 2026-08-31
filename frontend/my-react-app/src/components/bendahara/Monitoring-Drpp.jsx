@@ -23,6 +23,9 @@ const CARI_INPUTS = [
 ];
 const CARI_KOSONG = Object.fromEntries(CARI_INPUTS.map(input => [input.name, ""]));
 
+// Pages fetched per request. Moving between pages inside one block never hits the network.
+const HALAMAN_PER_AMBIL = 3;
+
 const FILTER_KOSONG = { satker: "", pungutan: "", setoran: "", month: "", jenisPajak: "" };
 
 const asOptions = (list, value, label) => list.map(item => ({ value: item[value], label: item[label] }));
@@ -37,6 +40,8 @@ const FILTER_SELECTS = [
 export default function MonitoringDrpp(props) {
 
     //State
+    // One fetch covers HALAMAN_PER_AMBIL pages, so moving inside a block is a local slice
+    // rather than a round trip. Both arrays are index aligned and sliced together.
     const [fullDRPPData, setFullDRPPData] = useState([])
     const [monitoringData, setMonitoringData] = useState([]);
     const [buktiSetor, setBuktiSetor] = useState({});
@@ -50,6 +55,7 @@ export default function MonitoringDrpp(props) {
     const [totalPages, setTotalPages] = useState(0);
     // Server side paging, so a change here refetches rather than re-slicing
     const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
+    const blok = Math.floor((currentPage - 1) / HALAMAN_PER_AMBIL);
     const [cardContent, setCardContent] = useState([0, 0, 0, 0, 0]);
     const [filterSelect, setFilterSelect] = useState(() => {
         const savedFilter = localStorage.getItem('monitoring-drpp-filter');
@@ -59,26 +65,33 @@ export default function MonitoringDrpp(props) {
     const [cariSelect, setCariSelect] = useState({});
 
     //Fetch Data
-    async function fetchMonitoringData (page, limit, status, search) {
+    // The block is one oversized backend page: asking for page blok+1 at three times the
+    // limit lands on exactly the rows pages 3n+1..3n+3 need, so no new server logic.
+    async function fetchMonitoringData (blokKe, limit, status, search) {
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/monitoring-drpp', { params:{ page, limit, filterKeyword: status, cariNomor: search }});
+            const response = await apiClient.get('/bendahara/monitoring-drpp', { params:{
+                page: blokKe + 1, limit: limit * HALAMAN_PER_AMBIL, filterKeyword: status, cariNomor: search,
+            }});
             if (response.status === 200){
                 const { data: responseResult, realAllDRPPRows, countData, fullData } = response.data;
                 setMonitoringData(responseResult);
                 setFullDRPPData(fullData);
+                // Against rowsPerPage, not the block size, or the pager would show a third
+                // of the pages it should
                 setTotalPages(Math.ceil(realAllDRPPRows / limit));
                 setCardContent(countData);
             }
             setIsLoading(false);
         } catch (error) {
+            setIsLoading(false);
             console.error("Error fetching data.", error);
         }
     }
 
     useEffect(() => {
-        fetchMonitoringData(currentPage, rowsPerPage, filterSelect, cariSelect);
-    }, [currentPage, rowsPerPage, filterSelect, cariSelect]);
+        fetchMonitoringData(blok, rowsPerPage, filterSelect, cariSelect);
+    }, [blok, rowsPerPage, filterSelect, cariSelect]);
 
     // Publish the active search so Aksi-Drpp can mark the cell that matched. The value
     // lives in 'Write Table', not in the DRPP row, so it cannot be shown on this screen.
@@ -101,7 +114,12 @@ export default function MonitoringDrpp(props) {
         }
     }, [totalPages, currentPage]);
 
-    const tableContent = monitoringData.map(row => [...row.slice(0, 7),
+    // Where this page starts inside the block that was fetched
+    const awalHalaman = ((currentPage - 1) % HALAMAN_PER_AMBIL) * rowsPerPage;
+    const halamanIni = monitoringData.slice(awalHalaman, awalHalaman + rowsPerPage);
+    const halamanPenuh = fullDRPPData.slice(awalHalaman, awalHalaman + rowsPerPage);
+
+    const tableContent = halamanIni.map(row => [...row.slice(0, 7),
         spmKey(row[5]) ? buktiSetorLabel(buktiSetor[spmKey(row[5])]) : "-", ...row.slice(7)]);
 
     // Handle Pagination
@@ -207,7 +225,7 @@ export default function MonitoringDrpp(props) {
                 {isLoading ? <LoadingAnimate /> :
                 <div className="lihat-antri-table" >
                     <TableKelola type="monitor" header={placeholderTable} content={tableContent}
-                        fullContent={fullDRPPData} changeComponent={props.changeComponent} aksiData={props.aksiData}
+                        fullContent={halamanPenuh} changeComponent={props.changeComponent} aksiData={props.aksiData}
                         page={currentPage} totalPages={totalPages} rowsPerPage={rowsPerPage}
                         onPageChange={value => handlePaginationChange(null, value)}
                         onRowsPerPageChange={handleRowsPerPageChange} />

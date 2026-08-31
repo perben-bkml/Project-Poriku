@@ -268,6 +268,8 @@ const ROUTE_ROLES = {
     "POST /anggaran/unggah/terapkan": ADMIN,
     "DELETE /anggaran/unggah": ADMIN,
     "POST /anggaran/realisasi/segarkan": ADMIN,
+    "POST /anggaran/realisasi/override": ADMIN,
+    "DELETE /anggaran/realisasi/override": ADMIN,
 
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
@@ -1391,8 +1393,8 @@ const JENIS_PENGAJUAN = {
     "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true, majuSpm: true },
     "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true, majuSpm: true },
     "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true, majuSpm: true },
-    "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: false, majuSpm: true },
-    "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: false, majuSpm: true },
+    "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: true, majuSpm: true },
+    "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: true, majuSpm: true },
 };
 
 // Nomor SPP is stored zero padded to 5 digits. Anything not purely numeric is left alone
@@ -2847,7 +2849,11 @@ function drppRowsForTransIds(totalRows, transIds) {
 app.get("/bendahara/monitoring-drpp", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-        const { page = 1, limit = 10, filterKeyword, cariNomor } = req.query;
+        const { filterKeyword, cariNomor } = req.query;
+        // Coerced once, here: query values arrive as strings, and `startIndex + limit` is a
+        // string concatenation that silently returns every remaining row instead of one page
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
         
         // Parse cariNomor if it exists
         let parsedCariNomor = null;
@@ -3261,8 +3267,8 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
                 const matched = drppRowsForTransIds(totalRows, transIds);
                 // Free text can match far more blocks than the unique SPM/DRPP numbers, so
                 // this branch pages its hits instead of shipping all of them at once
-                const start = (Number(page) - 1) * Number(limit);
-                const pageRows = matched.slice(start, start + Number(limit));
+                const start = (page - 1) * limit;
+                const pageRows = matched.slice(start, start + limit);
                 return res.json({
                     data: pageRows.map(row => row.slice(0, -1)),
                     realAllDRPPRows: matched.length,
@@ -3278,7 +3284,7 @@ app.get("/bendahara/monitoring-drpp", async (req, res) => {
         // Sort by rowIndex in descending order to get latest rows first
         const sortedRows = visibleRows.sort((a, b) => b.rowIndex - a.rowIndex);
         
-        const startIndex = ( page - 1 ) * limit;
+        const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
         const paginatedRows = sortedRows.slice(startIndex, endIndex)
 
@@ -5849,18 +5855,20 @@ const STATUS_REALISASI = "SUDAH SP2D";
 // activation takes, so a rebuild and an activation of the same year never queue behind
 // each other.
 const REALISASI_LOCK = 6006;
-const MAK_KOLOM = 1; // column C on both table sheets, both reads starting at B
+const MAK_KOLOM = 1;        // column C on both table sheets, both reads starting at B
+const TANGGAL_SP2D_KOLOM = 17; // column R on both antrian sheets
 
 // Nama and Nomor SPP are already inside the antrian ranges the rebuild reads, so naming the
 // pengajuan behind a flagged claim costs no extra call.
 const REALISASI_SUMBER = [
     {
-        alur: "gup", antrian: "'Write Antrian'!A:L", kolomStatus: 7, kolomUnit: 11,
+        alur: "gup", antrian: "'Write Antrian'!A:R", kolomStatus: 7, kolomUnit: 11,
         kolomNama: 2, kolomSpp: 9,
         tabel: "'Write Table'!B:E", trans: "'Write Table'!X:X", kolomNilai: 3,
     },
     {
-        alur: "verif", antrian: "'Write Antrian Verif'!A:I", kolomStatus: 5, kolomUnit: 8,
+        // Read to R on both: column R is Tanggal SP2D on either sheet
+        alur: "verif", antrian: "'Write Antrian Verif'!A:R", kolomStatus: 5, kolomUnit: 8,
         kolomNama: 2, kolomSpp: 6,
         tabel: "'Write Table Verif'!B:D", trans: "'Write Table Verif'!X:X", kolomNilai: 2,
     },
@@ -5903,6 +5911,9 @@ async function hitungBelanja(spreadsheetId) {
                     status: normalizeSatker(row?.[sumber.kolomStatus]),
                     nama: trimmed(row?.[sumber.kolomNama]),
                     nomorSpp: trimmed(row?.[sumber.kolomSpp]),
+                    // SP2D where there is one, otherwise the antrian timestamp: everything
+                    // still in the queue counts toward Terpakai and needs a date too
+                    tanggal: toIsoDate(row?.[TANGGAL_SP2D_KOLOM]) || toIsoDate(row?.[1]),
                 });
             }
         }
@@ -5927,7 +5938,7 @@ async function hitungBelanja(spreadsheetId) {
 
             semua.push({
                 transId, alur: sumber.alur, unitKerjaKunci: induk.unit,
-                nama: induk.nama, nomorSpp: induk.nomorSpp,
+                nama: induk.nama, nomorSpp: induk.nomorSpp, tanggal: induk.tanggal,
                 kodeMak, kodeAkun, nominal, sudahSp2d: induk.status === STATUS_REALISASI,
             });
         }
@@ -5954,6 +5965,7 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
                 unit_kerja_kunci: row.unitKerjaKunci,
                 nama: row.nama,
                 nomor_spp: row.nomorSpp,
+                tanggal: row.tanggal,
                 kode_mak: row.kodeMak,
                 kode_akun: row.kodeAkun,
                 nominal: row.nominal,
@@ -5961,7 +5973,7 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
             }));
             await trx`INSERT INTO anggaran_realisasi_baris ${trx(potong,
                 "tahun", "trans_id", "alur", "unit_kerja_kunci", "nama", "nomor_spp",
-                "kode_mak", "kode_akun", "nominal", "sudah_sp2d")}`;
+                "tanggal", "kode_mak", "kode_akun", "nominal", "sudah_sp2d")}`;
         }
         await trx`
             INSERT INTO anggaran_realisasi_sinkron (tahun, disegarkan_pada, baris_sumber, dilewati, durasi_ms)
@@ -6009,7 +6021,7 @@ async function periksaMakUnit(tahun, unitKerja, tabledata) {
         .map((row, index) => ({ baris: index + 1, ...normalisasiKodeMak(row?.[MAK_KOLOM_TABEL]) }))
         .filter(item => item.kodeMak && !milikSendiri.has(item.kodeMak))
         .map(item => {
-            const punya = pemilik.get(item.kodeMak) || [];
+            const punya = (pemilik.get(item.kodeMak) || []).map(p => p.nama);
             return punya.length > 0
                 ? `baris ${item.baris} (${item.kodeMak}) milik ${punya.join(", ")}`
                 : `baris ${item.baris} (${item.kodeMak}) tidak ada di anggaran ${tahun}`;
@@ -6030,49 +6042,159 @@ async function peringatanMakAman(tahun, unitKerja, tabledata) {
     }
 }
 
-async function bacaAgregatRealisasi(tahun) {
+// The stored baseline in the Map shape susunPohonDariExcel produces, so gabungPohon and
+// periksaJumlahAnak work on it unchanged. Rows whose unit kerja was since deactivated are
+// dropped: they can no longer be merged against or displayed.
+function pohonDariOverride(override, unitDikenal) {
+    const units = new Map();
+    for (const row of override?.baris || []) {
+        const dikenal = unitDikenal.get(row.unit_kerja_kunci);
+        if (!dikenal) continue;
+        let unit = units.get(row.unit_kerja_kunci);
+        if (!unit) {
+            unit = { unitKerjaId: dikenal.id, nama: dikenal.nama, pagu: 0, baris: 0, mak: new Map() };
+            units.set(row.unit_kerja_kunci, unit);
+        }
+        let mak = unit.mak.get(row.kode_mak);
+        if (!mak) {
+            mak = { kode: row.kode_mak, uraian: "", pagu: 0, baris: 0, akun: new Map() };
+            unit.mak.set(row.kode_mak, mak);
+        }
+        // Every level holds the total beneath it, the same way a parsed Excel tree does, so
+        // ratakanOverride can take a MAK's own figure back out as the part its akun leave over
+        const nominal = Number(row.nominal);
+        if (row.kode_akun !== "") mak.akun.set(row.kode_akun, { kode: row.kode_akun, pagu: nominal, baris: 0 });
+        mak.pagu += nominal;
+        unit.pagu += nominal;
+    }
+    return units;
+}
+
+// Tree -> stored rows. A MAK's own figure is whatever its akun do not account for, so the
+// two never double count when bacaAgregatRealisasi adds them to the same slot.
+function ratakanOverride(tahun, units) {
+    const rows = [];
+    for (const [unitKerjaKunci, unit] of units) {
+        for (const mak of unit.mak.values()) {
+            const kodeMak = normalisasiKodeMak(mak.kode).kodeMak;
+            if (!kodeMak) continue;
+            let terinci = 0;
+            for (const akun of mak.akun.values()) {
+                if (akun.pagu <= 0) continue;
+                terinci += akun.pagu;
+                rows.push({ tahun, unit_kerja_kunci: unitKerjaKunci, kode_mak: kodeMak,
+                    kode_akun: akun.kode, nominal: akun.pagu });
+            }
+            const sisa = mak.pagu - terinci;
+            if (sisa > 0) {
+                rows.push({ tahun, unit_kerja_kunci: unitKerjaKunci, kode_mak: kodeMak,
+                    kode_akun: "", nominal: sisa });
+            }
+        }
+    }
+    return rows;
+}
+
+async function bacaOverrideRealisasi(tahun) {
+    const [meta] = await sql`
+        SELECT tanggal_batas, nama_berkas, dibuat_oleh, dibuat_pada
+        FROM anggaran_realisasi_awal_meta WHERE tahun = ${tahun}`;
+    if (!meta) return null;
+    const baris = await sql`
+        SELECT unit_kerja_kunci, kode_mak, kode_akun, nominal
+        FROM anggaran_realisasi_awal WHERE tahun = ${tahun}`;
+    return { ...meta, baris };
+}
+
+// Everything up to and including the cutoff comes from the uploaded baseline, everything
+// after it from the pengajuan. Applied here rather than during the rebuild so moving the
+// cutoff takes effect on the next read.
+async function bacaAgregatRealisasi(tahun, override) {
+    const batas = override?.tanggal_batas || null;
+    // tanggal = '' means neither the SP2D cell nor the timestamp parsed. Kept rather than
+    // dropped: a row nobody can date is still money, and losing it silently is worse than
+    // the small chance it belongs before the cutoff.
     const rows = await sql`
         SELECT unit_kerja_kunci, kode_mak, kode_akun,
                COALESCE(SUM(nominal) FILTER (WHERE sudah_sp2d), 0)     AS realisasi,
                COALESCE(SUM(nominal) FILTER (WHERE NOT sudah_sp2d), 0) AS komitmen,
                COUNT(*) AS baris
-        FROM anggaran_realisasi_baris WHERE tahun = ${tahun}
+        FROM anggaran_realisasi_baris
+        WHERE tahun = ${tahun}
+              AND (${batas}::text IS NULL OR tanggal = '' OR tanggal > ${batas})
         GROUP BY unit_kerja_kunci, kode_mak, kode_akun`;
-    return rows.map(row => ({
-        unitKerjaKunci: row.unit_kerja_kunci, kodeMak: row.kode_mak, kodeAkun: row.kode_akun,
-        realisasi: Number(row.realisasi), komitmen: Number(row.komitmen), baris: Number(row.baris),
-    }));
+
+    const total = new Map();
+    const tambah = (unitKerjaKunci, kodeMak, kodeAkun, komitmen, realisasi, baris, dariAwal = 0) => {
+        const kunci = kunciRealisasi(unitKerjaKunci, kodeMak, kodeAkun);
+        const catatan = total.get(kunci)
+            || { unitKerjaKunci, kodeMak, kodeAkun, komitmen: 0, realisasi: 0, baris: 0, dariAwal: 0 };
+        catatan.komitmen += komitmen;
+        catatan.realisasi += realisasi;
+        catatan.baris += baris;
+        catatan.dariAwal += dariAwal;
+        total.set(kunci, catatan);
+    };
+    for (const row of rows) {
+        tambah(row.unit_kerja_kunci, row.kode_mak, row.kode_akun,
+            Number(row.komitmen), Number(row.realisasi), Number(row.baris));
+    }
+    // The baseline is money already disbursed, so it lands on the realisasi side. dariAwal
+    // is carried alongside so a problem the upload alone created can be told apart from one
+    // an actual pengajuan created.
+    for (const row of override?.baris || []) {
+        const nominal = Number(row.nominal);
+        tambah(row.unit_kerja_kunci, row.kode_mak, row.kode_akun, 0, nominal, 0, nominal);
+    }
+    return [...total.values()];
 }
 
 // The pengajuan behind each flagged claim. A second query rather than pulling every line
 // item into the main read: it only fires when something was actually flagged, and it is
 // scoped to the few units that were.
-async function rinciKlaim(tahun, klaim) {
+async function rinciKlaim(tahun, klaim, override) {
     if (klaim.length === 0) return [];
+    const batas = override?.tanggal_batas || null;
     const unitKerja = [...new Set(klaim.map(row => row.unitKerjaKunci))];
-    const dicari = new Set(klaim.map(row => kunciRealisasi(row.unitKerjaKunci, row.kodeMak, row.kodeAkun)));
-    const pemilikPerKunci = new Map(klaim.map(row =>
-        [kunciRealisasi(row.unitKerjaKunci, row.kodeMak, row.kodeAkun), row.pemilik]));
-    const namaPerUnit = new Map(klaim.map(row => [row.unitKerjaKunci, row.unitKerja]));
+    const perKunci = new Map(klaim.map(row =>
+        [kunciRealisasi(row.unitKerjaKunci, row.kodeMak, row.kodeAkun), row]));
 
+    // Same cutoff the tree uses: without it the panel lists pengajuan from before the
+    // override whose amounts are no longer counted anywhere.
     const rows = await sql`
         SELECT unit_kerja_kunci, kode_mak, kode_akun, trans_id, alur, nama, nomor_spp,
                COALESCE(SUM(nominal) FILTER (WHERE sudah_sp2d), 0)     AS realisasi,
                COALESCE(SUM(nominal) FILTER (WHERE NOT sudah_sp2d), 0) AS komitmen
         FROM anggaran_realisasi_baris
         WHERE tahun = ${tahun} AND unit_kerja_kunci IN ${sql(unitKerja)}
+              AND (${batas}::text IS NULL OR tanggal > ${batas})
         GROUP BY unit_kerja_kunci, kode_mak, kode_akun, trans_id, alur, nama, nomor_spp`;
 
-    return rows
-        .filter(row => dicari.has(kunciRealisasi(row.unit_kerja_kunci, row.kode_mak, row.kode_akun)))
-        .map(row => ({
-            unitKerja: namaPerUnit.get(row.unit_kerja_kunci) || row.unit_kerja_kunci,
-            kodeMak: row.kode_mak, kodeAkun: row.kode_akun,
-            pemilik: pemilikPerKunci.get(kunciRealisasi(row.unit_kerja_kunci, row.kode_mak, row.kode_akun)) || [],
-            transId: row.trans_id, alur: row.alur, nama: row.nama, nomorSpp: row.nomor_spp,
+    const rinci = [];
+    const terpakai = new Set();
+    for (const row of rows) {
+        const kunci = kunciRealisasi(row.unit_kerja_kunci, row.kode_mak, row.kode_akun);
+        const induk = perKunci.get(kunci);
+        if (!induk) continue;
+        terpakai.add(kunci);
+        rinci.push({
+            unitKerja: induk.unitKerja, kodeMak: row.kode_mak, kodeAkun: row.kode_akun,
+            pemilik: induk.pemilik, transId: row.trans_id, alur: row.alur,
+            nama: row.nama, nomorSpp: row.nomor_spp,
             realisasi: Number(row.realisasi), komitmen: Number(row.komitmen),
-        }))
-        .sort((a, b) => (b.komitmen + b.realisasi) - (a.komitmen + a.realisasi));
+        });
+    }
+    // A claim carried by the uploaded baseline has no line item to name, so it would vanish
+    // from the panel while the tree still counted it. Listed as what it is instead.
+    for (const [kunci, row] of perKunci) {
+        if (terpakai.has(kunci)) continue;
+        rinci.push({
+            unitKerja: row.unitKerja, kodeMak: row.kodeMak, kodeAkun: row.kodeAkun,
+            pemilik: row.pemilik, transId: "", alur: "awal", nama: "", nomorSpp: "",
+            realisasi: row.realisasi, komitmen: row.komitmen,
+        });
+    }
+    return rinci.sort((a, b) => (b.komitmen + b.realisasi) - (a.komitmen + a.realisasi));
 }
 
 async function bacaSinkronRealisasi(tahun) {
@@ -6117,7 +6239,7 @@ function indeksMak(units) {
         for (const item of unit.mak.values()) {
             const kode = normalisasiKodeMak(item.kode).kodeMak;
             if (!pemilik.has(kode)) pemilik.set(kode, []);
-            pemilik.get(kode).push(unit.nama);
+            pemilik.get(kode).push({ kunci: namaKunci, nama: unit.nama });
             node.set(`${namaKunci}|${kode}`, item);
         }
     }
@@ -6134,14 +6256,35 @@ function klasifikasiBelanja(units, agregat) {
     for (const row of agregat) {
         const unit = units.get(row.unitKerjaKunci);
         const mak = node.get(`${row.unitKerjaKunci}|${row.kodeMak}`);
+        const punya = pemilik.get(row.kodeMak) || [];
+        const cocokAkun = (item) => row.kodeAkun === "" || item.akun.has(row.kodeAkun);
+
         let sebab = null;
-        if (!unit) sebab = SEBAB_UNIT_ASING;
-        else if (!mak) sebab = pemilik.has(row.kodeMak) ? SEBAB_UNIT_LAIN : SEBAB_MAK_HILANG;
-        else if (row.kodeAkun !== "" && !mak.akun.has(row.kodeAkun)) sebab = SEBAB_AKUN_BARU;
+        let dibebankanKe = row.unitKerjaKunci;
+        if (!unit) {
+            sebab = SEBAB_UNIT_ASING;
+            dibebankanKe = null;
+        } else if (!mak) {
+            sebab = punya.length > 0 ? SEBAB_UNIT_LAIN : SEBAB_MAK_HILANG;
+            // A claim draws down the MAK's real ceiling, so it is charged to the unit that
+            // owns it. Only when exactly one does: two units holding the same code cannot be
+            // told apart, and charging the wrong one is worse than charging neither - the
+            // same rule matchMirrorAntrianRow follows.
+            const satuPemilik = sebab === SEBAB_UNIT_LAIN && punya.length === 1 ? punya[0] : null;
+            const makPemilik = satuPemilik && node.get(`${satuPemilik.kunci}|${row.kodeMak}`);
+            dibebankanKe = makPemilik && cocokAkun(makPemilik) ? satuPemilik.kunci : null;
+        } else if (!cocokAkun(mak)) {
+            // Shown under its MAK but counted nowhere: the DIPA has not said this akun exists
+            sebab = SEBAB_AKUN_BARU;
+            dibebankanKe = null;
+        }
+
         hasil.set(kunciRealisasi(row.unitKerjaKunci, row.kodeMak, row.kodeAkun), {
-            ...row, sebab, pemilik: pemilik.get(row.kodeMak) || [],
-            // The display name where the unit is known; the normalised key otherwise, which
-            // is the whole information when the cause is unit-tidak-dikenal
+            ...row, sebab, dibebankanKe,
+            // Nothing but the uploaded baseline sits behind this, so there is no pengajuan to
+            // go and fix - it is pre-cutoff history the admin already signed off on
+            hanyaAwal: (row.dariAwal || 0) > 0 && row.komitmen + row.realisasi === row.dariAwal,
+            pemilik: punya.map(item => item.nama),
             unitKerja: unit?.nama || row.unitKerjaKunci,
         });
     }
@@ -6152,17 +6295,20 @@ function klasifikasiBelanja(units, agregat) {
 // between a level's own pagu and what its children account for, which is why pagu lives at
 // each level; "sisa" is that pagu less everything spent or committed against it.
 function susunTampilan(units, belanja) {
-    const sisaBelanja = new Map(belanja);
-    const ambil = (kunci) => {
-        const hit = sisaBelanja.get(kunci);
-        if (hit) sisaBelanja.delete(kunci);
-        return hit || { komitmen: 0, realisasi: 0, baris: 0 };
-    };
-
-    // Grouped once rather than rescanned per MAK and per unit
+    // What each (unit, mak, akun) slot is actually charged: its own spending, plus any
+    // single-owner claim another unit made against it. Rows charged to nobody - an akun the
+    // DIPA has not detailed, an unknown MAK, an ambiguous claim - never reach this map.
+    const beban = new Map();
     const akunBaruPerMak = new Map();
     const klaimPerUnit = new Map();
+    const diklaimPerMak = new Map();
     for (const row of belanja.values()) {
+        const nilai = row.komitmen + row.realisasi;
+        if (row.dibebankanKe) {
+            const kunci = kunciRealisasi(row.dibebankanKe, row.kodeMak, row.kodeAkun);
+            beban.set(kunci, (beban.get(kunci) || 0) + nilai);
+        }
+        if (row.hanyaAwal) continue;
         if (row.sebab === SEBAB_AKUN_BARU) {
             const kunci = `${row.unitKerjaKunci}|${row.kodeMak}`;
             if (!akunBaruPerMak.has(kunci)) akunBaruPerMak.set(kunci, []);
@@ -6172,29 +6318,31 @@ function susunTampilan(units, belanja) {
             const perMak = klaimPerUnit.get(row.unitKerjaKunci);
             if (!perMak.has(row.kodeMak)) perMak.set(row.kodeMak, { pemilik: row.pemilik, baris: [] });
             perMak.get(row.kodeMak).baris.push(row);
+            if (row.dibebankanKe) {
+                const kunci = `${row.dibebankanKe}|${row.kodeMak}`;
+                if (!diklaimPerMak.has(kunci)) diklaimPerMak.set(kunci, new Set());
+                diklaimPerMak.get(kunci).add(row.unitKerja);
+            }
         }
     }
+    const ambil = (unit, kodeMak, kodeAkun) => beban.get(kunciRealisasi(unit, kodeMak, kodeAkun)) || 0;
 
-    // A claimed MAK has no row in this unit's tree - it is somebody else's - so it is rebuilt
-    // here with no pagu at any level and kept out of the roll-up below: the money is against
-    // nobody's ceiling, so adding it to a total would move a Sisa it never actually spent.
-    // Read, never consumed: these same rows still have to reach the Klaim MAK Unit Lain panel.
+    // A claimed MAK has no row in the claiming unit's tree - it is somebody else's - so it is
+    // rebuilt here with no pagu at any level and kept out of that unit's roll-up: the amount
+    // is charged to the owner instead, and counting it twice would overstate the year.
     const makDiklaim = (namaKunci) => [...(klaimPerUnit.get(namaKunci) || new Map()).entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([kode, { pemilik, baris }]) => {
-            const akun = baris.filter(row => row.kodeAkun !== "")
+        .map(([kode, { pemilik, baris }]) => ({
+            kode, uraian: "", pagu: null, belumDirinci: null, sisa: null,
+            luarPagu: true, pemilik, akunTakDirinci: 0,
+            terpakai: baris.reduce((sum, row) => sum + row.komitmen + row.realisasi, 0),
+            akun: baris.filter(row => row.kodeAkun !== "")
                 .sort((a, b) => a.kodeAkun.localeCompare(b.kodeAkun))
                 .map(row => ({
                     kode: row.kodeAkun, pagu: null, sisa: null, luarPagu: true,
                     terpakai: row.komitmen + row.realisasi,
-                }));
-            return {
-                kode, uraian: "", pagu: null, belumDirinci: null, sisa: null,
-                luarPagu: true, pemilik, akunTakDirinci: 0,
-                terpakai: baris.reduce((sum, row) => sum + row.komitmen + row.realisasi, 0),
-                akun,
-            };
-        });
+                })),
+        }));
 
     const anggaran = [...units.entries()]
         .sort(([, a], [, b]) => a.nama.localeCompare(b.nama))
@@ -6207,44 +6355,35 @@ function susunTampilan(units, belanja) {
                     const kodeMak = normalisasiKodeMak(item.kode).kodeMak;
                     const akun = [...item.akun.values()].sort((a, b) => a.kode.localeCompare(b.kode))
                         .map(a => {
-                            const pakai = ambil(kunciRealisasi(namaKunci, kodeMak, a.kode));
-                            return {
-                                kode: a.kode, pagu: a.pagu,
-                                terpakai: pakai.komitmen + pakai.realisasi,
-                                sisa: a.pagu - pakai.komitmen - pakai.realisasi,
-                            };
+                            const terpakai = ambil(namaKunci, kodeMak, a.kode);
+                            return { kode: a.kode, pagu: a.pagu, terpakai, sisa: a.pagu - terpakai };
                         });
-                    // An akun the DIPA has not detailed yet still spends this MAK's pagu, so it
-                    // joins the children rather than the panel. Appended here and never added
-                    // to `sendiri`, so the roll-up below can only count it once.
+                    // Shown so the gap is visible, never added to terpakai: the DIPA has not
+                    // said this akun exists, so there is nothing here it may draw down.
                     for (const row of akunBaruPerMak.get(`${namaKunci}|${kodeMak}`) || []) {
-                        ambil(kunciRealisasi(namaKunci, kodeMak, row.kodeAkun));
                         akun.push({
-                            kode: row.kodeAkun, pagu: null, takDirinci: true,
-                            terpakai: row.komitmen + row.realisasi, sisa: null,
+                            kode: row.kodeAkun, pagu: null, sisa: null, takDirinci: true,
+                            terpakai: row.komitmen + row.realisasi,
                         });
                     }
-                    // A cell that carried no akun segment attributes to the MAK itself
-                    const sendiri = ambil(kunciRealisasi(namaKunci, kodeMak, ""));
-                    const terpakai = sendiri.komitmen + sendiri.realisasi
-                        + akun.reduce((sum, a) => sum + a.terpakai, 0);
+                    const terpakai = ambil(namaKunci, kodeMak, "")
+                        + akun.reduce((sum, a) => sum + (a.takDirinci ? 0 : a.terpakai), 0);
                     const terinci = akun.reduce((sum, a) => sum + (a.pagu || 0), 0);
                     return {
                         kode: item.kode, uraian: item.uraian, pagu: item.pagu,
                         belumDirinci: item.pagu - terinci,
-                        // Carried up so a collapsed row still says something needs detailing;
-                        // the akun it counts are only visible two levels down
                         akunTakDirinci: akun.filter(a => a.takDirinci).length,
+                        diklaimOleh: [...(diklaimPerMak.get(`${namaKunci}|${kodeMak}`) || [])],
                         terpakai, sisa: item.pagu - terpakai, akun,
                     };
                 });
-            // Totalled over the unit's own MAK only, before the claimed ones are appended
             const terinci = mak.reduce((sum, m) => sum + m.pagu, 0);
             const terpakai = mak.reduce((sum, m) => sum + m.terpakai, 0);
             const diklaim = makDiklaim(namaKunci);
             return {
                 unitKerja: unit.nama, pagu: unit.pagu, belumDirinci: unit.pagu - terinci,
                 akunTakDirinci: mak.reduce((sum, m) => sum + m.akunTakDirinci, 0),
+                makDiklaimOlehLain: mak.filter(m => m.diklaimOleh.length > 0).length,
                 terpakai, sisa: unit.pagu - terpakai,
                 klaimUnitLain: diklaim.reduce((sum, m) => sum + m.terpakai, 0),
                 makDiklaim: diklaim.length,
@@ -6254,11 +6393,15 @@ function susunTampilan(units, belanja) {
         });
 
     const berat = (row) => row.komitmen + row.realisasi;
-    const tersisa = [...sisaBelanja.values()].sort((a, b) => berat(b) - berat(a));
+    const bermasalah = [...belanja.values()].filter(row => row.sebab);
+    const panel = bermasalah.filter(row => !row.hanyaAwal).sort((a, b) => berat(b) - berat(a));
     return {
         anggaran,
-        klaimUnitLain: tersisa.filter(row => row.sebab === SEBAB_UNIT_LAIN),
-        tidakDikenal: tersisa.filter(row => row.sebab !== SEBAB_UNIT_LAIN),
+        klaimUnitLain: panel.filter(row => row.sebab === SEBAB_UNIT_LAIN),
+        tidakDikenal: panel.filter(row => row.sebab === SEBAB_MAK_HILANG || row.sebab === SEBAB_UNIT_ASING),
+        // Reported once on the upload card rather than dropped: it is still money, it just has
+        // no pengajuan behind it and nothing on the tree it can be attributed to.
+        awalTakCocok: bermasalah.reduce((sum, row) => sum + (row.dariAwal || 0), 0),
     };
 }
 
@@ -6294,13 +6437,15 @@ app.get("/anggaran", async (req, res) => {
         // columns at zero instead of taking the whole screen down with it.
         let sinkron = null;
         let agregat = [];
+        let override = null;
         try {
             sinkron = await bacaSinkronRealisasi(tahun);
             if (realisasiUsang(sinkron)) {
                 await segarkanSekali(tahun, getSpreadsheetId(req, "AJUAN"));
                 sinkron = await bacaSinkronRealisasi(tahun);
             }
-            agregat = await bacaAgregatRealisasi(tahun);
+            override = await bacaOverrideRealisasi(tahun);
+            agregat = await bacaAgregatRealisasi(tahun, override);
         } catch (error) {
             console.error("Realisasi tidak tersedia:", error);
         }
@@ -6316,19 +6461,25 @@ app.get("/anggaran", async (req, res) => {
         if (req.viewer.role === "user") {
             const kunci = normalizeSatker(req.viewer.name);
             units = new Map([...semuaUnit].filter(([namaKunci]) => namaKunci === kunci));
-            belanja = new Map([...belanja].filter(([, row]) => row.unitKerjaKunci === kunci));
+            belanja = new Map([...belanja].filter(([, row]) =>
+                row.unitKerjaKunci === kunci || row.dibebankanKe === kunci));
         }
 
-        const { anggaran, klaimUnitLain, tidakDikenal } = susunTampilan(units, belanja);
+        const { anggaran, klaimUnitLain, tidakDikenal, awalTakCocok } = susunTampilan(units, belanja);
         return res.status(200).json({
             tahun,
             revisi: { id: revisi.id, nomorRevisi: revisi.nomor_revisi, catatan: revisi.catatan, aktifPada: revisi.aktif_pada },
             anggaran,
-            klaimUnitLain: await rinciKlaim(tahun, klaimUnitLain),
+            klaimUnitLain: await rinciKlaim(tahun, klaimUnitLain, override),
             tidakDikenal,
             sinkron: sinkron && {
                 disegarkanPada: sinkron.disegarkan_pada, barisSumber: sinkron.baris_sumber,
                 dilewati: sinkron.dilewati, durasiMs: sinkron.durasi_ms,
+            },
+            override: override && {
+                tanggalBatas: override.tanggal_batas, namaBerkas: override.nama_berkas,
+                dibuatOleh: override.dibuat_oleh, dibuatPada: override.dibuat_pada,
+                baris: override.baris.length, takCocok: awalTakCocok,
             },
         });
     } catch (error) {
@@ -6523,6 +6674,95 @@ app.post("/anggaran/realisasi/segarkan", async (req, res) => {
         if (anggaranBelumSiap(error, res)) return;
         console.error("Error in POST /anggaran/realisasi/segarkan:", error);
         return res.status(500).json({ message: "Gagal menyegarkan realisasi." });
+    }
+});
+
+// The baseline already booked before Poriku started recording. Same Excel template as
+// Unggah Anggaran and the same three merge modes, because an admin uploading one unit's
+// figures must not blank the other seventeen; the pagu columns are read as realisasi.
+app.post("/anggaran/realisasi/override", handleAnggaranUpload, async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        if (!req.file) return res.status(400).json({ message: "Berkas belum dipilih." });
+        const tanggalBatas = trimmed(req.body?.tanggalBatas);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggalBatas)) {
+            return res.status(400).json({ message: "Tanggal batas wajib diisi (YYYY-MM-DD)." });
+        }
+        if (Number(tanggalBatas.slice(0, 4)) !== tahun) {
+            return res.status(400).json({ message: `Tanggal batas harus di dalam tahun ${tahun}.` });
+        }
+        const mode = ANGGARAN_MODE.includes(req.body?.mode) ? req.body.mode : MODE_PER_UNIT;
+
+        const unitDikenal = await bacaUnitDikenal();
+        if (unitDikenal.size === 0) {
+            return res.status(500).json({ message: "Daftar unit kerja kosong - terapkan migrasi 005." });
+        }
+
+        let baris;
+        try {
+            baris = await bacaBarisExcel(req.file.buffer);
+        } catch (error) {
+            console.error("Gagal membaca berkas realisasi awal:", error);
+            return res.status(400).json({ message: "Berkas tidak dapat dibaca sebagai .xlsx." });
+        }
+
+        const { units: dariExcel, masalah, peringatan } = susunPohonDariExcel(baris, unitDikenal);
+        if (masalah.length > 0) {
+            return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah, peringatan });
+        }
+        if (dariExcel.size === 0) {
+            return res.status(400).json({ message: "Berkas tidak memuat satu pun baris realisasi." });
+        }
+
+        const lama = await bacaOverrideRealisasi(tahun);
+        const pohonLama = pohonDariOverride(lama, unitDikenal);
+        const pohonBaru = gabungPohon(pohonLama, dariExcel, mode);
+        periksaJumlahAnak(pohonBaru, masalah, peringatan, new Set(dariExcel.keys()));
+        if (masalah.length > 0) {
+            return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah, peringatan });
+        }
+
+        const rows = ratakanOverride(tahun, pohonBaru);
+        await sql.begin(async trx => {
+            await trx`SELECT pg_advisory_xact_lock(${REALISASI_LOCK}, ${tahun})`;
+            await trx`DELETE FROM anggaran_realisasi_awal WHERE tahun = ${tahun}`;
+            for (let i = 0; i < rows.length; i += 1000) {
+                await trx`INSERT INTO anggaran_realisasi_awal ${trx(rows.slice(i, i + 1000),
+                    "tahun", "unit_kerja_kunci", "kode_mak", "kode_akun", "nominal")}`;
+            }
+            await trx`
+                INSERT INTO anggaran_realisasi_awal_meta (tahun, tanggal_batas, nama_berkas, dibuat_oleh)
+                VALUES (${tahun}, ${tanggalBatas}, ${req.file.originalname || ""}, ${req.viewer.name || ""})
+                ON CONFLICT (tahun) DO UPDATE SET tanggal_batas = ${tanggalBatas},
+                    nama_berkas = ${req.file.originalname || ""}, dibuat_oleh = ${req.viewer.name || ""},
+                    dibuat_pada = NOW()`;
+        });
+
+        return res.status(200).json({
+            tahun, tanggalBatas, mode, baris: rows.length, peringatan,
+            message: `Realisasi awal sampai ${tanggalBatas} disimpan.`,
+        });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in POST /anggaran/realisasi/override:", error);
+        return res.status(500).json({ message: "Gagal menyimpan realisasi awal." });
+    }
+});
+
+app.delete("/anggaran/realisasi/override", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
+        await sql.begin(async trx => {
+            await trx`DELETE FROM anggaran_realisasi_awal WHERE tahun = ${tahun}`;
+            await trx`DELETE FROM anggaran_realisasi_awal_meta WHERE tahun = ${tahun}`;
+        });
+        return res.status(200).json({ tahun, message: "Realisasi awal dihapus." });
+    } catch (error) {
+        if (anggaranBelumSiap(error, res)) return;
+        console.error("Error in DELETE /anggaran/realisasi/override:", error);
+        return res.status(500).json({ message: "Gagal menghapus realisasi awal." });
     }
 });
 

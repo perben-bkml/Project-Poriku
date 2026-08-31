@@ -1455,7 +1455,10 @@ const barisLencana = (...lencana) => {
 // The same notice at every level: an akun carries it, and its MAK and unit kerja carry the
 // count, so a collapsed row still shows that something inside it needs detailing in the DIPA.
 const tandaTakDirinci = (jumlah) => jumlah > 0
-    ? <span key="dirinci" className="anggaran-tanda-baru">{jumlah} akun belum dirinci di DIPA</span>
+    ? <span key="dirinci" className="anggaran-tanda-baru"
+            title="Belum ada di DIPA, jadi tidak dihitung ke Terpakai">
+        {jumlah} akun belum dirinci di DIPA
+      </span>
     : null;
 
 // A claimed MAK belongs to another unit kerja, so it has no pagu here and nothing to
@@ -1499,6 +1502,11 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                             unit.akunDiklaim > 0 &&
                                                 <span key="diklaim" className="anggaran-tanda-baru">
                                                     {unit.akunDiklaim} akun diklaim
+                                                </span>,
+                                            unit.makDiklaimOlehLain > 0 &&
+                                                <span key="dipakai" className="anggaran-lencana-klaim"
+                                                      title="MAK milik unit kerja ini yang dipakai unit kerja lain">
+                                                    {unit.makDiklaimOlehLain} MAK dipakai unit lain
                                                 </span>,
                                             tandaTakDirinci(unit.akunTakDirinci),
                                         )}
@@ -1545,6 +1553,11 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                             <span key="milik" className="anggaran-lencana-klaim">
                                                                 milik {(mak.pemilik || []).join(", ") || "unit kerja lain"}
                                                             </span>,
+                                                        mak.diklaimOleh?.length > 0 &&
+                                                            <span key="diklaim" className="anggaran-lencana-klaim"
+                                                                  title="Terpakai di bawah ini termasuk belanja unit kerja lain">
+                                                                diklaim {mak.diklaimOleh.join(", ")}
+                                                            </span>,
                                                         tandaTakDirinci(mak.akunTakDirinci),
                                                     )}
                                                 </TableCell>
@@ -1564,8 +1577,9 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                         {akun.kode}
                                                         {barisLencana(
                                                             akun.takDirinci &&
-                                                                <span key="dirinci" className="anggaran-tanda-baru">
-                                                                    belum dirinci di DIPA
+                                                                <span key="dirinci" className="anggaran-tanda-baru"
+                                                                      title="Belum ada di DIPA, jadi tidak dihitung ke Terpakai">
+                                                                    belum dirinci di DIPA - tidak dihitung
                                                                 </span>,
                                                             akun.luarPagu &&
                                                                 <span key="luar" className="anggaran-tanda-baru">
@@ -1652,7 +1666,10 @@ export function TableKlaimUnitLain({baris}) {
                             <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
                             <TableCell>{dash(row.kodeAkun)}</TableCell>
                             <TableCell sx={{color: "#BD1404"}}>{dash((row.pemilik || []).join(", "))}</TableCell>
-                            <TableCell>{dash(row.nama)}</TableCell>
+                            {/* A claim carried by the uploaded baseline has no pengajuan to name */}
+                            <TableCell>{row.alur === "awal"
+                                ? <span className="anggaran-tanda-baru">unggahan realisasi awal</span>
+                                : dash(row.nama)}</TableCell>
                             <TableCell>{dash(formatNomorSpp(row.nomorSpp))}</TableCell>
                             <TableCell>{formatRupiah(row.realisasi)}</TableCell>
                             <TableCell>{formatRupiah(row.komitmen)}</TableCell>

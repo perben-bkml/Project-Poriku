@@ -41,7 +41,7 @@ const SECTIONS = [
     ]},
     {card: "Sudah Diajukan", tables: [
         {title: "Sudah Diajukan Bulan Ini", head: headData4,
-            source: data => [...(data[4] || []), ...(data[5] || [])], columns: [0, 2, 3, 4, 6, 11, 8, 9, 10],
+            source: data => [...(data[4] || []), ...(data[5] || [])], columns: [0, 2, 3, 4, 6, 11, 8, 9, 10, 7],
             empty: "Tidak ada pengajuan yang sudah diajukan bulan ini."},
     ]},
 ];

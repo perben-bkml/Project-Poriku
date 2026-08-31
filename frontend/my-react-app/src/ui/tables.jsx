@@ -24,7 +24,8 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp } from '../components/bendahara/head-data.js';
+import { anggaranSebabLabel } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
 // Pengujian-PJK puts an <a> in Dok. Verifikasi and it would render as [object Object]
@@ -1429,12 +1430,38 @@ TableDaftarPengajuan.propTypes = {
 // Positional arrays cannot express three levels, so unlike TableKelola this one takes the
 // nested objects GET /anggaran returns and keeps its own expand state per row. "Belum
 // dirinci" is the gap between a level's own pagu and what its children account for, which
-// is the whole reason pagu is stored at every level rather than only at the leaf.
-const ANGGARAN_HEAD = ["Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Terinci", "Belum Dirinci"];
+// is the whole reason pagu is stored at every level rather than only at the leaf; "Sisa"
+// is that pagu less everything committed or already paid against it, and a negative one is
+// the computed replacement for the Pagu Minus an admin used to set by hand.
+// "Terpakai", not "Realisasi": it holds money still in the antrian as well as money already
+// SP2D, and only the latter is realisasi in the accounting sense. Sisa subtracts both, so a
+// unit cannot over-submit unnoticed while its pengajuan wait for KPPN.
+const ANGGARAN_HEAD = [
+    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Terpakai", "Sisa", "Belum Dirinci",
+];
 
 // Level indents rather than separate columns, so a deep row still reads as one line
 const indentSel = (level) => ({paddingLeft: `${16 + level * 28}px`, whiteSpace: "nowrap"});
 const sisaWarna = (nilai) => nilai < 0 ? "#BD1404" : "inherit";
+
+// Badges sit on their own line under the label rather than beside it: inline they widen the
+// first column enough to squeeze every money column off a laptop screen, and the cell is
+// nowrap so they could never break on their own.
+const barisLencana = (...lencana) => {
+    const isi = lencana.filter(Boolean);
+    return isi.length > 0 ? <div className="anggaran-lencana-baris">{isi}</div> : null;
+};
+
+// The same notice at every level: an akun carries it, and its MAK and unit kerja carry the
+// count, so a collapsed row still shows that something inside it needs detailing in the DIPA.
+const tandaTakDirinci = (jumlah) => jumlah > 0
+    ? <span key="dirinci" className="anggaran-tanda-baru">{jumlah} akun belum dirinci di DIPA</span>
+    : null;
+
+// A claimed MAK belongs to another unit kerja, so it has no pagu here and nothing to
+// subtract from - every figure that would need one reads as a dash rather than a zero,
+// which would look like a real ceiling of nothing.
+const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : formatRupiah(nilai);
 
 export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini."}) {
     // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
@@ -1463,20 +1490,48 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 {unitBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                             </IconButton>}
                                         {unit.unitKerja}
+                                        {barisLencana(
+                                            unit.klaimUnitLain > 0 &&
+                                                <span key="klaim" className="anggaran-lencana-klaim"
+                                                      title="Belanja yang memakai Kode MAK milik unit kerja lain">
+                                                    Klaim MAK unit lain {formatRupiah(unit.klaimUnitLain)}
+                                                </span>,
+                                            unit.akunDiklaim > 0 &&
+                                                <span key="diklaim" className="anggaran-tanda-baru">
+                                                    {unit.akunDiklaim} akun diklaim
+                                                </span>,
+                                            tandaTakDirinci(unit.akunTakDirinci),
+                                        )}
                                     </TableCell>
                                     <TableCell/>
                                     <TableCell sx={{fontWeight: 600}}>{formatRupiah(unit.pagu)}</TableCell>
-                                    <TableCell>{formatRupiah(unit.terinci)}</TableCell>
+                                    <TableCell>{formatRupiah(unit.terpakai)}</TableCell>
+                                    <TableCell sx={{fontWeight: 600, color: sisaWarna(unit.sisa)}}>
+                                        {formatRupiah(unit.sisa)}
+                                    </TableCell>
                                     <TableCell sx={{color: sisaWarna(unit.belumDirinci)}}>
                                         {formatRupiah(unit.belumDirinci)}
                                     </TableCell>
                                 </TableRow>
 
-                                {unitBuka && unit.mak.map(mak => {
+                                {unitBuka && unit.mak.map((mak, urutan) => {
                                     const kunciMak = `${unit.unitKerja}|${mak.kode}`;
                                     const makBuka = !!terbuka[kunciMak];
+                                    // The claimed MAK are appended after the unit's own, so the
+                                    // first of them opens the group. Announced rather than just
+                                    // indented: these rows carry a nominal but deliberately do
+                                    // not add to the totals above, and an unexplained row that
+                                    // does not sum to its parent reads as a bug.
+                                    const mulaiLuar = mak.luarPagu && !unit.mak[urutan - 1]?.luarPagu;
                                     return (
                                         <Fragment key={kunciMak}>
+                                            {mulaiLuar &&
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="anggaran-pemisah-luar">
+                                                        Di luar pagu unit kerja ini - memakai Kode MAK milik unit kerja lain,
+                                                        sehingga tidak mengurangi angka di atas
+                                                    </TableCell>
+                                                </TableRow>}
                                             <TableRow hover>
                                                 <TableCell sx={indentSel(1)}>
                                                     {mak.akun.length > 0 &&
@@ -1485,23 +1540,50 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                             {makBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                                         </IconButton>}
                                                     {mak.kode}
+                                                    {barisLencana(
+                                                        mak.luarPagu &&
+                                                            <span key="milik" className="anggaran-lencana-klaim">
+                                                                milik {(mak.pemilik || []).join(", ") || "unit kerja lain"}
+                                                            </span>,
+                                                        tandaTakDirinci(mak.akunTakDirinci),
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>{dash(mak.uraian)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.pagu)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.terinci)}</TableCell>
-                                                <TableCell sx={{color: sisaWarna(mak.belumDirinci)}}>
-                                                    {formatRupiah(mak.belumDirinci)}
+                                                <TableCell>{selLuarPagu(mak.pagu, mak.luarPagu)}</TableCell>
+                                                <TableCell>{formatRupiah(mak.terpakai)}</TableCell>
+                                                <TableCell sx={{color: sisaWarna(mak.sisa ?? 0)}}>
+                                                    {selLuarPagu(mak.sisa, mak.luarPagu)}
+                                                </TableCell>
+                                                <TableCell sx={{color: sisaWarna(mak.belumDirinci ?? 0)}}>
+                                                    {selLuarPagu(mak.belumDirinci, mak.luarPagu)}
                                                 </TableCell>
                                             </TableRow>
                                             {makBuka && mak.akun.map(akun => (
                                                 <TableRow key={`${kunciMak}|${akun.kode}`} hover>
-                                                    <TableCell sx={indentSel(2)}>{akun.kode}</TableCell>
+                                                    <TableCell sx={indentSel(2)}>
+                                                        {akun.kode}
+                                                        {barisLencana(
+                                                            akun.takDirinci &&
+                                                                <span key="dirinci" className="anggaran-tanda-baru">
+                                                                    belum dirinci di DIPA
+                                                                </span>,
+                                                            akun.luarPagu &&
+                                                                <span key="luar" className="anggaran-tanda-baru">
+                                                                    di luar pagu unit kerja ini
+                                                                </span>,
+                                                        )}
+                                                    </TableCell>
                                                     {/* No uraian by design - an akun code is a national
                                                         standard, so a dash would read as missing data */}
                                                     <TableCell/>
-                                                    <TableCell>{formatRupiah(akun.pagu)}</TableCell>
+                                                    {/* Neither an undetailed akun nor a claimed one has a pagu
+                                                        of its own, so neither has a Sisa */}
+                                                    <TableCell>{selLuarPagu(akun.pagu, akun.takDirinci || akun.luarPagu)}</TableCell>
+                                                    <TableCell>{formatRupiah(akun.terpakai)}</TableCell>
+                                                    <TableCell sx={{color: sisaWarna(akun.sisa ?? 0)}}>
+                                                        {selLuarPagu(akun.sisa, akun.takDirinci || akun.luarPagu)}
+                                                    </TableCell>
                                                     {/* an akun has no children, so it has nothing left to detail */}
-                                                    <TableCell/>
                                                     <TableCell/>
                                                 </TableRow>
                                             ))}
@@ -1520,6 +1602,70 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
 TableAnggaranPohon.propTypes = {
     anggaran: PropTypes.array,
     kosong: PropTypes.string,
+};
+
+// Spending whose MAK has no home in the active revisi. Shown rather than dropped: a
+// silently discarded row understates realisasi and nobody ever finds out.
+export function TableRealisasiTakDikenal({baris}) {
+    if (!baris || baris.length === 0) {
+        return <p style={{margin: "20px 30px", opacity: 0.7}}>Semua belanja cocok dengan anggaran yang berlaku.</p>;
+    }
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={["Unit Kerja", "Kode MAK", "Akun", "Sebab", "Realisasi", "Komitmen", "Baris"]}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.unitKerja)}</TableCell>
+                            <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
+                            <TableCell>{dash(row.kodeAkun)}</TableCell>
+                            <TableCell>{anggaranSebabLabel[row.sebab] || dash(row.sebab)}</TableCell>
+                            <TableCell>{formatRupiah(row.realisasi)}</TableCell>
+                            <TableCell>{formatRupiah(row.komitmen)}</TableCell>
+                            <TableCell>{row.baris}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableRealisasiTakDikenal.propTypes = {
+    baris: PropTypes.array,
+};
+
+// A unit kerja spending against a MAK that belongs to another one. Flat rather than
+// expandable so every offending pengajuan is on screen without a click - the Nomor SPP is
+// the whole point, since it is what an admin searches Kelola Pengajuan by.
+export function TableKlaimUnitLain({baris}) {
+    if (!baris || baris.length === 0) return null;
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={["Unit Kerja Pengaju", "Kode MAK", "Akun", "Terdaftar di", "Nama", "Nomor SPP", "Realisasi", "Komitmen"]}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.unitKerja)}</TableCell>
+                            <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
+                            <TableCell>{dash(row.kodeAkun)}</TableCell>
+                            <TableCell sx={{color: "#BD1404"}}>{dash((row.pemilik || []).join(", "))}</TableCell>
+                            <TableCell>{dash(row.nama)}</TableCell>
+                            <TableCell>{dash(formatNomorSpp(row.nomorSpp))}</TableCell>
+                            <TableCell>{formatRupiah(row.realisasi)}</TableCell>
+                            <TableCell>{formatRupiah(row.komitmen)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableKlaimUnitLain.propTypes = {
+    baris: PropTypes.array,
 };
 
 // The upload diff. Deliberately not paginated: an admin about to replace a budget should

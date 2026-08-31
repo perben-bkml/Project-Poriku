@@ -838,7 +838,11 @@ function BuatPengajuan(props) {
                 }
             })
             if (response.status === 200){
-                props.alertMessage("Data berhasil dibuat.")
+                // The pengajuan is saved either way; a Kode MAK that is not this unit kerja's
+                // is reported rather than refused, because the DIPA upload can lag behind
+                props.alertMessage(response.data?.warning
+                    ? `Data berhasil dibuat. ${response.data.warning}`
+                    : "Data berhasil dibuat.")
                 props.changeComponent("daftar-pengajuan")
             }
             setIsLoading(false);

@@ -4,10 +4,11 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {AuthContext} from "../../lib/AuthContext.jsx";
-import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes} from "./head-data.js";
+import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian,
+    anggaranSebabKeterangan, anggaranKlaimKeterangan} from "./head-data.js";
 import {unduhExcel, selTeks} from "../../lib/excel.js";
 // Import Tables
-import {TableAnggaranPohon, TableSelisihAnggaran} from "../../ui/tables.jsx";
+import {TableAnggaranPohon, TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
 
 // Twin of ANGGARAN_MAX_FILE_MB in server.js - the label has to name the limit multer enforces
 const ANGGARAN_MAX_MB = 10;
@@ -29,6 +30,7 @@ export default function Anggaran() {
     const [mode, setMode] = useState("perUnit");
     const [isUnggah, setIsUnggah] = useState(false);
     const [isTerapkan, setIsTerapkan] = useState(false);
+    const [isSegarkan, setIsSegarkan] = useState(false);
     // The diff waiting for a decision, and the blocking problems of a rejected file
     const [pratinjau, setPratinjau] = useState(null);
     const [masalah, setMasalah] = useState([]);
@@ -127,6 +129,21 @@ export default function Anggaran() {
         }
     }
 
+    // The read refreshes on its own once the projection passes its TTL; this is for an admin
+    // who has just edited a sheet by hand and does not want to wait it out.
+    async function segarkanRealisasi() {
+        try {
+            setIsSegarkan(true);
+            await apiClient.post('/anggaran/realisasi/segarkan', {});
+            await fetchAnggaran(true);
+            showAlert("success", "Realisasi disegarkan.");
+        } catch (error) {
+            showAlert("error", error?.response?.data?.message || "Gagal menyegarkan realisasi.");
+        } finally {
+            setIsSegarkan(false);
+        }
+    }
+
     // diam=true when this is housekeeping before a fresh upload, not the admin pressing Batal
     async function batalkanDraf(diam = false) {
         if (!pratinjau) return;
@@ -144,6 +161,12 @@ export default function Anggaran() {
     if (isLoading && !data) return <LoadingAnimate/>;
 
     const revisiAktif = data?.revisi;
+    const takDikenal = data?.tidakDikenal || [];
+    const klaimUnitLain = data?.klaimUnitLain || [];
+    // The age of a stored number has to be visible, or nobody can tell whether it is current
+    const labelSinkron = data?.sinkron?.disegarkanPada
+        ? `Realisasi diperbarui ${new Date(data.sinkron.disegarkanPada).toLocaleString("id-ID", {dateStyle: "short", timeStyle: "short"})}`
+        : "Realisasi belum pernah dihitung";
 
     return (
         <div>
@@ -260,13 +283,47 @@ export default function Anggaran() {
                             </span>}
                     </h2>
                     <div className="wide-card-actions">
+                        <span className="anggaran-sinkron">{labelSinkron}</span>
+                        {canUnggah &&
+                            <input className="btn-aksi btn-aksi-wide" type="button"
+                                   value={isSegarkan ? "Menyegarkan..." : "Segarkan Realisasi"}
+                                   disabled={isSegarkan || isLoading} onClick={segarkanRealisasi}/>}
                         <input className="btn-aksi btn-aksi-wide" type="button"
                                value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
                                onClick={() => fetchAnggaran()}/>
                     </div>
                 </div>
+                <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
                 {isLoading ? <LoadingAnimate/> : <TableAnggaranPohon anggaran={data?.anggaran || []}/>}
             </div>
+
+            {/* The faulty claims, kept apart from the rest: a unit kerja using another unit's
+                MAK is a compliance problem, not the data-entry problem the panel below holds. */}
+            {klaimUnitLain.length > 0 &&
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Klaim MAK Unit Lain</h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">{klaimUnitLain.length} pengajuan</span>
+                        </div>
+                    </div>
+                    <p className="anggaran-note anggaran-catatan-realisasi">{anggaranKlaimKeterangan}</p>
+                    <TableKlaimUnitLain baris={klaimUnitLain}/>
+                </div>}
+
+            {/* Belanja that matched no MAK in the active revisi. Reported rather than dropped,
+                because money that vanishes from the report is money nobody goes looking for. */}
+            {takDikenal.length > 0 &&
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Belanja Tanpa Anggaran</h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">{takDikenal.length} kode MAK</span>
+                        </div>
+                    </div>
+                    <p className="anggaran-note anggaran-catatan-realisasi">{anggaranSebabKeterangan}</p>
+                    <TableRealisasiTakDikenal baris={takDikenal}/>
+                </div>}
 
             {/* Revisi history - the snapshot model is the audit trail, so it is worth showing */}
             {canUnggah && revisiList.length > 0 &&

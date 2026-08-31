@@ -74,7 +74,9 @@ const jenisValueFromLabel = (label) => {
 const headData1 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Req. Tanggal", "Unit Kerja", "Status"];
 const headData2 = ["No.", "Timestamp", "Nama", "Jenis", "Nominal", "Tanggal Verifikasi", "Tanggal Acc.", "Pajak", "Anggaran", "Unit Kerja", "Status"];
 const headData3 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "Status"];
-const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "DRPP", "SPP", "SPM"];
+// Status is shown because this table holds both Sudah Diajukan ke KPPN and Sudah SP2D,
+// which are otherwise indistinguishable once they sit in the same list
+const headData4 = ["No.", "Nama", "Jenis", "Nominal", "Tanggal Acc.", "Unit Kerja", "DRPP", "SPP", "SPM", "Status"];
 // headData2 plus the PJK verdicts after Anggaran, minus the trailing Status
 const headDataPjk = [...headData2.slice(0, 9), "Substansi", "Kelengkapan", ...headData2.slice(9, -1)];
 

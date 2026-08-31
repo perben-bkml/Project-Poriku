@@ -89,27 +89,46 @@ const anggaranContohBaris = [
 const anggaranModes = [
     {
         value: "tambahan",
-        title: "Perbarui sebagian - hanya baris yang ada di berkas",
-        keterangan: "Baris di dalam berkas ditambah atau diperbarui. Tidak ada yang dihapus, " +
+        title: "Perbarui Sebagian",
+        keterangan: "Baris di dalam file .xlsx akan menambah/memperbarui database. Tidak ada yang dihapus, " +
             "dan pagu yang dikosongkan tetap seperti sebelumnya. Gunakan ini untuk mengubah " +
             "satu atau beberapa Akun Belanja tanpa menulis ulang seluruh MAK.",
         bahaya: false,
     },
     {
         value: "perUnit",
-        title: "Ganti per unit kerja - unit di berkas ditulis ulang",
-        keterangan: "Unit kerja yang ada di berkas diganti seluruhnya, jadi MAK atau Akun " +
+        title: "Ganti per Unit Kerja",
+        keterangan: "Unit kerja yang ada di dalam file .xlsx diganti seluruhnya, MAK atau Akun " +
             "Belanja yang tidak ikut tertulis akan dihapus. Unit kerja lain tidak tersentuh. " +
             "Gunakan ini bila ada baris yang memang harus hilang.",
         bahaya: true,
     },
     {
         value: "seluruh",
-        title: "Ganti seluruh anggaran tahun ini",
-        keterangan: "Berkas menjadi satu-satunya isi anggaran tahun ini. Unit kerja yang tidak " +
-            "ada di dalam berkas akan dihapus. Gunakan hanya untuk mengganti DIPA satu tahun penuh.",
+        title: "Ganti Seluruh Anggaran",
+        keterangan: "Unit kerja yang tidak ada di dalam berkas akan dihapus. Gunakan hanya untuk mengganti DIPA satu tahun penuh.",
         bahaya: true,
     },
 ]
 
-export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes }
+// LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
+// their nominal can never be attributed to an akun. Said out loud on the screen rather than
+// left for someone to discover by reconciling by hand.
+const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku. LS Pegawai dan LS PPP belum tercatat karena belum ada tabel."
+
+// Twin of the SEBAB_* constants in server.js. "akun-belum-dirinci" never reaches these
+// panels - it is folded into its MAK - so it is not listed here.
+const anggaranSebabLabel = {
+    "mak-tidak-ada": "MAK tidak ada di anggaran",
+    "unit-tidak-dikenal": "Unit kerja tidak dikenal",
+}
+
+const anggaranSebabKeterangan = "Kode MAK ada pada pengajuan tetapi tidak ada di anggaran yang " +
+    "berlaku, jadi nominalnya belum mengurangi pagu mana pun. Perbaiki kode MAK pada pengajuan, atau tambahkan " +
+    "MAK tersebut lewat unggah anggaran."
+
+const anggaranKlaimKeterangan = "Pengajuan berikut memakai Kode MAK yang terdaftar di unit kerja lain, bukan " +
+    "milik unit kerja yang mengajukan. Nominalnya tidak mengurangi pagu siapa pun sampai kode MAK diperbaiki " +
+    "atau MAK tersebut memang dialokasikan ke unit kerja ini lewat revisi anggaran."
+
+export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan }

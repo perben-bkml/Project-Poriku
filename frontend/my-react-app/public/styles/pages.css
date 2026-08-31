@@ -1778,6 +1778,63 @@
     color: #5A6472;
 }
 
+/* Sits inside .wide-card-actions, which is a flex row of buttons */
+.anggaran-sinkron {
+    align-self: center;
+    font-size: 0.82rem;
+    color: #5A6472;
+    white-space: nowrap;
+}
+
+.anggaran-catatan-realisasi {
+    margin: 0 35px 4px;
+    max-width: 900px;
+}
+
+/* Badges live on their own line under the label. max-width caps what this cell contributes
+   to the column's width, so a long badge wraps instead of widening the whole table and
+   pushing the money columns off a laptop screen. */
+.anggaran-lencana-baris {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 3px;
+    max-width: 320px;
+    white-space: normal;
+}
+
+.anggaran-lencana-klaim {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background-color: #FBE1DE;
+    color: #BD1404;
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Opens the claimed-MAK group inside a unit kerja. These rows carry a nominal but do not
+   add to the totals above, so the break has to be unmistakable. */
+.anggaran-pemisah-luar {
+    padding: 6px 16px 6px 44px !important;
+    background-color: #FBF4F3;
+    border-top: 1px solid #F0C9C3;
+    color: #8B3A2E;
+    font-size: 0.76rem;
+    font-style: italic;
+}
+
+.anggaran-tanda-baru {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background-color: #E7ECF4;
+    color: #5A6472;
+    font-size: 0.7rem;
+    font-weight: 400;
+    /* Each badge stays whole; the row wraps between them instead */
+    white-space: nowrap;
+}
+
 .anggaran-riwayat {
     margin: 0 35px 10px;
     padding-left: 20px;

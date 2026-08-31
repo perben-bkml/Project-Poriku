@@ -14,6 +14,7 @@ function AksiPengajuan(props) {
     const [isTableLoading, setIsTableLoading] = useState(false)
     const [isPopup, setIsPopup] = useState(false)
     const [tableData, setTableData] = useState([])
+    const [tandaMak, setTandaMak] = useState(null)
     const [antriData, setAntriData] = useState({
         no_antri: "",
         ajuan_verifikasi: "",
@@ -58,9 +59,11 @@ function AksiPengajuan(props) {
         try {
             setIsTableLoading(true)
             const tableKeyword = `TRANS_ID:${props.fulldata[0]}`
-            const response = await apiClient.get('/bendahara/data-transaksi', { params: { tableKeyword } })
+            const response = await apiClient.get('/bendahara/data-transaksi',
+                { params: { tableKeyword, unitKerja: props.fulldata[11] } })
             if (response.status === 200) {
                 setTableData(response.data.data || []);
+                setTandaMak(response.data.tandaMak || null);
                 setIsTableLoading(false)
             }
         } catch (error) {
@@ -386,7 +389,8 @@ function AksiPengajuan(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
                 {isTableLoading ? <LoadingAnimate /> : 
-                <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData} />
+                <TableKelola type="aksi" header={columns} content={tableData} fullContent={tableData}
+                             tandaMak={tandaMak} />
                 }
             </div>
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}

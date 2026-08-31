@@ -2304,3 +2304,18 @@ input[type="number"]::-webkit-inner-spin-button {
     max-width: 190px;
     box-shadow: inset -1px 0 0 #D8DEE8;
 }
+
+/* Kode MAK that does not belong to the submitting unit kerja, on the Aksi screens */
+.mak-tanda {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.mak-tanda-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    opacity: 0.85;
+}

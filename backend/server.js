@@ -1813,7 +1813,12 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
         })
 
         // Return back to only the grabbed table to frontend
-        res.json({ data: keywordTableData, keywordRowPos: keywordRow - 1, keywordEndRow: endKeywordTableRow })
+        res.json({
+            data: keywordTableData,
+            keywordRowPos: keywordRow - 1,
+            keywordEndRow: endKeywordTableRow,
+            tandaMak: await tandaiMak(req, keywordTableData),
+        })
     } catch (error) {
         console.error("Error in /bendahara/data-transaksi:", error);
         res.status(500).json({ error: "Failed to fetch data." });
@@ -5999,7 +6004,6 @@ function segarkanSekali(tahun, spreadsheetId) {
 // Kode MAK sits in column C on both table sheets, so index 2 of a tabledata row, which
 // starts at column A.
 const MAK_KOLOM_TABEL = 2;
-
 // Warns about a Kode MAK that is not the submitting unit's, and never blocks: the same code
 // is legitimately missing whenever the DIPA revisi upload lags behind, and a bendahara has
 // no override. Returns null when there is nothing to say.
@@ -6014,7 +6018,7 @@ async function periksaMakUnit(tahun, unitKerja, tabledata) {
     if (!unit) return null;
 
     const milikSendiri = new Set([...unit.mak.values()].map(item => normalisasiKodeMak(item.kode).kodeMak));
-    const pemilik = pemilikSetiapMak(units);
+    const { pemilik } = indeksMak(units);
 
     // Row 0 is the header the form prepends, so sheet row n is tabledata[n]
     const asing = tabledata.slice(1)
@@ -6038,6 +6042,45 @@ async function peringatanMakAman(tahun, unitKerja, tabledata) {
         return await periksaMakUnit(tahun, unitKerja, tabledata);
     } catch (error) {
         console.error("Gagal memeriksa Kode MAK terhadap anggaran:", error);
+        return null;
+    }
+}
+
+const MAK_INDEKS_TTL_MS = 60 * 1000;
+
+const indeksMakTahun = (tahun) => cached(`mak-unit|${tahun}`, async () => {
+    const revisi = await bacaRevisiAktif(tahun);
+    return revisi ? indeksMak(await bacaPohonRevisi(revisi.id)) : null;
+}, MAK_INDEKS_TTL_MS);
+
+// Keyed by the Kode MAK cell exactly as it was typed, not by row position: the verdict
+// depends only on that text, so two rows sharing it share an answer and the caller cannot
+// misalign them. Derived on read against the active revisi rather than stamped onto the
+// sheet at submit, so a later revisi clears the mark on its own.
+async function tandaiMak(req, rows) {
+    const unit = normalizeSatker(req.query.unitKerja);
+    const tahun = anggaranTahun(req);
+    if (!unit || !tahun || !Array.isArray(rows) || rows.length === 0) return null;
+    try {
+        const indeks = await indeksMakTahun(tahun);
+        if (!indeks) return null;
+        const tanda = {};
+        for (const row of rows) {
+            const teks = trimmed(row?.[MAK_KOLOM_TABEL]);
+            if (!teks || teks in tanda) continue;
+            const { kodeMak, kodeAkun } = normalisasiKodeMak(teks);
+            if (!kodeMak) continue;
+            const mak = indeks.node.get(`${unit}|${kodeMak}`);
+            if (!mak) {
+                const pemilik = (indeks.pemilik.get(kodeMak) || []).map(item => item.nama);
+                tanda[teks] = { sebab: pemilik.length > 0 ? SEBAB_UNIT_LAIN : SEBAB_MAK_HILANG, pemilik };
+            } else if (kodeAkun && !mak.akun.has(kodeAkun)) {
+                tanda[teks] = { sebab: SEBAB_AKUN_BARU, pemilik: [] };
+            }
+        }
+        return Object.keys(tanda).length > 0 ? tanda : null;
+    } catch (error) {
+        console.error("Gagal memeriksa Kode MAK pada data transaksi:", error);
         return null;
     }
 }

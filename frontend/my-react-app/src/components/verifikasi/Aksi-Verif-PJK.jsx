@@ -20,6 +20,7 @@ function AksiVerifPJK(props) {
     const [isTableLoading, setIsTableLoading] = useState(true);
     const [isPopup, setIsPopup] = useState(false);
     const [tableData, setTableData] = useState([]);
+    const [tandaMak, setTandaMak] = useState(null);
     const [pjkData, setPjkData] = useState({
         no_antri: "",
         mulai_verifikasi: "FALSE",
@@ -60,12 +61,16 @@ function AksiVerifPJK(props) {
         (async () => {
             try {
                 // A mirror row's block lives on the gup table sheet under the id it came from
+                const unitKerja = props.fulldata[FIELD.unitKerja];
                 const response = await apiClient.get('/bendahara/data-transaksi', {
                     params: sourceId
-                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup" }
-                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif" },
+                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup", unitKerja }
+                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif", unitKerja },
                 });
-                if (response.status === 200) setTableData(response.data.data || []);
+                if (response.status === 200) {
+                    setTableData(response.data.data || []);
+                    setTandaMak(response.data.tandaMak || null);
+                }
             } catch {
                 setTableData([]); // jenis without a table block
             }
@@ -179,7 +184,8 @@ function AksiVerifPJK(props) {
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi" header={tableHeader} content={tableData} fullContent={tableData} />
+                <TableKelola type="aksi" header={tableHeader} content={tableData} fullContent={tableData}
+                             tandaMak={tandaMak} />
                 }
             </div> : null}
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}

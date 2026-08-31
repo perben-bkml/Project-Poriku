@@ -25,7 +25,7 @@ import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
 import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp } from '../components/bendahara/head-data.js';
-import { anggaranSebabLabel } from '../components/verifikasi/head-data.js';
+import { anggaranSebabLabel, anggaranTandaMak, tandaMakPesan } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
 // Pengujian-PJK puts an <a> in Dok. Verifikasi and it would render as [object Object]
@@ -179,6 +179,13 @@ export function TableKelola(props) {
     const kolomStatus = new Set(headLabels
         .map((label, index) => isStatusLabel(label) ? index : -1)
         .filter(index => index >= 0));
+
+    // Located by label, because the Kode MAK column sits at a different index on the full
+    // GUP table and the cropped verifikasi one. Inert on every screen that passes no tandaMak.
+    const tandaMak = props.tandaMak || {};
+    const kolomMak = props.tandaMak
+        ? headLabels.findIndex(label => String(label ?? "").trim().toLowerCase() === "kode mak")
+        : -1;
 
     // Inert without a sorot prop, so the six other screens using this table are untouched
     const sorot = props.sorot;
@@ -485,6 +492,8 @@ export function TableKelola(props) {
                         const isItemChecked = checkedItems.has(itemId);
                         
                         const potongan = potongCell(data, index);
+                        const tanda = index === kolomMak ? tandaMak[String(data ?? "").trim()] : null;
+                        const gayaTanda = tanda && anggaranTandaMak[tanda.sebab];
                         // Only the first marked cell of the first matching row is scrolled to
                         const isSorotPertama = potongan && props.rowIndex === indexSorotPertama
                             && index === sorot.columns.find(column => potongCell(props.rowData[column], column) !== null);
@@ -502,7 +511,13 @@ export function TableKelola(props) {
                                            : { borderBottom: '2px solid rgb(214, 214, 214)' }),
                                        ...(tableType !== 'monitor' && (index === 1 || index === 19)
                                        ? { maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word' } : null) }} >
-                            {tableType === 'monitor' && BUKTI_SETOR_STYLE[data] ?
+                            {gayaTanda ?
+                                <span className="mak-tanda" title={tandaMakPesan(tanda)}
+                                      style={{backgroundColor: gayaTanda.bg, color: gayaTanda.fg}}>
+                                    {data}
+                                    <span className="mak-tanda-label">{gayaTanda.label}</span>
+                                </span> :
+                            tableType === 'monitor' && BUKTI_SETOR_STYLE[data] ?
                                 <CustomColoredCell {...BUKTI_SETOR_STYLE[data]} data={data} /> :
                             tableType === 'monitor' && (index === 4 || index === 5 || index === 8 || index === 9) ?
                                 (data === "Sudah" && index === 8 || data === "Sudah" && index === 9 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
@@ -680,6 +695,7 @@ export function TableKelola(props) {
 
 TableKelola.propTypes = {
     type: PropTypes.string,
+    tandaMak: PropTypes.object,
     header: PropTypes.array,
     content: PropTypes.array,
     fullContent: PropTypes.array,

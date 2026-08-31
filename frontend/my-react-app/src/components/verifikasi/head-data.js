@@ -133,4 +133,21 @@ const anggaranKlaimKeterangan = "Pengajuan berikut memakai Kode MAK yang terdaft
 
 const anggaranAwalKeterangan = "Upload pada bagian ini akan mencatat manual realisasi anggaran. Format excel yang digunakan sama dengan bagian Unggah Anggaran."
 
-export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan }
+// How a Kode MAK cell is marked on Aksi-Pengajuan and Aksi-Verif-PJK. Keys are the SEBAB_*
+// values server.js returns as tandaMak.
+const anggaranTandaMak = {
+    "klaim-unit-lain":    {label: "MAK unit lain", bg: "#FBE1DE", fg: "#BD1404"},
+    "mak-tidak-ada":      {label: "MAK tidak terdaftar", bg: "#FBE1DE", fg: "#BD1404"},
+    "akun-belum-dirinci": {label: "Akun belum dirinci", bg: "#FFF1CF", fg: "#8A6100"},
+}
+
+const tandaMakPesan = (tanda) => {
+    if (!tanda) return "";
+    if (tanda.sebab === "klaim-unit-lain") {
+        return `Kode MAK ini terdaftar di ${tanda.pemilik.join(", ")}, bukan unit kerja yang mengajukan.`;
+    }
+    if (tanda.sebab === "mak-tidak-ada") return "Kode MAK ini tidak ada di anggaran yang berlaku.";
+    return "Akun Belanja ini belum dirinci di DIPA untuk MAK tersebut.";
+}
+
+export { satkerNames, tableHead, userSatkerNames, monthNames, anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian, anggaranSebabLabel, anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan, anggaranTandaMak, tandaMakPesan }

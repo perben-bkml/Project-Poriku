@@ -414,6 +414,67 @@
     justify-self: start;
 }
 
+/* Pembayaran BP filter row. Same grid as Monitoring DRPP, narrower tracks: the six
+   selects hold short values, so 260px lands on 4 columns at 1440px and 5 above it.
+   Scoped - .filter-monitoring, .filter-select2, .filter-search and .cari-input are
+   shared with the other monitoring screens. */
+.filter-bp {
+    box-sizing: border-box;
+}
+
+/* .filter-monitoring zeroes the vertical padding further down, so this has to outrank it */
+.pengajuan-filter.filter-bp {
+    padding-bottom: 16px;
+}
+
+.filter-bp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 300px));
+    align-items: center;
+    column-gap: 24px;
+    row-gap: 14px;
+    margin-top: 6px;
+    padding-left: 30px;
+}
+
+.filter-bp-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* The shared margins are sized for the old inline run and overflow a grid track here;
+   min-width holds the selects on a common left edge down each column */
+.filter-bp-item .filter-label2 {
+    margin-left: 0;
+    min-width: 105px;
+}
+
+.filter-bp-item .filter-select {
+    flex: 1;
+    min-width: 0;
+    margin-right: 0;
+}
+
+.filter-bp-item .filter-select2 select {
+    width: 100%;
+    max-width: 185px;
+    margin-left: 0;
+    height: 28px;
+}
+
+/* Cari sits under the grid on the same left edge, its heading stacked like "Filter" */
+.cari-bp {
+    display: block;
+    margin-top: 16px;
+}
+
+.cari-bp .cari-input {
+    width: 220px;
+    margin: 0 0 0 30px;
+    border-bottom: 1px solid #c7ccd6;
+}
+
 /* Marks the Cari term inside the DRPP transaction table. <mark> carries a UA background,
    so it is overridden rather than left to the browser's own yellow. */
 .sorot {

@@ -1,5 +1,6 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {useContext, useEffect, useMemo, useRef, useState} from 'react';
 import apiClient from "../../lib/apiClient";
+import {AuthContext} from "../../lib/AuthContext";
 // Import Components
 import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
@@ -38,6 +39,12 @@ const bulat = (nilai) => {
 };
 
 export default function KelolaKkp() {
+    // A user reaches this screen as "Kalkulator SBM Jaldis": the kalkulator and the SBM
+    // reference only. Everything else here writes, and GET /kkp/transaksi is admin only,
+    // so it must not even be asked for.
+    const {user} = useContext(AuthContext);
+    const hanyaKalkulator = user?.role === "user";
+
     const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState(null);
     const [alert, setAlert] = useState(null);
@@ -94,7 +101,7 @@ export default function KelolaKkp() {
             const response = await apiClient.get('/kkp/sbm');
             setData(response.data);
             // Nothing to calculate against yet: the upload is the only thing left to do here
-            if (!response.data?.unggahan) setBukaUnggah(true);
+            if (!response.data?.unggahan && !hanyaKalkulator) setBukaUnggah(true);
         } catch (error) {
             console.log("Failed fetching SBM.", error);
             showAlert("error", error?.response?.data?.message || "Gagal memuat data SBM.");
@@ -119,7 +126,7 @@ export default function KelolaKkp() {
 
     useEffect(() => {
         fetchSbm();
-        fetchTransaksi();
+        if (!hanyaKalkulator) fetchTransaksi();
     }, []);
 
     // The whole group takes one number, so this is asked for once per Kode rather than
@@ -348,6 +355,10 @@ export default function KelolaKkp() {
     ];
     const transaksiAktif = daftarTransaksi.find(item => item.kunci === tabTransaksi) || daftarTransaksi[0];
 
+    // With one category there is nothing to switch between, so the strip is not drawn and
+    // the panel is pinned open rather than left depending on a remembered key
+    const kategoriAktif = hanyaKalkulator ? "sbm" : kategori;
+
     // Colour is keyed to the unit's place in the sorted list the API returns, so it holds
     // still across reloads; a group naming a unit no longer on the list falls back to grey.
     const warnaUnit = useMemo(() => {
@@ -369,6 +380,7 @@ export default function KelolaKkp() {
                 mounted and are hidden with the attribute instead of being unmounted: the
                 kalkulator rows, the pending upload draft and the half typed transaksi form
                 all live in component state, and switching category must not throw them away. */}
+            {!hanyaKalkulator &&
             <div className="kelola-tabs" role="tablist">
                 {KKP_KATEGORI.map(item => {
                     const aktif = item.kunci === kategori;
@@ -380,10 +392,12 @@ export default function KelolaKkp() {
                         </button>
                     );
                 })}
-            </div>
+            </div>}
             <br/>
 
-            <div className="kkp-panel" hidden={kategori !== "sbm"}>
+            <div className="kkp-panel" hidden={kategoriAktif !== "sbm"}>
+                {/* Maintaining the reference is admin work; a user only prices against it */}
+                {!hanyaKalkulator &&
                 <div className="bg-card wide-card-content">
                     <div className="wide-card-head">
                         <h2 className="wide-card-title">Unggah Standar Biaya Masukan {data?.tahun || ""}</h2>
@@ -429,7 +443,7 @@ export default function KelolaKkp() {
                                 </ul>
                             </div>}
                     </>}
-                </div>
+                </div>}
 
                 {/* What the file was read as, waiting for a decision. The prices themselves are
                     shown, not just a count: a mis-shifted column is only obvious as numbers. */}
@@ -555,7 +569,8 @@ export default function KelolaKkp() {
                 </div>
             </div>
 
-            <div className="kkp-panel" hidden={kategori !== "kkp"}>
+            {!hanyaKalkulator &&
+            <div className="kkp-panel" hidden={kategoriAktif !== "kkp"}>
                 {/* The register. Grouped by Kode because a Kode is one SPM: that is the unit an
                     admin gives a number to and the unit the payment sheet settles. */}
                 <div className="bg-card wide-card-content">
@@ -611,7 +626,7 @@ export default function KelolaKkp() {
                                       onSelesai={fetchTransaksi} onBatal={() => setUbahBaris(null)}/>
                     <br/>
                 </div>
-            </div>
+            </div>}
 
             {alert && <PopupAlert isAlert={true} severity={alert.severity} message={alert.message}/>}
         </div>

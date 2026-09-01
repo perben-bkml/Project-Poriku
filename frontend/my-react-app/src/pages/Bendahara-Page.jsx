@@ -49,7 +49,7 @@ const MENU_ROLES = {
     "pembayaran-bp": ["admin"],
     "pembayaran-tup": ["admin"],
     // SBM is reference data an admin maintains and only an admin calculates against
-    "kelola-kkp": ["admin"],
+    "kelola-kkp": ["admin", "user"],   // a user only gets the kalkulator half of the screen
     // Writing dokumen gaji stays with the roles the backend lets write it
     "input-dokumen-gaji": ["admin_gaji"],
     "edit-dokumen-gaji": ["admin_gaji"],
@@ -73,7 +73,9 @@ const MENU_BUTTONS = [
     {name: "SPM-bendahara", label: "SPM Bendahara", Icon: FindInPageIcon},
     {name: "monitor-data-gaji", label: "Monitor Data Gaji", Icon: PaymentsIcon},
     {name: "pembayaran-bp", label: "Pembayaran BP", Icon: ReceiptLongIcon},
-    {name: "kelola-kkp", label: "Kelola KKP", Icon: CalculateIcon},
+    // labelUser: a user sees only the SBM kalkulator inside this screen, so the menu is
+    // named for what they can actually do there rather than for the admin screen it is part of
+    {name: "kelola-kkp", label: "Kelola KKP", labelUser: "Kalkulator SBM Jaldis", Icon: CalculateIcon},
 ];
 
 function BendaharaPage(props) {
@@ -97,6 +99,7 @@ function BendaharaPage(props) {
 
     const canOpen = (menu) => !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
         && (user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role));
+    const labelMenu = (item) => (user.role === "user" && item.labelUser) || item.label;
     const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 
     // Set buttonSelect when page renders
@@ -132,6 +135,13 @@ function BendaharaPage(props) {
           .join(" "); // Join the words with a space
         return newText
       }
+
+    // The heading follows whatever the sidebar calls the menu. Menus opened from a parent
+    // screen are not in MENU_BUTTONS, so the name itself stays the fallback.
+    function judulMenu() {
+        const item = MENU_BUTTONS.find(entry => entry.name === buttonSelect);
+        return item ? labelMenu(item) : formatText(buttonSelect);
+    }
 
     // Handle invisible component (invisible on button)
     function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp, catatan, pjkCatatan}) {
@@ -214,10 +224,10 @@ function BendaharaPage(props) {
                         </button>
                     </div>
                     <div className="dash-content">
-                        {visibleButtons.map(({name, label, Icon}) => (
-                            <button key={name} name={name} onClick={() => handleButtonClick(name)}
-                                    className={`dash-button ${buttonSelect === name ? "btn-selected" : ""}`}>
-                                <Icon fontSize="small"/><span className="padd-span-bend"/>{label}
+                        {visibleButtons.map((item) => (
+                            <button key={item.name} name={item.name} onClick={() => handleButtonClick(item.name)}
+                                    className={`dash-button ${buttonSelect === item.name ? "btn-selected" : ""}`}>
+                                <item.Icon fontSize="small"/><span className="padd-span-bend"/>{labelMenu(item)}
                             </button>
                         ))}
                     </div>
@@ -236,7 +246,7 @@ function BendaharaPage(props) {
                     </button>
                 )}
                 <div className={`page-content ${isSidebarOpen ? "" : "full-width"}`}>
-                    <h1 className="content-title">{formatText(buttonSelect)}</h1>
+                    <h1 className="content-title">{judulMenu()}</h1>
                     {renderComponent()}
                 </div>
             </div>

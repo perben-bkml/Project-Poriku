@@ -755,13 +755,26 @@
     padding-left: 20px;
 }
 
+/* The icon and its spacer keep their size, so only the label takes the reduction when a
+   menu name has to wrap */
+.dash-button > .MuiSvgIcon-root,
+.dash-button > .padd-span-bend {
+    flex: none;
+}
+
 .dash-button {
     display: flex;
     align-items: center;
     margin: 10px 10px 0px 10px;
     padding-left: 20px;
+    padding-right: 12px;
     padding-top: 10px;
     padding-bottom: 10px;
+    /* A label longer than the 230px sidebar fits wraps onto a second line instead of
+       running past the pill - "Kalkulator SBM Jaldis" is the one that needs it. Left
+       aligned so a wrapped second line starts under the first rather than centred. */
+    text-align: left;
+    line-height: 1.3;
     font-size: 1rem;
     background-color: white;
     color: #00204A;

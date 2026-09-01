@@ -271,10 +271,11 @@ const ROUTE_ROLES = {
     "POST /anggaran/realisasi/override": ADMIN,
     "DELETE /anggaran/realisasi/override": ADMIN,
 
-    // Kelola KKP. Reference data an admin maintains and only an admin calculates against,
-    // so unlike /anggaran the read is admin only too. The delete carries unggahanId in the
-    // query so this stays a plain lookup rather than a ROUTE_ROLES_PREFIX entry.
-    "GET /kkp/sbm": ADMIN,
+    // Kelola KKP. A user reaches the SBM half of the screen as "Kalkulator SBM Jaldis" and
+    // prices a trip against the reference, so the read is open to any role; maintaining that
+    // reference stays admin only. The delete carries unggahanId in the query so this stays a
+    // plain lookup rather than a ROUTE_ROLES_PREFIX entry.
+    "GET /kkp/sbm": ANY_ROLE,
     "POST /kkp/sbm/unggah": ADMIN,
     "POST /kkp/sbm/unggah/terapkan": ADMIN,
     "DELETE /kkp/sbm/unggah": ADMIN,
@@ -7189,12 +7190,32 @@ const kurangBerkas = (record, which) => which === "any"
     ? record.berkasKurang.buktiBayar || record.berkasKurang.buktiBayarDepositPajak
     : Boolean(record.berkasKurang[which]);
 
+// Jenis values that name a family rather than one cell: KKP spending is spelled per card
+// ("GUP KKP 01"), so asking for all of it at once cannot be an exact match.
+const PEMBAYARAN_BP_JENIS_GRUP = ["GUP KKP"];
+const jenisGrup = (value) => PEMBAYARAN_BP_JENIS_GRUP
+    .some(grup => normalizeSatker(grup) === normalizeSatker(value));
+
+const cocokJenis = (nilai, dipilih) => jenisGrup(dipilih)
+    ? normalizeSatker(nilai).includes(normalizeSatker(dipilih))
+    : normalizeSatker(nilai) === normalizeSatker(dipilih);
+
 // Distinct values as spelled in the data, so the filters cannot drift from it.
 function pembayaranBpOptions(records) {
-    const collect = (key) => [...new Set(records.map(record => record[key]).filter(Boolean))].sort();
+    const collect = (key) => [...new Set(records.map(record => record[key]).filter(Boolean))]
+        .sort().map(value => ({ value, label: value }));
+
+    const jenis = collect("jenis");
+    // A grup is only offered once the data holds a member it does not already spell out,
+    // so a year without KKP spending shows no dead option and a lone exact match no twin.
+    const grup = PEMBAYARAN_BP_JENIS_GRUP
+        .filter(item => jenis.some(({ value }) =>
+            cocokJenis(value, item) && normalizeSatker(value) !== normalizeSatker(item)))
+        .map(item => ({ value: item, label: `${item} (Semua)` }));
+
     return {
         unitKerja: collect("unitKerja"),
-        jenis: collect("jenis"),
+        jenis: [...grup, ...jenis],
         statusBayar: collect("statusBayarPenerima"),
         statusPajak: collect("statusPajak"),
     };
@@ -7241,7 +7262,7 @@ app.get("/bendahara/pembayaran-bp", async (req, res) => {
         const applyFilters = (month) => records.filter(record => {
             if (month && monthOfSheetDate(record.tanggalSp2d) !== month) return false;
             if (unitKerja && normalizeSatker(record.unitKerja) !== normalizeSatker(unitKerja)) return false;
-            if (jenis && normalizeSatker(record.jenis) !== normalizeSatker(jenis)) return false;
+            if (jenis && !cocokJenis(record.jenis, jenis)) return false;
             if (statusBayar && normalizeSatker(record.statusBayarPenerima) !== normalizeSatker(statusBayar)) return false;
             if (belumSelesai && bayarSelesai(record.statusBayarPenerima)) return false;
             if (statusPajak && normalizeSatker(record.statusPajak) !== normalizeSatker(statusPajak)) return false;

@@ -346,6 +346,7 @@ export default function Anggaran() {
                 </div>
                 <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
                 {isLoading ? <LoadingAnimate/> : <TableAnggaranPohon anggaran={data?.anggaran || []}/>}
+                <br/><br/>
             </div>
 
             {/* Realisasi already booked before Poriku started recording it. Uploaded once,

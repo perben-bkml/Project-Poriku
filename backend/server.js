@@ -279,6 +279,16 @@ const ROUTE_ROLES = {
     "POST /kkp/sbm/unggah/terapkan": ADMIN,
     "DELETE /kkp/sbm/unggah": ADMIN,
 
+    // Kelola KKP: the transaksi register. Lives on a tab of the Pembayaran BP spreadsheet
+    // but is not part of that screen's data, so it keeps its own /kkp prefix. Both the
+    // delete's row and the SPM's kode travel in the query or the body, so these stay plain
+    // lookups rather than ROUTE_ROLES_PREFIX entries.
+    "GET /kkp/transaksi": ADMIN,
+    "POST /kkp/transaksi": ADMIN,
+    "PATCH /kkp/transaksi": ADMIN,
+    "DELETE /kkp/transaksi": ADMIN,
+    "POST /kkp/transaksi/spm": ADMIN,
+
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
@@ -8173,6 +8183,523 @@ app.patch("/bendahara/pembayaran-bp", handlePembayaranBpUpload, async (req, res)
     } catch (error) {
         console.error("Error in PATCH /bendahara/pembayaran-bp:", error);
         return res.status(500).json({ message: "Gagal memperbarui data Pembayaran BP." });
+    }
+});
+
+// --- Kelola KKP: transaksi ----------------------------------------------------
+// The KKP register, on its own tab of the Pembayaran BP spreadsheet. The tab name carries
+// no year - the year is already in the spreadsheet id, the same arrangement REK KORAN
+// uses. Sitting beside PEMBAYARAN BP is what makes Status derivable rather than typed:
+// once a Kode's rows carry a Nomor SPM, the payment sheet already says whether it was
+// paid, so nothing here has to be kept in step by hand.
+
+const DATABASE_KKP_SHEET = "Database KKP";
+const DATABASE_KKP_FIRST_ROW = 2;   // row 1 is the header
+
+// Spelled as the sheet spells them: a different wording there is a change here only.
+const KKP_BELUM = "Belum Terbayarkan";
+const KKP_SUDAH = "Sudah Terbayarkan";
+
+// index is the sheet column, 0 based - unlike Pembayaran BP the read starts at A.
+const KKP_COLUMNS = [
+    { index: 0,  key: "no" },                                // A
+    { index: 1,  key: "timestamp" },                         // B
+    { index: 2,  key: "tanggalTransaksi" },                  // C
+    { index: 3,  key: "namaPic" },                           // D
+    { index: 4,  key: "namaPejalan" },                       // E
+    { index: 5,  key: "unitKerja" },                         // F
+    { index: 6,  key: "keterangan" },                        // G
+    { index: 7,  key: "transaksiVia" },                      // H
+    { index: 8,  key: "nominal" },                           // I
+    { index: 9,  key: "kode" },                              // J
+    { index: 10, key: "status" },                            // K
+    { index: 11, key: "nomorSpm" },                          // L
+    { index: 12, key: "buktiTransaksi", link: true },        // M
+];
+const KKP_RANGE = `'${DATABASE_KKP_SHEET}'!A${DATABASE_KKP_FIRST_ROW}:M`;
+
+const KKP_TRANSAKSI_VIA = ["Traveloka", "Tiket.com", "Payment Link", "EDC", "Shopee",
+    "Tokopedia", "Gojek/Grab", "KAI Access"];
+
+const KKP_LABEL = {
+    namaPic: "Nama PIC", namaPejalan: "Nama Pejalan", unitKerja: "Unit Kerja",
+    keterangan: "Keterangan Penggunaan KKP",
+};
+
+// Curated where slicing reads badly or would collide; everything else follows the rule
+// below. Keyed on normalizeSatker of anggaran_unit_kerja.nama - SATKER_UNIT_KERJA cannot
+// be reused, it keys on the account names, which are spelled differently.
+const KKP_KODE_PREFIX = {
+    "BIRO SARANA DAN PRASARANA": "SARPRAS",
+    "BIRO UMUM TU RUMGA": "DOM",   // the spelling UNIT_KERJA_AJUAN_ALIAS already uses
+    "DIT DATA DAN INFORMASI": "DATIN",
+    "DIT OPERASI LAUT": "OPSLA",
+    "DIT OPERASI UDARA": "OPSUD",
+    "UNIT PENINDAKAN HUKUM": "UPH",
+};
+// Words that say what kind of unit it is rather than which one, so they carry nothing
+// into a code: dropping them is what keeps ZONA MARITIM BARAT and TENGAH apart.
+const KKP_KATA_UMUM = new Set(["BIRO", "DIT", "DIREKTORAT", "UNIT", "PUSAT", "MARITIM", "DAN"]);
+// Long enough for PERENCANAAN and INSPEKTORAT, which are one word and cannot be shortened
+// without a curated entry above; every registered unit kerja is distinct within it.
+const KKP_PREFIX_MAKS = 12;
+
+function kkpPrefix(nama) {
+    const kunci = normalizeSatker(nama);
+    if (KKP_KODE_PREFIX[kunci]) return KKP_KODE_PREFIX[kunci];
+    const sisa = kunci.split(" ").filter(kata => !KKP_KATA_UMUM.has(kata)).join("");
+    return sisa.replace(/[^A-Z]/g, "").slice(0, KKP_PREFIX_MAKS) || "KKP";
+}
+
+// UMUM01 -> prefix UMUM, nomor 1. A code that does not parse is one an admin typed by
+// hand; it still groups, it just never takes part in the numbering.
+const KKP_KODE_POLA = /^([A-Z]+)(\d+)$/;
+
+function kodeBerikutnya(prefix, dipakai) {
+    let tertinggi = 0;
+    for (const kode of dipakai) {
+        const cocok = KKP_KODE_POLA.exec(normalizeSatker(kode));
+        if (cocok && cocok[1] === prefix) tertinggi = Math.max(tertinggi, Number(cocok[2]));
+    }
+    return `${prefix}${String(tertinggi + 1).padStart(2, "0")}`;
+}
+
+function kkpToRecord(cells, rowNumber) {
+    const record = { rowNumber };
+    for (const column of KKP_COLUMNS) {
+        const cell = cells?.[column.index];
+        // Column M is a file drop attachment, exactly like Pembayaran BP's M and S
+        record[column.key] = column.link ? pembayaranBpLink(cell) : trimmed(cell?.formattedValue);
+    }
+    return record;
+}
+
+// Grid data, not values.get: the hyperlink in M comes back no other way.
+async function readKkpRecords(spreadsheetId) {
+    const response = await withBackoff(() => sheets.spreadsheets.get({
+        spreadsheetId,
+        includeGridData: true,
+        ranges: [KKP_RANGE],
+        fields: "sheets(data(rowData(values(formattedValue,hyperlink))))",
+    }));
+    return (response.data.sheets?.[0]?.data?.[0]?.rowData || [])
+        .map((row, index) => kkpToRecord(row.values, DATABASE_KKP_FIRST_ROW + index))
+        .filter(record => record.no !== "" || record.kode !== "" || record.namaPejalan !== "");
+}
+
+// Same TTL and same cache as the Pembayaran BP snapshot this screen reads alongside it
+const kkpRowsKey = (spreadsheetId) => `kkp|${spreadsheetId}`;
+const bacaKkp = (spreadsheetId) => cached(kkpRowsKey(spreadsheetId),
+    () => readKkpRecords(spreadsheetId), PEMBAYARAN_BP_SEARCH_TTL_MS);
+const forgetKkpRows = (spreadsheetId) => pembayaranBpCache.delete(kkpRowsKey(spreadsheetId));
+
+// The payment sheet's verdict per SPM. Either answer means the money moved: a finished
+// Status Bayar Penerima, or a Bukti Bayar file on a row whose status is not filled in yet.
+// Also carries the Nilai SP2D, summed because one SPM can occupy more than one row there.
+function kkpRingkasSpm(records) {
+    const ringkas = new Map();
+    for (const record of records) {
+        const spm = spmDigits(record.nomorSpm);
+        if (!spm) continue;
+        const item = ringkas.get(spm) || { lunas: false, nilai: 0 };
+        if (bayarSelesai(record.statusBayarPenerima) || record.buktiBayar.nama) item.lunas = true;
+        const nilai = parseRupiah(record.nilaiSp2d);
+        if (!Number.isNaN(nilai)) item.nilai += nilai;
+        ringkas.set(spm, item);
+    }
+    return ringkas;
+}
+
+// One entry per Kode - a Kode is one SPM, so its rows share a single verdict. Rows with no
+// Kode still group, under "", so a hand-edited sheet never hides a row from the screen.
+function kkpGrup(baris, ringkasSpm) {
+    const grup = new Map();
+    for (const row of baris) {
+        const kunci = normalizeSatker(row.kode);
+        let item = grup.get(kunci);
+        if (!item) {
+            item = { kode: row.kode, unitKerja: row.unitKerja, nomorSpm: "", total: 0, baris: [] };
+            grup.set(kunci, item);
+        }
+        if (!item.nomorSpm && row.nomorSpm) item.nomorSpm = row.nomorSpm;
+        if (!item.unitKerja) item.unitKerja = row.unitKerja;
+        const nominal = parseRupiah(row.nominal);
+        item.total += Number.isNaN(nominal) ? 0 : nominal;
+        item.baris.push(row);
+    }
+    for (const item of grup.values()) {
+        const bayar = item.kode && item.nomorSpm ? ringkasSpm.get(spmDigits(item.nomorSpm)) : null;
+        item.lunas = Boolean(bayar?.lunas);
+        item.status = item.lunas ? KKP_SUDAH : KKP_BELUM;
+        // The SP2D paid what the payment sheet says, not what the register adds up to, so a
+        // gap means one of the two is wrong. The status still flips - the money did move -
+        // and the difference is reported beside it rather than silently swallowed.
+        item.nilaiSpm = bayar ? bayar.nilai : null;
+        item.selisih = item.lunas ? item.total - bayar.nilai : 0;
+    }
+    return grup;
+}
+
+// Correcting column K is a courtesy to whoever opens the spreadsheet itself - the response
+// already carries the derived status, so a failed write must not fail the read. The cached
+// records are updated in step, so the correction is not re-attempted for the next minute.
+async function selaraskanStatusKkp(spreadsheetId, grup) {
+    const data = [];
+    for (const item of grup.values()) {
+        for (const row of item.baris) {
+            if (row.status === item.status) continue;
+            data.push({ range: `'${DATABASE_KKP_SHEET}'!K${row.rowNumber}`, values: [[item.status]] });
+            row.status = item.status;
+        }
+    }
+    if (data.length === 0) return;
+    try {
+        await writeRanges(sheets, spreadsheetId, data);
+    } catch (error) {
+        console.error("Gagal menyelaraskan Status di Database KKP:", error?.message || error);
+    }
+}
+
+const nominalKkp = (nilai) => {
+    const angka = parseRupiah(nilai);
+    return Number.isNaN(angka) ? 0 : angka;
+};
+
+const bentukTransaksiKkp = (row) => ({
+    rowNumber: row.rowNumber, no: row.no, timestamp: row.timestamp,
+    tanggalTransaksi: row.tanggalTransaksi, namaPic: row.namaPic, namaPejalan: row.namaPejalan,
+    unitKerja: row.unitKerja, keterangan: row.keterangan, transaksiVia: row.transaksiVia,
+    nominal: nominalKkp(row.nominal), kode: row.kode, nomorSpm: row.nomorSpm,
+    buktiTransaksi: row.buktiTransaksi,
+});
+
+// dd-mm-yyyy, as every other date on this spreadsheet is written. Text rather than a
+// serial: the tab is plain, with no number format for a serial to render through.
+function kkpTanggal(nilai) {
+    const cocok = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed(nilai));
+    if (!cocok) return null;
+    const [, tahun, bulan, hari] = cocok;
+    if (Number(bulan) < 1 || Number(bulan) > 12 || Number(hari) < 1 || Number(hari) > 31) return null;
+    return `${hari}-${bulan}-${tahun}`;
+}
+
+const selTeksKkp = (nilai) => ({ userEnteredValue: { stringValue: String(nilai) } });
+const selAngkaKkp = (nilai) => ({ userEnteredValue: { numberValue: nilai } });
+// Same shape as the sheet's own file drop attachments, the reason pembayaranBpLink can
+// read it back. =HYPERLINK cannot be used: this locale separates arguments with ";".
+const selTautanKkp = (link) => link?.nama
+    ? {
+        userEnteredValue: { stringValue: link.nama },
+        ...(link.url ? { textFormatRuns: [{ startIndex: 0, format: { link: { uri: link.url } } }] } : {}),
+    }
+    : {};
+
+function periksaTransaksiKkp(body) {
+    const tanggal = kkpTanggal(body?.tanggalTransaksi);
+    if (!tanggal) return { message: "Tanggal Transaksi bukan tanggal yang sah." };
+
+    const teks = {};
+    for (const key of Object.keys(KKP_LABEL)) {
+        teks[key] = trimmed(body?.[key]);
+        if (!teks[key]) return { message: `${KKP_LABEL[key]} wajib diisi.` };
+    }
+
+    const via = KKP_TRANSAKSI_VIA.find(item => normalizeSatker(item) === normalizeSatker(body?.transaksiVia));
+    if (!via) return { message: `Transaksi Via "${trimmed(body?.transaksiVia)}" tidak dikenal.` };
+
+    // A negative nominal is a refund, so only a value holding no digit at all is refused.
+    // Zero is refused too: a transaksi that moved nothing is a typo, not a record.
+    const nominal = parseRupiah(body?.nominal);
+    if (Number.isNaN(nominal)) return { message: "Nominal bukan angka." };
+    if (nominal === 0) return { message: "Nominal tidak boleh nol." };
+
+    return { nilai: { tanggal, ...teks, via, nominal } };
+}
+
+// A-M in one go. Unlike Pembayaran BP this tab holds no formulas, so there are no runs to
+// step around and the whole row is written at once.
+const kkpBarisSel = (nilai, { no, timestamp, kode, status, nomorSpm, bukti }) => [
+    selAngkaKkp(no),
+    selTeksKkp(timestamp),
+    selTeksKkp(nilai.tanggal),
+    selTeksKkp(nilai.namaPic),
+    selTeksKkp(nilai.namaPejalan),
+    selTeksKkp(nilai.unitKerja),
+    selTeksKkp(nilai.keterangan),
+    selTeksKkp(nilai.via),
+    selAngkaKkp(nilai.nominal),
+    selTeksKkp(kode),
+    selTeksKkp(status),
+    nomorSpm ? selTeksKkp(nomorSpm) : {},
+    selTautanKkp(bukti),
+];
+
+const kkpTulisBaris = (sheetId, row, values, mulai = 0) => ({
+    updateCells: {
+        range: {
+            sheetId, startRowIndex: row - 1, endRowIndex: row,
+            startColumnIndex: mulai, endColumnIndex: mulai + values.length,
+        },
+        rows: [{ values }],
+        fields: "userEnteredValue,textFormatRuns",
+    },
+});
+
+const driveFolderIdBuktiKkp = process.env.DRIVE_FOLDER_ID_BUKTI_KKP;
+// Same multer as Pembayaran BP: PDF only, same 10 MB cap
+const handleKkpUpload = runPembayaranBpUpload(uploadPembayaranBp.single("buktiTransaksi"));
+
+// Named by the Kode and the moment, so two receipts on one Kode never collide and the
+// folder stays browsable. Returns null once it has already answered the request.
+async function unggahBuktiKkp(req, res, kode) {
+    if (!req.file) return {};
+    if (!driveFolderIdBuktiKkp) {
+        console.error("DRIVE_FOLDER_ID_BUKTI_KKP belum diatur - upload dibatalkan.");
+        res.status(503).json({ message: "Folder penyimpanan Bukti Transaksi belum dikonfigurasi." });
+        return null;
+    }
+    if (!await requireGajiDriveReady(res, "Token Bukti Transaksi KKP")) return null;
+    const nama = `${safePart(kode) || "KKP"} ${getFormattedDate().fullDateTimeFormat.replace(/\D/g, "")}.pdf`;
+    return { nama, url: await uploadToDriveFolder(req.file, driveFolderIdBuktiKkp, nama) };
+}
+
+// Everything a write needs: the snapshot, its groups and the tab's sheetId.
+async function konteksKkp(req, res) {
+    const spreadsheetId = pembayaranBpSpreadsheet(req, res);
+    if (!spreadsheetId) return null;
+    const sheetName = pembayaranBpSheetName(req);
+    const [baris, pembayaran] = await Promise.all([
+        bacaKkp(spreadsheetId),
+        cached(`rows|${spreadsheetId}|${sheetName}`,
+            () => readPembayaranBpRecords(spreadsheetId, sheetName), PEMBAYARAN_BP_SEARCH_TTL_MS),
+    ]);
+    return { spreadsheetId, baris, grup: kkpGrup(baris, kkpRingkasSpm(pembayaran)) };
+}
+
+// A paid Kode is an SPM already settled, so nothing may be added to it or changed inside
+// it - the money is out and the sheet is the record of what it paid for.
+function grupTerkunci(grup, kode) {
+    const item = grup.get(normalizeSatker(kode));
+    return item?.lunas ? `Kode ${item.kode} sudah terbayarkan dan tidak dapat diubah.` : null;
+}
+
+app.get("/kkp/transaksi", async (req, res) => {
+    try {
+        const konteks = await konteksKkp(req, res);
+        if (!konteks) return;
+        const { spreadsheetId, baris, grup } = konteks;
+
+        await selaraskanStatusKkp(spreadsheetId, grup);
+
+        // A missing anggaran table must not take the register down with it; the form just
+        // has no unit kerja to offer until migration 005 is applied.
+        let unitDikenal = [];
+        try {
+            unitDikenal = [...(await bacaUnitDikenal()).values()];
+        } catch (error) {
+            console.error("Daftar unit kerja tidak tersedia untuk Kelola KKP:", error?.message || error);
+        }
+        const semuaKode = baris.map(row => row.kode).filter(Boolean);
+
+        return res.status(200).json({
+            tahun: getRequestYear(req),
+            transaksiVia: KKP_TRANSAKSI_VIA,
+            unitKerja: unitDikenal.map(unit => {
+                const prefix = kkpPrefix(unit.nama);
+                return { nama: unit.nama, prefix, kodeBaru: kodeBerikutnya(prefix, semuaKode) };
+            }),
+            grup: [...grup.values()]
+                .sort((a, b) => a.kode.localeCompare(b.kode, "id"))
+                .map(item => ({
+                    kode: item.kode, unitKerja: item.unitKerja, status: item.status,
+                    lunas: item.lunas, nomorSpm: item.nomorSpm, total: item.total,
+                    nilaiSpm: item.nilaiSpm, selisih: item.selisih,
+                    jumlahBaris: item.baris.length,
+                    baris: item.baris.map(bentukTransaksiKkp),
+                })),
+        });
+    } catch (error) {
+        if (String(error?.message || "").includes("Unable to parse range")) {
+            console.error(`Tab '${DATABASE_KKP_SHEET}' tidak ditemukan pada spreadsheet Pembayaran BP.`);
+            return res.status(400).json({ message: `Tab "${DATABASE_KKP_SHEET}" tidak ditemukan di spreadsheet Pembayaran BP.` });
+        }
+        console.error("Error in GET /kkp/transaksi:", error);
+        return res.status(500).json({ message: "Gagal memuat data transaksi KKP." });
+    }
+});
+
+app.post("/kkp/transaksi", handleKkpUpload, async (req, res) => {
+    try {
+        const konteks = await konteksKkp(req, res);
+        if (!konteks) return;
+        const { spreadsheetId, baris, grup } = konteks;
+
+        const diperiksa = periksaTransaksiKkp(req.body);
+        if (diperiksa.message) return res.status(400).json({ message: diperiksa.message });
+        const nilai = diperiksa.nilai;
+
+        // Blank means "start a new one" - the form sends a Kode only to join an open group
+        const diminta = trimmed(req.body?.kode);
+        let kode;
+        if (diminta) {
+            const item = grup.get(normalizeSatker(diminta));
+            if (!item || !item.kode) return res.status(400).json({ message: `Kode "${diminta}" tidak dikenal.` });
+            if (item.lunas) return res.status(409).json({ message: grupTerkunci(grup, diminta) });
+            kode = item.kode;
+        } else {
+            kode = kodeBerikutnya(kkpPrefix(nilai.unitKerja), baris.map(row => row.kode).filter(Boolean));
+        }
+
+        // Uploaded only once the form has passed, so a rejected entry leaves no orphan
+        const bukti = await unggahBuktiKkp(req, res, kode);
+        if (!bukti) return;
+
+        const sheetId = await pembayaranBpSheetId(spreadsheetId, DATABASE_KKP_SHEET);
+        const nomorSpm = grup.get(normalizeSatker(kode))?.nomorSpm || "";
+
+        const hasil = await queuePembayaranBpWrite(spreadsheetId, async () => {
+            // Read afresh inside the queue: two creates would otherwise pick the same row
+            const kolom = await readRange(sheets, spreadsheetId,
+                `'${DATABASE_KKP_SHEET}'!A${DATABASE_KKP_FIRST_ROW}:A`);
+            const nomor = (kolom.data.values || []).map(row => parseInt(row?.[0], 10))
+                .filter(Number.isInteger);
+            const row = DATABASE_KKP_FIRST_ROW + (kolom.data.values || []).length;
+            // max + 1, not count + 1: a deleted row leaves a gap rather than a duplicate
+            const no = nomor.length === 0 ? 1 : Math.max(...nomor) + 1;
+
+            const values = kkpBarisSel(nilai, {
+                no, timestamp: getFormattedDate().fullDateTimeFormat,
+                kode, status: KKP_BELUM, nomorSpm, bukti,
+            });
+            await withBackoff(() => sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: { requests: [kkpTulisBaris(sheetId, row, values)] },
+            }));
+            return { row, no };
+        });
+        forgetKkpRows(spreadsheetId);
+
+        return res.status(201).json({
+            message: `Transaksi tersimpan dengan Kode ${kode}.`, kode, rowNumber: hasil.row, no: hasil.no,
+        });
+    } catch (error) {
+        console.error("Error in POST /kkp/transaksi:", error);
+        return res.status(500).json({ message: "Gagal menyimpan transaksi KKP." });
+    }
+});
+
+app.patch("/kkp/transaksi", handleKkpUpload, async (req, res) => {
+    try {
+        const konteks = await konteksKkp(req, res);
+        if (!konteks) return;
+        const { spreadsheetId, baris, grup } = konteks;
+
+        const rowNumber = parseInt(req.body?.rowNumber, 10);
+        const lama = baris.find(row => row.rowNumber === rowNumber);
+        if (!lama) return res.status(404).json({ message: "Data tidak ditemukan, muat ulang halaman." });
+        // The row number came from a snapshot that may be up to a minute old
+        if (trimmed(req.body?.expectedNo) && trimmed(req.body.expectedNo) !== lama.no) {
+            return res.status(409).json({ message: "Data sudah berubah, muat ulang halaman." });
+        }
+        const terkunci = grupTerkunci(grup, lama.kode);
+        if (terkunci) return res.status(409).json({ message: terkunci });
+
+        const diperiksa = periksaTransaksiKkp(req.body);
+        if (diperiksa.message) return res.status(400).json({ message: diperiksa.message });
+
+        // No new file keeps the link the row already has, so an edit never wipes it
+        const bukti = req.file ? await unggahBuktiKkp(req, res, lama.kode) : lama.buktiTransaksi;
+        if (!bukti) return;
+
+        const sheetId = await pembayaranBpSheetId(spreadsheetId, DATABASE_KKP_SHEET);
+        const values = kkpBarisSel(diperiksa.nilai, {
+            no: 0, timestamp: lama.timestamp || getFormattedDate().fullDateTimeFormat,
+            kode: lama.kode, status: lama.status || KKP_BELUM, nomorSpm: lama.nomorSpm, bukti,
+        }).slice(1);   // A holds the id and is never rewritten
+
+        await withBackoff(() => sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [kkpTulisBaris(sheetId, rowNumber, values, 1)] },
+        }));
+        forgetKkpRows(spreadsheetId);
+
+        // The old file is only ours to delete once the row no longer points at it
+        if (req.file && lama.buktiTransaksi.url) {
+            await deleteOwnedDriveFiles([lama.buktiTransaksi.url], driveFolderIdBuktiKkp)
+                .catch(error => console.error("Gagal menghapus Bukti Transaksi lama:", error?.message || error));
+        }
+
+        return res.status(200).json({ message: "Transaksi berhasil diperbarui.", rowNumber });
+    } catch (error) {
+        console.error("Error in PATCH /kkp/transaksi:", error);
+        return res.status(500).json({ message: "Gagal memperbarui transaksi KKP." });
+    }
+});
+
+app.delete("/kkp/transaksi", async (req, res) => {
+    try {
+        const konteks = await konteksKkp(req, res);
+        if (!konteks) return;
+        const { spreadsheetId, baris, grup } = konteks;
+
+        const rowNumber = parseInt(req.query.rowNumber, 10);
+        const lama = baris.find(row => row.rowNumber === rowNumber);
+        if (!lama) return res.status(404).json({ message: "Data tidak ditemukan, muat ulang halaman." });
+        if (trimmed(req.query.expectedNo) && trimmed(req.query.expectedNo) !== lama.no) {
+            return res.status(409).json({ message: "Data sudah berubah, muat ulang halaman." });
+        }
+        const terkunci = grupTerkunci(grup, lama.kode);
+        if (terkunci) return res.status(409).json({ message: terkunci });
+
+        const sheetId = await pembayaranBpSheetId(spreadsheetId, DATABASE_KKP_SHEET);
+        // Removed rather than blanked, so the tab holds no hole for a later read to trip on.
+        // No is a literal we wrote, so the rows below keep the numbers they already have.
+        await queuePembayaranBpWrite(spreadsheetId, () => withBackoff(() => sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [{ deleteDimension: {
+                range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber },
+            }}]},
+        })));
+        forgetKkpRows(spreadsheetId);
+
+        // After the row is gone, so a failed delete keeps the berkas too
+        await deleteOwnedDriveFiles([lama.buktiTransaksi.url], driveFolderIdBuktiKkp);
+
+        return res.status(200).json({ message: "Transaksi berhasil dihapus." });
+    } catch (error) {
+        console.error("Error in DELETE /kkp/transaksi:", error);
+        return res.status(500).json({ message: "Gagal menghapus transaksi KKP." });
+    }
+});
+
+// One Kode is one SPM, so the number is given to the whole group at once rather than typed
+// per row - which is also what lets the status derive itself from the payment sheet.
+app.post("/kkp/transaksi/spm", async (req, res) => {
+    try {
+        const konteks = await konteksKkp(req, res);
+        if (!konteks) return;
+        const { spreadsheetId, grup } = konteks;
+
+        const item = grup.get(normalizeSatker(req.body?.kode));
+        if (!item || !item.kode) return res.status(404).json({ message: "Kode tidak dikenal." });
+        if (item.lunas) return res.status(409).json({ message: grupTerkunci(grup, item.kode) });
+
+        // Padded like column D of PEMBAYARAN BP, so the two spell one SPM the same way
+        const digits = trimmed(req.body?.nomorSpm).replace(/\D/g, "");
+        if (!digits) return res.status(400).json({ message: "Nomor SPM harus berupa angka." });
+        const nomorSpm = digits.padStart(5, "0");
+
+        await writeRanges(sheets, spreadsheetId, item.baris.map(row => ({
+            range: `'${DATABASE_KKP_SHEET}'!L${row.rowNumber}`, values: [[nomorSpm]],
+        })));
+        forgetKkpRows(spreadsheetId);
+
+        return res.status(200).json({
+            message: `Nomor SPM ${nomorSpm} diterapkan pada ${item.baris.length} transaksi Kode ${item.kode}.`,
+        });
+    } catch (error) {
+        console.error("Error in POST /kkp/transaksi/spm:", error);
+        return res.status(500).json({ message: "Gagal menyimpan Nomor SPM." });
     }
 });
 

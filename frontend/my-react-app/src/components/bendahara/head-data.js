@@ -354,6 +354,17 @@ const sbmUnggahKeterangan = "Satu berkas .xlsx berisi dua sheet: Tiket Pesawat l
 const kalkulatorKeterangan = "Setiap baris dihitung sendiri, jadi satu perjalanan dapat memuat orang " +
     "dengan kelas atau golongan yang berbeda. Hasil hanya tampil di layar dan tidak disimpan.";
 
+// The transaksi register on the 'Database KKP' tab. Twins of KKP_TRANSAKSI_VIA, KKP_BELUM
+// and KKP_SUDAH in server.js - the create route refuses a Transaksi Via not on this list.
+const kkpTransaksiVia = ["Traveloka", "Tiket.com", "Payment Link", "EDC", "Shopee",
+    "Tokopedia", "Gojek/Grab", "KAI Access"];
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan };
+const kkpStatusBelum = "Belum Terbayarkan";
+const kkpStatusSudah = "Sudah Terbayarkan";
+
+const kkpTransaksiHeadData = ["No.", "Tanggal", "Nama PIC", "Nama Pejalan", "Keterangan",
+    "Transaksi Via", "Nominal", "Bukti", "Aksi"];
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpInputKeterangan };
 

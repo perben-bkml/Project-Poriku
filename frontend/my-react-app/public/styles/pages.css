@@ -1852,20 +1852,16 @@
 }
 
 /* --- Kelola KKP -------------------------------------------------------------
-   The two kalkulator sit side by side on a wide screen and stack below it: each
-   is a self-contained list of line items, so nothing lines up across the pair
-   and a split at any width is safe. */
+   The two kalkulator sit side by side only when there is room for both tables to
+   show every column; otherwise they stack, since each is a self-contained list of
+   line items and nothing lines up across the pair. auto-fit rather than a viewport
+   media query: the grid sits inside .page-content, so what matters is the width
+   left after the 240px sidebar - which also means hiding the sidebar can split it. */
 .kkp-kalkulator {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(660px, 1fr));
     gap: 24px;
     margin: 0 30px;
-}
-
-@media (max-width: 1400px) {
-    .kkp-kalkulator {
-        grid-template-columns: minmax(0, 1fr);
-    }
 }
 
 .kkp-blok-head {
@@ -1893,13 +1889,16 @@
 .kkp-sel,
 .kkp-angka {
     width: 100%;
-    min-width: 120px;
+    min-width: 110px;
     padding: 6px 8px;
     font-size: 0.9rem;
 }
 
+/* Jumlah Orang / Durasi hold two digits at most, so they size to the number
+   instead of stretching to the cell like the dropdowns do. */
 .kkp-angka {
-    min-width: 80px;
+    width: 64px;
+    min-width: 0;
 }
 
 .kkp-belum {
@@ -1942,6 +1941,111 @@
     text-align: right;
     color: #8A6100;
     font-size: 0.85rem;
+}
+
+/* Category strip for the one card holding both reference tables. The buttons reuse
+   .kelola-tab; only the container differs, since this strip sits inside a card
+   rather than above one, and lines up with the table's own 30px gutter. */
+.kkp-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 30px 16px 30px;
+}
+
+/* --- Kelola KKP: transaksi --- */
+/* The Kode group header. Set apart from its own rows so a long register still reads as a
+   list of SPM rather than as one flat table. */
+.kkp-grup-baris > td {
+    background-color: #F4F7FB;
+}
+
+.kkp-kode {
+    padding: 2px 10px;
+    border-radius: 20px;
+    background-color: #EDF1F7;
+    color: #5A6472;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* An open Kode is the one an admin can still add to, so it is the one worth spotting */
+.kkp-kode-jalan {
+    background-color: #FFF1CC;
+    color: #8A6100;
+}
+
+.kkp-grup-unit {
+    margin-left: 10px;
+    font-weight: 600;
+    color: #0a0f1b;
+}
+
+.kkp-grup-meta {
+    margin-left: 10px;
+    color: #5A6472;
+    font-size: 0.85rem;
+}
+
+/* A settled Kode whose rows do not add up to the Nilai SP2D. Amber rather than red: the
+   payment itself is real, it is the two records that disagree. */
+.kkp-selisih {
+    margin-left: 10px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background-color: #FFF1CC;
+    color: #8A6100;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.kkp-grup-total {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* A refund is a negative nominal, so it has to read as money coming back rather than as
+   a smaller charge that happens to have a dash in front of it */
+.kkp-refund {
+    color: #0F9043;
+}
+
+.kkp-btn-spm {
+    padding: 4px 14px;
+    border: 1px solid #00449C;
+    border-radius: 20px;
+    background-color: white;
+    color: #00449C;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.kkp-btn-spm:hover {
+    background-color: #00449C;
+    color: white;
+}
+
+/* The same fields as the Pembayaran BP side panel, but in a full width card instead of a
+   470px panel: .bp-form-fields is one scrolling column there, which would leave most of the
+   row empty here and put the submit an entire screen below the first field. */
+.kkp-form .bp-form-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0 24px;
+    overflow: visible;   /* the card grows; there is no panel height to fit inside */
+}
+
+/* The textarea and the file picker read across the whole row rather than in a column */
+.kkp-form .bp-field-note,
+.kkp-form .bp-field-file {
+    grid-column: 1 / -1;
+}
+
+.kkp-form .bp-form-footer {
+    padding-bottom: 20px;
 }
 
 /* Sits inside .wide-card-actions, which is a flex row of buttons */

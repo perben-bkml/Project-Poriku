@@ -1953,38 +1953,78 @@
     margin: 4px 30px 16px 30px;
 }
 
+/* Both category panels stay mounted so switching never unmounts a half filled form or a
+   kalkulator full of rows; the attribute is what hides one. Spelled out because a UA
+   default is easy to override by accident. */
+.kkp-panel[hidden] {
+    display: none;
+}
+
 /* --- Kelola KKP: transaksi --- */
-/* The Kode group header. Set apart from its own rows so a long register still reads as a
-   list of SPM rather than as one flat table. */
-.kkp-grup-baris > td {
-    background-color: #F4F7FB;
+/* The register reads as groups, not rows: a Kode band announces one SPM and its transaksi
+   sit under it. Colour on the band and the chip is the unit kerja; whether it is settled is
+   said in words on .kkp-status, because status must never have to be inferred from a hue. */
+.kkp-band > td {
+    background-color: #F7F9FC;
+    border-bottom: 1px solid #E1E7EF;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.kkp-band-utama {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* The second line carries the counts, so the first stays scannable as identity alone */
+.kkp-band-meta {
+    display: block;
+    margin: 4px 0 0 40px;   /* clears the expand button above it */
+    color: #5A6472;
+    font-size: 0.82rem;
 }
 
 .kkp-kode {
-    padding: 2px 10px;
+    padding: 3px 12px;
     border-radius: 20px;
-    background-color: #EDF1F7;
-    color: #5A6472;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.3px;
     font-variant-numeric: tabular-nums;
 }
 
-/* An open Kode is the one an admin can still add to, so it is the one worth spotting */
-.kkp-kode-jalan {
-    background-color: #FFF1CC;
-    color: #8A6100;
-}
-
 .kkp-grup-unit {
-    margin-left: 10px;
     font-weight: 600;
     color: #0a0f1b;
 }
 
-.kkp-grup-meta {
-    margin-left: 10px;
-    color: #5A6472;
-    font-size: 0.85rem;
+.kkp-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.kkp-status-titik {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+/* Scoped to the band so it outweighs .MuiTableCell-root, which sets font-weight at the
+   same specificity and would otherwise win or lose on injection order alone. The group
+   total is the figure an admin scans for; the rows under it stay regular weight. */
+.kkp-band .kkp-grup-total {
+    font-weight: 700;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 /* A settled Kode whose rows do not add up to the Nilai SP2D. Amber rather than red: the
@@ -1995,19 +2035,44 @@
     border-radius: 20px;
     background-color: #FFF1CC;
     color: #8A6100;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
 }
 
-.kkp-grup-total {
-    font-weight: 600;
-    white-space: nowrap;
+/* Money lines up digit for digit down the column, and a long Keterangan must not push the
+   nominal off screen - it is the one cell that may wrap. */
+.kkp-anak td {
+    font-size: 0.86rem;
+}
+
+.kkp-anak-no {
+    color: #8792A3;
+    font-variant-numeric: tabular-nums;
+}
+
+.kkp-anak-ket {
+    max-width: 280px;
+    min-width: 160px;
+}
+
+.kkp-angka-sel {
+    font-variant-numeric: tabular-nums;
 }
 
 /* A refund is a negative nominal, so it has to read as money coming back rather than as
    a smaller charge that happens to have a dash in front of it */
 .kkp-refund {
     color: #0F9043;
+    font-variant-numeric: tabular-nums;
+}
+
+.kkp-bukti {
+    display: inline-flex;
+    color: #00449C;
+}
+
+.kkp-bukti-kosong {
+    color: #C9CFD8;
 }
 
 .kkp-btn-spm {
@@ -2017,10 +2082,11 @@
     background-color: white;
     color: #00449C;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .kkp-btn-spm:hover {
@@ -2028,20 +2094,77 @@
     color: white;
 }
 
-/* The same fields as the Pembayaran BP side panel, but in a full width card instead of a
-   470px panel: .bp-form-fields is one scrolling column there, which would leave most of the
-   row empty here and put the submit an entire screen below the first field. */
-.kkp-form .bp-form-fields {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 0 24px;
-    overflow: visible;   /* the card grows; there is no panel height to fit inside */
+/* The entry form. .bp-form-fields is one scrolling column in the Pembayaran BP side panel;
+   in a full width card that would leave most of the row empty and put the submit an entire
+   screen below the first field, so the fields are grouped into named sections instead. */
+.kkp-form {
+    padding: 0 30px 6px 30px;
 }
 
-/* The textarea and the file picker read across the whole row rather than in a column */
-.kkp-form .bp-field-note,
-.kkp-form .bp-field-file {
+.kkp-bagian {
+    margin-bottom: 18px;
+    padding: 14px 18px 4px 18px;
+    border: 1px solid #E7ECF3;
+    border-radius: 12px;
+    background-color: #FCFDFE;
+}
+
+.kkp-bagian-judul {
+    margin: 0 0 12px 0;
+    color: #00449C;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+.kkp-bagian-isi {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0 22px;
+}
+
+/* Keterangan and the file picker read across the whole row rather than in a column */
+.kkp-bagian-lebar {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.kkp-bantuan {
+    margin-top: 5px;
+    color: #8792A3;
+    font-size: 0.78rem;
+}
+
+/* What the picked Kode already holds and what this entry will make it. Spans the section so
+   it sits under the dropdown rather than beside it in a column of its own. */
+.kkp-ringkas {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 2px 0 14px 0;
+    padding: 10px 14px;
+    border: 1px solid #E7ECF3;
+    border-left: 4px solid #9AA4B2;
+    border-radius: 10px;
+    background-color: #F7F9FC;
+    color: #5A6472;
+    font-size: 0.85rem;
+}
+
+.kkp-ringkas-kode {
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.kkp-ringkas-jadi {
+    margin-left: auto;
+    color: #0a0f1b;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
 .kkp-form .bp-form-footer {

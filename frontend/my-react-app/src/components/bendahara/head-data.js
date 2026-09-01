@@ -362,9 +362,30 @@ const kkpTransaksiVia = ["Traveloka", "Tiket.com", "Payment Link", "EDC", "Shope
 const kkpStatusBelum = "Belum Terbayarkan";
 const kkpStatusSudah = "Sudah Terbayarkan";
 
-const kkpTransaksiHeadData = ["No.", "Tanggal", "Nama PIC", "Nama Pejalan", "Keterangan",
-    "Transaksi Via", "Nominal", "Bukti", "Aksi"];
+const kkpTransaksiHeadData = [
+    {label: "No."}, {label: "Tanggal"}, {label: "Nama PIC"}, {label: "Nama Pejalan"},
+    {label: "Keterangan"}, {label: "Transaksi Via"}, {label: "Nominal", align: "right"},
+    {label: "Bukti", align: "center"}, {label: "Aksi", align: "center"},
+];
+
+// One hue per unit kerja rather than 20 hand-picked colours: the chip, its text and the
+// accent are all derived from a single number, so they cannot drift out of contrast with
+// each other. Hues are spread rather than evenly stepped - 18 degrees apart would put four
+// near-identical greens in a row. There are exactly 20 registered unit kerja; a 21st wraps
+// and shares a hue, which is a repeat rather than a bug.
+const kkpWarnaHue = [210, 12, 145, 275, 32, 190, 330, 95, 250, 5,
+                     165, 45, 300, 220, 120, 20, 200, 285, 60, 175];
+
+// indeks is the unit's position in the sorted list the API returns, so a colour is stable
+// for as long as the unit kerja list is. -1 (an unknown or blank unit) stays neutral.
+const kkpWarnaUnit = (indeks) => indeks < 0
+    ? {aksen: "#9AA4B2", latar: "#EDF1F7", teks: "#5A6472"}
+    : {
+        aksen: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 62% 46%)`,
+        latar: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 78% 95%)`,
+        teks: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 68% 27%)`,
+    };
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpInputKeterangan };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
 

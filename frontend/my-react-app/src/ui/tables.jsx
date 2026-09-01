@@ -1758,7 +1758,28 @@ TableSbmHotel.propTypes = {
 // The transaksi register, grouped by Kode - a Kode is one SPM, so the group is the unit an
 // admin acts on and a single row is only ever a line inside it. Follows TableAnggaranPohon:
 // one Fragment per group, expansion held in a map keyed by Kode.
-export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
+//
+// Colour carries unit kerja, not status: the accent and the Kode chip identify whose
+// spending this is, and whether it is settled is said in words on its own pill. The two
+// were competing for one chip before, and status is the thing that must never be guessed.
+const KKP_STATUS_GAYA = {
+    lunas:  {latar: "#DFF5E6", teks: "#0F7A38", titik: "#12A24A"},
+    belum:  {latar: "#FFF1CC", teks: "#8A6100", titik: "#E0A200"},
+};
+
+function StatusKkp({lunas, label}) {
+    const gaya = lunas ? KKP_STATUS_GAYA.lunas : KKP_STATUS_GAYA.belum;
+    return (
+        <span className="kkp-status" style={{backgroundColor: gaya.latar, color: gaya.teks}}>
+            <span className="kkp-status-titik" style={{backgroundColor: gaya.titik}}/>
+            {label}
+        </span>
+    );
+}
+
+StatusKkp.propTypes = {lunas: PropTypes.bool, label: PropTypes.string};
+
+export function TableTransaksiKkp({grup, kosong, warna, onSpm, onUbah, onHapus}) {
     const [terbuka, setTerbuka] = useState({});
     const toggle = (kode) => setTerbuka(prev => ({...prev, [kode]: !prev[kode]}));
 
@@ -1767,41 +1788,59 @@ export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
     }
 
     return (
-        <TableContainer sx={{...realisasiContainer, maxHeight: "620px"}}>
+        <TableContainer sx={{...realisasiContainer, maxHeight: "640px"}}>
             <Table size="small" stickyHeader>
-                <RealisasiHead heads={kkpTransaksiHeadData}/>
+                <TableHead>
+                    <TableRow>
+                        {kkpTransaksiHeadData.map(({label, align}) => (
+                            <TableCell key={label} sx={realisasiHeadCell} align={align || "left"}>{label}</TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
                 <TableBody>
                     {grup.map(item => {
                         // A hand-edited sheet can hold a row with no Kode; it groups under ""
                         // rather than disappearing, but has no SPM to be given
                         const kunci = item.kode || "(tanpa kode)";
                         const buka = !!terbuka[kunci];
+                        const gaya = warna(item.unitKerja);
+                        // The accent runs down the whole group, so its rows read as belonging
+                        // to the band above them rather than as a flat list
+                        const tepi = {borderLeft: `4px solid ${gaya.aksen}`};
                         return (
                             <Fragment key={kunci}>
-                                <TableRow hover className="kkp-grup-baris">
-                                    <TableCell colSpan={5}>
-                                        <IconButton size="small" onClick={() => toggle(kunci)}
-                                                    aria-label={buka ? "Tutup" : "Buka"}>
-                                            {buka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
-                                        </IconButton>
-                                        <span className={`kkp-kode${item.lunas ? "" : " kkp-kode-jalan"}`}>{kunci}</span>
-                                        <span className="kkp-grup-unit">{item.unitKerja}</span>
-                                        <span className="kkp-grup-meta">{item.jumlahBaris} transaksi</span>
-                                        {item.nomorSpm && <span className="kkp-grup-meta">SPM {item.nomorSpm}</span>}
-                                        {/* The status still flipped - the money moved - but the
-                                            register and the SP2D disagree on how much, so one of
-                                            the two needs correcting */}
-                                        {item.selisih !== 0 &&
-                                            <span className="kkp-selisih"
-                                                  title={`Nilai SP2D di Pembayaran BP ${formatRupiah(item.nilaiSpm)}`}>
-                                                Selisih {formatRupiah(Math.abs(item.selisih))}
-                                                {item.selisih > 0 ? " lebih besar" : " lebih kecil"} dari Nilai SP2D
-                                            </span>}
+                                <TableRow className="kkp-band">
+                                    <TableCell colSpan={6} sx={tepi}>
+                                        <span className="kkp-band-utama">
+                                            <IconButton size="small" onClick={() => toggle(kunci)}
+                                                        aria-label={buka ? "Tutup" : "Buka"}>
+                                                {buka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
+                                            </IconButton>
+                                            <span className="kkp-kode"
+                                                  style={{backgroundColor: gaya.latar, color: gaya.teks}}>
+                                                {kunci}
+                                            </span>
+                                            <span className="kkp-grup-unit">{item.unitKerja || "Tanpa unit kerja"}</span>
+                                            <StatusKkp lunas={item.lunas} label={item.status}/>
+                                        </span>
+                                        <span className="kkp-band-meta">
+                                            {item.jumlahBaris} transaksi
+                                            {item.nomorSpm && <> &middot; SPM {item.nomorSpm}</>}
+                                            {/* The status still flipped - the money moved - but
+                                                the register and the SP2D disagree on how much,
+                                                so one of the two needs correcting */}
+                                            {item.selisih !== 0 &&
+                                                <span className="kkp-selisih"
+                                                      title={`Nilai SP2D di Pembayaran BP ${formatRupiah(item.nilaiSpm)}`}>
+                                                    Selisih {formatRupiah(Math.abs(item.selisih))}
+                                                    {item.selisih > 0 ? " lebih besar" : " lebih kecil"} dari Nilai SP2D
+                                                </span>}
+                                        </span>
                                     </TableCell>
-                                    <TableCell/>
-                                    <TableCell className="kkp-grup-total">{formatRupiah(item.total)}</TableCell>
-                                    <TableCell/>
-                                    <TableCell align="center">
+                                    <TableCell align="right" className="kkp-grup-total">
+                                        {formatRupiah(item.total)}
+                                    </TableCell>
+                                    <TableCell colSpan={2} align="center">
                                         {!item.lunas && item.kode &&
                                             <button type="button" className="kkp-btn-spm" onClick={() => onSpm(item)}>
                                                 {item.nomorSpm ? "Ubah SPM" : "Beri Nomor SPM"}
@@ -1810,23 +1849,28 @@ export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
                                 </TableRow>
 
                                 {buka && item.baris.map(row => (
-                                    <TableRow key={row.rowNumber} hover>
-                                        <TableCell>{row.no}</TableCell>
+                                    <TableRow key={row.rowNumber} hover className="kkp-anak">
+                                        <TableCell sx={tepi} className="kkp-anak-no">{row.no}</TableCell>
                                         <TableCell sx={{whiteSpace: "nowrap"}}>{row.tanggalTransaksi}</TableCell>
                                         <TableCell>{row.namaPic}</TableCell>
                                         <TableCell>{row.namaPejalan}</TableCell>
-                                        <TableCell>{row.keterangan}</TableCell>
+                                        <TableCell className="kkp-anak-ket">{row.keterangan}</TableCell>
                                         <TableCell>{row.transaksiVia}</TableCell>
                                         {/* A refund is entered as a negative nominal, so it has
                                             to read as one rather than as a smaller charge */}
-                                        <TableCell sx={{whiteSpace: "nowrap"}}
-                                                   className={row.nominal < 0 ? "kkp-refund" : undefined}>
+                                        <TableCell align="right" sx={{whiteSpace: "nowrap"}}
+                                                   className={row.nominal < 0 ? "kkp-refund" : "kkp-angka-sel"}>
                                             {formatRupiah(row.nominal)}
                                         </TableCell>
                                         <TableCell align="center">
                                             {row.buktiTransaksi?.url
-                                                ? <a href={row.buktiTransaksi.url} target="_blank" rel="noopener noreferrer">Lihat</a>
-                                                : dash(row.buktiTransaksi?.nama)}
+                                                ? <Tooltip title={row.buktiTransaksi.nama}>
+                                                    <a href={row.buktiTransaksi.url} target="_blank" rel="noopener noreferrer"
+                                                       className="kkp-bukti">
+                                                        <DescriptionOutlinedIcon sx={{fontSize: 20}}/>
+                                                    </a>
+                                                  </Tooltip>
+                                                : <span className="kkp-bukti-kosong">-</span>}
                                         </TableCell>
                                         <TableCell align="center" sx={{whiteSpace: "nowrap"}}>
                                             {/* A settled group is the record of what an SP2D
@@ -1835,7 +1879,7 @@ export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
                                                 <span>
                                                     <IconButton size="small" disabled={item.lunas}
                                                                 onClick={() => onUbah(row)}>
-                                                        <EditIcon sx={{fontSize: 20, color: item.lunas ? "#C9CFD8" : "#00449C"}}/>
+                                                        <EditIcon sx={{fontSize: 19, color: item.lunas ? "#C9CFD8" : "#00449C"}}/>
                                                     </IconButton>
                                                 </span>
                                             </Tooltip>
@@ -1843,7 +1887,7 @@ export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
                                                 <span>
                                                     <IconButton size="small" disabled={item.lunas}
                                                                 onClick={() => onHapus(row)}>
-                                                        <DeleteForeverIcon sx={{fontSize: 20, color: item.lunas ? "#C9CFD8" : "#BD1404"}}/>
+                                                        <DeleteForeverIcon sx={{fontSize: 19, color: item.lunas ? "#C9CFD8" : "#BD1404"}}/>
                                                     </IconButton>
                                                 </span>
                                             </Tooltip>
@@ -1862,6 +1906,7 @@ export function TableTransaksiKkp({grup, kosong, onSpm, onUbah, onHapus}) {
 TableTransaksiKkp.propTypes = {
     grup: PropTypes.array,
     kosong: PropTypes.string,
+    warna: PropTypes.func.isRequired,
     onSpm: PropTypes.func.isRequired,
     onUbah: PropTypes.func.isRequired,
     onHapus: PropTypes.func.isRequired,

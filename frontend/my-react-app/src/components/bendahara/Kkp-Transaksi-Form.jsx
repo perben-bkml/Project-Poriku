@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import apiClient from "../../lib/apiClient";
 import {BackgroundTaskContext} from "../../lib/BackgroundTasks";
 import {SubmitButton} from "../../ui/buttons.jsx";
-import {kkpTransaksiVia, kkpInputKeterangan, formatRupiah} from "./head-data.js";
+import {kkpTransaksiVia, kkpWarnaUnit, formatRupiah} from "./head-data.js";
 
 const MAX_FILE_MB = 10;
 const DRAFT_KEY = 'kkp-transaksi-draft';
@@ -38,6 +38,13 @@ const dariRecord = (record) => ({
     nominal: toRupiah(record.nominal),
     kode: record.kode || "",
 });
+
+// The field holds grouped text; the summary has to add it up, and a refund carries a minus
+const angkaNominal = (teks) => {
+    const digits = String(teks ?? "").replace(/\D/g, "");
+    if (digits === "") return 0;
+    return String(teks).trim().startsWith("-") ? -Number(digits) : Number(digits);
+};
 
 export default function KkpTransaksiForm({data, record, onSelesai, onBatal}) {
     const isEdit = Boolean(record);
@@ -123,6 +130,14 @@ export default function KkpTransaksiForm({data, record, onSelesai, onBatal}) {
         .filter(item => item.kode && item.unitKerja === formData.unitKerja)
         .sort((a, b) => a.kode.localeCompare(b.kode, "id")), [data, formData.unitKerja]);
 
+    // What the picked Kode already holds and what this entry would make it. Answers the
+    // question the admin actually has at this point: is this the right group to add to?
+    const grupTerpilih = useMemo(
+        () => (data?.grup || []).find(item => item.kode === formData.kode) || null,
+        [data, formData.kode]);
+    const nominalBaru = angkaNominal(formData.nominal);
+    const warnaUnit = kkpWarnaUnit(unitKerja.findIndex(item => item.nama === formData.unitKerja));
+
     function handleSubmit(event) {
         event.preventDefault();
 
@@ -163,86 +178,134 @@ export default function KkpTransaksiForm({data, record, onSelesai, onBatal}) {
         <form className="pembayaran-bp-form kkp-form" onSubmit={handleSubmit}>
 
 
-            <div className="bp-form-fields">
-                <div className="bp-field">
-                    <label htmlFor="tanggalTransaksi">Tanggal Transaksi</label>
-                    <input type="date" id="tanggalTransaksi" name="tanggalTransaksi" className="type-btn"
-                           value={formData.tanggalTransaksi} onChange={handleInputChange} required/>
-                </div>
+            <div className="kkp-bagian">
+                <h3 className="kkp-bagian-judul">Detail Transaksi</h3>
+                <div className="kkp-bagian-isi">
+                    <div className="bp-field">
+                        <label htmlFor="tanggalTransaksi">Tanggal Transaksi</label>
+                        <input type="date" id="tanggalTransaksi" name="tanggalTransaksi" className="type-btn"
+                               value={formData.tanggalTransaksi} onChange={handleInputChange} required/>
+                    </div>
 
-                <div className="bp-field">
-                    <label htmlFor="namaPic">Nama PIC</label>
-                    <input type="text" id="namaPic" name="namaPic" className="type-btn"
-                           value={formData.namaPic} onChange={handleInputChange} required/>
-                </div>
+                    <div className="bp-field">
+                        <label htmlFor="transaksiVia">Transaksi Via</label>
+                        <select id="transaksiVia" name="transaksiVia" className="type-btn"
+                                value={formData.transaksiVia} onChange={handleInputChange} required>
+                            <option value="" disabled>Pilih kanal</option>
+                            {kkpTransaksiVia.map(via => <option key={via} value={via}>{via}</option>)}
+                        </select>
+                    </div>
 
-                <div className="bp-field">
-                    <label htmlFor="namaPejalan">Nama Pejalan</label>
-                    <input type="text" id="namaPejalan" name="namaPejalan" className="type-btn"
-                           value={formData.namaPejalan} onChange={handleInputChange} required/>
+                    <div className="bp-field">
+                        <label htmlFor="nominal">Nominal</label>
+                        <input type="text" id="nominal" name="nominal" className="type-btn" inputMode="numeric"
+                               placeholder="1.250.000" value={formData.nominal} required
+                               onChange={event => ubah("nominal", toRupiah(event.target.value))}/>
+                        <span className="kkp-bantuan">
+                            Awali dengan tanda minus untuk mencatat refund.
+                        </span>
+                    </div>
                 </div>
+            </div>
 
-                <div className="bp-field">
-                    <label htmlFor="unitKerja">Unit Kerja</label>
-                    <select id="unitKerja" name="unitKerja" className="type-btn"
-                            value={formData.unitKerja} onChange={handleInputChange} required>
-                        <option value="" disabled>Pilih unit kerja</option>
-                        {unitKerja.map(item => <option key={item.nama} value={item.nama}>{item.nama}</option>)}
-                    </select>
+            <div className="kkp-bagian">
+                <h3 className="kkp-bagian-judul">Pejalan &amp; Unit Kerja</h3>
+                <div className="kkp-bagian-isi">
+                    <div className="bp-field">
+                        <label htmlFor="namaPic">Nama PIC</label>
+                        <input type="text" id="namaPic" name="namaPic" className="type-btn"
+                               value={formData.namaPic} onChange={handleInputChange} required/>
+                    </div>
+
+                    <div className="bp-field">
+                        <label htmlFor="namaPejalan">Nama Pejalan</label>
+                        <input type="text" id="namaPejalan" name="namaPejalan" className="type-btn"
+                               value={formData.namaPejalan} onChange={handleInputChange} required/>
+                    </div>
+
+                    <div className="bp-field">
+                        <label htmlFor="unitKerja">Unit Kerja</label>
+                        <select id="unitKerja" name="unitKerja" className="type-btn"
+                                value={formData.unitKerja} onChange={handleInputChange} required>
+                            <option value="" disabled>Pilih unit kerja</option>
+                            {unitKerja.map(item => <option key={item.nama} value={item.nama}>{item.nama}</option>)}
+                        </select>
+                    </div>
                 </div>
+            </div>
 
-                <div className="bp-field">
-                    <label htmlFor="transaksiVia">Transaksi Via</label>
-                    <select id="transaksiVia" name="transaksiVia" className="type-btn"
-                            value={formData.transaksiVia} onChange={handleInputChange} required>
-                        <option value="" disabled>Pilih kanal</option>
-                        {kkpTransaksiVia.map(via => <option key={via} value={via}>{via}</option>)}
-                    </select>
-                </div>
-
-                <div className="bp-field">
-                    <label htmlFor="nominal">Nominal (isi minus untuk refund)</label>
-                    <input type="text" id="nominal" name="nominal" className="type-btn" inputMode="numeric"
-                           placeholder="1.250.000" value={formData.nominal} required
-                           onChange={event => ubah("nominal", toRupiah(event.target.value))}/>
-                </div>
-
-                {/* One Kode is one SPM. Joining an open one is a choice; leaving it blank
-                    lets the server mint the next number for this unit kerja. */}
-                <div className="bp-field">
-                    <label htmlFor="kode">Kode</label>
-                    <select id="kode" name="kode" className="type-btn" disabled={isEdit || !formData.unitKerja}
-                            value={formData.kode} onChange={handleInputChange}>
-                        <option value="">
-                            {unitTerpilih ? `Buat kode baru: ${unitTerpilih.kodeBaru}` : "Pilih unit kerja dahulu"}
-                        </option>
-                        {opsiKode.map(item => (
-                            <option key={item.kode} value={item.kode} disabled={item.lunas}>
-                                {item.kode} - {item.jumlahBaris} transaksi, {formatRupiah(item.total)}
-                                {item.lunas ? " (sudah terbayarkan)" : ""}
+            <div className="kkp-bagian">
+                <h3 className="kkp-bagian-judul">Pengelompokan SPM</h3>
+                <div className="kkp-bagian-isi">
+                    {/* One Kode is one SPM. Joining an open one is a choice; leaving it blank
+                        lets the server mint the next number for this unit kerja. */}
+                    <div className="bp-field">
+                        <label htmlFor="kode">Kode</label>
+                        <select id="kode" name="kode" className="type-btn" disabled={isEdit || !formData.unitKerja}
+                                value={formData.kode} onChange={handleInputChange}>
+                            <option value="">
+                                {unitTerpilih ? `Buat kode baru: ${unitTerpilih.kodeBaru}` : "Pilih unit kerja dahulu"}
                             </option>
-                        ))}
-                    </select>
-                </div>
+                            {opsiKode.map(item => (
+                                <option key={item.kode} value={item.kode} disabled={item.lunas}>
+                                    {item.kode} - {item.jumlahBaris} transaksi, {formatRupiah(item.total)}
+                                    {item.lunas ? " (sudah terbayarkan)" : ""}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                <div className="bp-field bp-field-note">
-                    <label htmlFor="keterangan">Keterangan Penggunaan KKP</label>
-                    <textarea id="keterangan" name="keterangan" className="type-btn" rows={3}
-                              value={formData.keterangan} onChange={handleInputChange} required/>
+                    {/* What this entry does to the group it is joining - the question an admin
+                        actually has here is whether this is the right group to add to */}
+                    {unitTerpilih &&
+                        <div className="kkp-ringkas" style={{borderLeftColor: warnaUnit.aksen}}>
+                            {grupTerpilih
+                                ? <>
+                                    <span className="kkp-ringkas-kode"
+                                          style={{backgroundColor: warnaUnit.latar, color: warnaUnit.teks}}>
+                                        {grupTerpilih.kode}
+                                    </span>
+                                    <span>
+                                        kini {grupTerpilih.jumlahBaris} transaksi &middot; {formatRupiah(grupTerpilih.total)}
+                                    </span>
+                                    <span className="kkp-ringkas-jadi">
+                                        setelah entri ini &rarr; {formatRupiah(grupTerpilih.total + nominalBaru)}
+                                    </span>
+                                  </>
+                                : <>
+                                    <span className="kkp-ringkas-kode"
+                                          style={{backgroundColor: warnaUnit.latar, color: warnaUnit.teks}}>
+                                        {unitTerpilih.kodeBaru}
+                                    </span>
+                                    <span>kode baru, dimulai dari entri ini</span>
+                                    <span className="kkp-ringkas-jadi">{formatRupiah(nominalBaru)}</span>
+                                  </>}
+                        </div>}
                 </div>
+            </div>
 
-                <div className="bp-field bp-field-file">
-                    <label htmlFor="buktiTransaksi">Bukti Transaksi (PDF, maks. {MAX_FILE_MB} MB)</label>
-                    <input type="file" id="buktiTransaksi" name="buktiTransaksi" accept="application/pdf"
-                           ref={berkasRef} onChange={handleFileChange}/>
-                    {isEdit && <span className="dokumen-gaji-file-current">
-                        Saat ini: {record.buktiTransaksi?.url
-                            ? <a href={record.buktiTransaksi.url} target="_blank" rel="noopener noreferrer">
-                                {record.buktiTransaksi.nama}</a>
-                            : (record.buktiTransaksi?.nama || "tidak ada")} - kosongkan jika tidak diganti.
-                    </span>}
-                    {!isEdit && !berkas && namaTertunda &&
-                        <span className="dokumen-gaji-file-current">Pilih ulang {namaTertunda}.</span>}
+            <div className="kkp-bagian">
+                <h3 className="kkp-bagian-judul">Keterangan &amp; Bukti</h3>
+                <div className="kkp-bagian-isi kkp-bagian-lebar">
+                    <div className="bp-field bp-field-note">
+                        <label htmlFor="keterangan">Keterangan Penggunaan KKP</label>
+                        <textarea id="keterangan" name="keterangan" className="type-btn" rows={3}
+                                  value={formData.keterangan} onChange={handleInputChange} required/>
+                    </div>
+
+                    <div className="bp-field bp-field-file">
+                        <label htmlFor="buktiTransaksi">Bukti Transaksi (PDF, maks. {MAX_FILE_MB} MB)</label>
+                        <input type="file" id="buktiTransaksi" name="buktiTransaksi" accept="application/pdf"
+                               ref={berkasRef} onChange={handleFileChange}/>
+                        {isEdit && <span className="dokumen-gaji-file-current">
+                            Saat ini: {record.buktiTransaksi?.url
+                                ? <a href={record.buktiTransaksi.url} target="_blank" rel="noopener noreferrer">
+                                    {record.buktiTransaksi.nama}</a>
+                                : (record.buktiTransaksi?.nama || "tidak ada")} - kosongkan jika tidak diganti.
+                        </span>}
+                        {!isEdit && !berkas && namaTertunda &&
+                            <span className="dokumen-gaji-file-current">Pilih ulang {namaTertunda}.</span>}
+                    </div>
                 </div>
             </div>
 

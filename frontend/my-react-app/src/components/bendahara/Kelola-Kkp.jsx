@@ -5,7 +5,7 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat,
     sbmGolonganHotel, sbmUnggahKeterangan, kalkulatorKeterangan, kkpStatusBelum, kkpStatusSudah,
-    formatRupiah} from "./head-data.js";
+    kkpWarnaUnit, formatRupiah} from "./head-data.js";
 import {unduhExcelBanyakSheet, selTeks} from "../../lib/excel.js";
 import KkpTransaksiForm from "./Kkp-Transaksi-Form.jsx";
 // Import Tables
@@ -23,6 +23,12 @@ const kunci = (teks) => String(teks ?? "").trim().replace(/\s+/g, " ").toUpperCa
 let nomorBaris = 0;
 const barisKosongTiket = () => ({id: ++nomorBaris, kotaAsal: "", kotaTujuan: "", kelas: "", orang: 1});
 const barisKosongHotel = () => ({id: ++nomorBaris, provinsi: "", golongan: "", durasi: 1, orang: 1});
+
+const KATEGORI_KEY = 'kelola-kkp-kategori';
+const KKP_KATEGORI = [
+    {kunci: "sbm", label: "Standar Biaya Masukan"},
+    {kunci: "kkp", label: "Kartu Kredit Pemerintah"},
+];
 
 // Blank while the row is incomplete rather than zero: a zero subtotal reads as "this leg is
 // free", which is a different claim from "this leg is not filled in yet".
@@ -52,6 +58,13 @@ export default function KelolaKkp() {
     // panel starts folded away and opens itself only when there is no SBM to calculate with.
     const [bukaUnggah, setBukaUnggah] = useState(false);
 
+    // A remembered category can be a key from an earlier layout, so an unknown one falls
+    // back to the first rather than showing neither panel
+    const [kategori, setKategori] = useState(() => {
+        const disimpan = localStorage.getItem(KATEGORI_KEY);
+        return KKP_KATEGORI.some(item => item.kunci === disimpan) ? disimpan : KKP_KATEGORI[0].kunci;
+    });
+
     // The transaksi register. Kept apart from `data` so a reload of one never blanks the
     // other - the two come from different sources, Postgres and the Pembayaran BP sheet.
     const [transaksi, setTransaksi] = useState(null);
@@ -64,6 +77,11 @@ export default function KelolaKkp() {
     const [tabRef, setTabRef] = useState("tiket");
     const [cariTiket, setCariTiket] = useState("");
     const [cariHotel, setCariHotel] = useState("");
+
+    function pilihKategori(kunci) {
+        setKategori(kunci);
+        localStorage.setItem(KATEGORI_KEY, kunci);
+    }
 
     function showAlert(severity, message) {
         setAlert({severity, message});
@@ -329,6 +347,13 @@ export default function KelolaKkp() {
         {kunci: "sudah", label: kkpStatusSudah, grup: semuaGrup.filter(item => item.lunas)},
     ];
     const transaksiAktif = daftarTransaksi.find(item => item.kunci === tabTransaksi) || daftarTransaksi[0];
+
+    // Colour is keyed to the unit's place in the sorted list the API returns, so it holds
+    // still across reloads; a group naming a unit no longer on the list falls back to grey.
+    const warnaUnit = useMemo(() => {
+        const urutan = new Map((transaksi?.unitKerja || []).map((item, index) => [item.nama, index]));
+        return (nama) => kkpWarnaUnit(urutan.has(nama) ? urutan.get(nama) : -1);
+    }, [transaksi]);
     const totalTransaksi = transaksiAktif.grup.reduce((sum, item) => sum + item.total, 0);
 
     if (isLoading && !data) return <LoadingAnimate/>;
@@ -340,226 +365,252 @@ export default function KelolaKkp() {
 
     return (
         <div>
-            <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
-                    <h2 className="wide-card-title">Unggah Standar Biaya Masukan {data?.tahun || ""}</h2>
-                    <div className="wide-card-actions">
-                        <span className="anggaran-sinkron">{labelSumber}</span>
-                        {bukaUnggah &&
-                            <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Template"
-                                   onClick={unduhTemplate}/>}
-                        <input className="btn-aksi btn-aksi-wide" type="button" aria-expanded={bukaUnggah}
-                               value={bukaUnggah ? "Tutup" : "Unggah Berkas"}
-                               onClick={() => setBukaUnggah(open => !open)}/>
+            {/* Two categories rather than one column of six cards. Both panels stay
+                mounted and are hidden with the attribute instead of being unmounted: the
+                kalkulator rows, the pending upload draft and the half typed transaksi form
+                all live in component state, and switching category must not throw them away. */}
+            <div className="kelola-tabs" role="tablist">
+                {KKP_KATEGORI.map(item => {
+                    const aktif = item.kunci === kategori;
+                    return (
+                        <button key={item.kunci} type="button" role="tab" aria-selected={aktif}
+                                onClick={() => pilihKategori(item.kunci)}
+                                className={`kelola-tab${aktif ? " kelola-tab-active" : ""}`}>
+                            <span>{item.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            <br/>
+
+            <div className="kkp-panel" hidden={kategori !== "sbm"}>
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Unggah Standar Biaya Masukan {data?.tahun || ""}</h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">{labelSumber}</span>
+                            {bukaUnggah &&
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Template"
+                                       onClick={unduhTemplate}/>}
+                            <input className="btn-aksi btn-aksi-wide" type="button" aria-expanded={bukaUnggah}
+                                   value={bukaUnggah ? "Tutup" : "Unggah Berkas"}
+                                   onClick={() => setBukaUnggah(open => !open)}/>
+                        </div>
                     </div>
+
+                    {/* Native submit so the browser runs the `required` check on the file input,
+                        the same reason Anggaran avoids SubmitButton here */}
+                    {bukaUnggah && <>
+                        <form className="anggaran-form" onSubmit={kirimBerkas}>
+                            <p className="anggaran-intro">{sbmUnggahKeterangan}</p>
+
+                            <label htmlFor="berkas-sbm">Berkas SBM (.xlsx, maks. {SBM_MAX_MB} MB)</label>
+                            <div className="anggaran-file">
+                                <input type="file" id="berkas-sbm" name="berkas" accept=".xlsx" ref={berkasRef} required/>
+                                <span className="anggaran-note">
+                                    Gunakan Unduh Template bila belum punya berkas dengan susunan sheet yang benar.
+                                </span>
+                            </div>
+
+                            <div className="form-submit">
+                                <input type="submit" className="btn-submit-wide" name="periksa-sbm"
+                                       value={isUnggah ? "Memproses..." : "Periksa Berkas"} disabled={isUnggah}/>
+                            </div>
+                        </form>
+
+                        {/* Blocking problems. Nothing was written, so there is no draft to discard. */}
+                        {masalah.length > 0 &&
+                            <div className="anggaran-pesan">
+                                <h3>Berkas belum dapat diproses</h3>
+                                <ul>
+                                    {masalah.map((item, index) => (
+                                        <li key={index}>Baris {item.baris}: {item.pesan}</li>
+                                    ))}
+                                </ul>
+                            </div>}
+                    </>}
                 </div>
 
-                {/* Native submit so the browser runs the `required` check on the file input,
-                    the same reason Anggaran avoids SubmitButton here */}
-                {bukaUnggah && <>
-                    <form className="anggaran-form" onSubmit={kirimBerkas}>
-                        <p className="anggaran-intro">{sbmUnggahKeterangan}</p>
+                {/* What the file was read as, waiting for a decision. The prices themselves are
+                    shown, not just a count: a mis-shifted column is only obvious as numbers. */}
+                {pratinjau &&
+                    <div className="bg-card wide-card-content anggaran-pratinjau">
+                        <div className="wide-card-head">
+                            <h2 className="wide-card-title">Pratinjau Data SBM</h2>
+                            <div className="wide-card-actions">
+                                <span className="anggaran-revisi-aktif">{pratinjau.namaBerkas}</span>
+                            </div>
+                        </div>
+                        <div className="anggaran-pratinjau-body">
+                            <p className="anggaran-ringkasan">
+                                <strong>{pratinjau.ringkasan.tiket}</strong> rute tiket pesawat,{' '}
+                                <strong>{pratinjau.ringkasan.hotel}</strong> provinsi tarif hotel.
+                            </p>
+                            <p className="anggaran-belum">
+                                Belum ada yang berubah. Menekan Terapkan akan mengganti seluruh data SBM tahun ini.
+                            </p>
+                            <div className="form-submit">
+                                <input type="button" className="btn-submit-wide" name="terapkan-sbm"
+                                       value={isTerapkan ? "Menerapkan..." : "Terapkan"}
+                                       disabled={isTerapkan} onClick={terapkanDraf}/>
+                                <input type="button" className="btn-submit-wide" name="batal-sbm" value="Batalkan"
+                                       disabled={isTerapkan} onClick={() => batalkanDraf(false)}/>
+                            </div>
+                        </div>
+                        <h3 className="kkp-sub">Tiket Pesawat</h3>
+                        <TableSbmTiket baris={pratinjau.tiket} kosong="Sheet Tiket Pesawat tidak berisi baris."/>
+                        <h3 className="kkp-sub">Tarif Hotel</h3>
+                        <TableSbmHotel baris={pratinjau.hotel} kosong="Sheet Tarif Hotel tidak berisi baris."/>
+                    </div>}
 
-                        <label htmlFor="berkas-sbm">Berkas SBM (.xlsx, maks. {SBM_MAX_MB} MB)</label>
-                        <div className="anggaran-file">
-                            <input type="file" id="berkas-sbm" name="berkas" accept=".xlsx" ref={berkasRef} required/>
-                            <span className="anggaran-note">
-                                Gunakan Unduh Template bila belum punya berkas dengan susunan sheet yang benar.
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Kalkulator Standar Biaya Masukan {data?.tahun || ""}</h2>
+                        <div className="wide-card-actions">
+                            <input className="btn-aksi btn-aksi-wide" type="button" value="Kosongkan"
+                                   onClick={() => {
+                                       setBarisTiket([barisKosongTiket()]);
+                                       setBarisHotel([barisKosongHotel()]);
+                                   }}/>
+                        </div>
+                    </div>
+                    <p className="anggaran-note anggaran-catatan-realisasi">{kalkulatorKeterangan}</p>
+
+                    <div className="kkp-kalkulator">
+                        <div className="kkp-blok">
+                            <div className="kkp-blok-head">
+                                <h3 className="kkp-sub">Kalkulator Tiket Pesawat</h3>
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
+                                       disabled={opsiKotaAsal.length === 0}
+                                       onClick={() => setBarisTiket(prev => [...prev, barisKosongTiket()])}/>
+                            </div>
+                            {opsiKotaAsal.length === 0
+                                ? <p className="anggaran-note">Belum ada data SBM Tiket Pesawat untuk dihitung.</p>
+                                : <>
+                                    <TableKalkulatorRincian baris={hitungTiket} kolom={kolomTiket}
+                                                            onUbah={ubahTiket} onHapus={hapusBaris(setBarisTiket)}/>
+                                    <p className="kkp-total">Total Tiket Pesawat <strong>{formatRupiah(totalTiket)}</strong></p>
+                                  </>}
+                        </div>
+
+                        <div className="kkp-blok">
+                            <div className="kkp-blok-head">
+                                <h3 className="kkp-sub">Kalkulator Tarif Hotel</h3>
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
+                                       disabled={opsiProvinsi.length === 0}
+                                       onClick={() => setBarisHotel(prev => [...prev, barisKosongHotel()])}/>
+                            </div>
+                            {opsiProvinsi.length === 0
+                                ? <p className="anggaran-note">Belum ada data SBM Tarif Hotel untuk dihitung.</p>
+                                : <>
+                                    <TableKalkulatorRincian baris={hitungHotel} kolom={kolomHotel}
+                                                            onUbah={ubahHotel} onHapus={hapusBaris(setBarisHotel)}/>
+                                    <p className="kkp-total">Total Tarif Hotel <strong>{formatRupiah(totalHotel)}</strong></p>
+                                  </>}
+                        </div>
+                    </div>
+
+                    <div className="kkp-grand">
+                        <span>Total Keseluruhan</span>
+                        <strong>{formatRupiah(totalTiket + totalHotel)}</strong>
+                    </div>
+                    {belumLengkap &&
+                        <p className="kkp-catatan">
+                            Ada baris yang belum lengkap dan belum ikut dijumlahkan.
+                        </p>}
+                    <br/><br/>
+                </div>
+
+                {/* One card for both reference tables: they are read one at a time and stacking
+                    them pushed the second below a list hundreds of rutes long. */}
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Data SBM {data?.tahun || ""}</h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">
+                                {refAktif.tampil} dari {refAktif.semua} {refAktif.satuan}
+                            </span>
+                            <input className="type-btn kkp-cari" type="search" placeholder={refAktif.petunjuk}
+                                   value={refAktif.cari} onChange={event => refAktif.ubahCari(event.target.value)}/>
+                            <input className="btn-aksi btn-aksi-wide" type="button"
+                                   value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
+                                   onClick={() => fetchSbm()}/>
+                        </div>
+                    </div>
+                    <div className="kkp-tabs" role="tablist">
+                        {daftarRef.map(item => {
+                            const aktif = item.kunci === refAktif.kunci;
+                            return (
+                                <button key={item.kunci} type="button" role="tab" aria-selected={aktif}
+                                        onClick={() => setTabRef(item.kunci)}
+                                        className={`kelola-tab${aktif ? " kelola-tab-active" : ""}`}>
+                                    <span>{item.label}</span>
+                                    <span className="kelola-tab-count">{item.semua}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {refAktif.tabel}
+                    <br/> <br/>
+                </div>
+            </div>
+
+            <div className="kkp-panel" hidden={kategori !== "kkp"}>
+                {/* The register. Grouped by Kode because a Kode is one SPM: that is the unit an
+                    admin gives a number to and the unit the payment sheet settles. */}
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">Transaksi KKP {transaksi?.tahun || ""}</h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">
+                                {transaksiAktif.grup.length} kode - {formatRupiah(totalTransaksi)}
+                            </span>
+                            <input className="btn-aksi btn-aksi-wide" type="button"
+                                   value={isTransaksi ? "Memuat..." : "Muat Ulang"} disabled={isTransaksi}
+                                   onClick={fetchTransaksi}/>
+                        </div>
+                    </div>
+                    <div className="kkp-tabs" role="tablist">
+                        {daftarTransaksi.map(item => {
+                            const aktif = item.kunci === transaksiAktif.kunci;
+                            return (
+                                <button key={item.kunci} type="button" role="tab" aria-selected={aktif}
+                                        onClick={() => setTabTransaksi(item.kunci)}
+                                        className={`kelola-tab${aktif ? " kelola-tab-active" : ""}`}>
+                                    <span>{item.label}</span>
+                                    <span className="kelola-tab-count">{item.grup.length}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {/* The register is read straight from the sheet, so a refresh is a round
+                        trip worth showing rather than a table that silently goes stale */}
+                    {isTransaksi
+                        ? <LoadingAnimate/>
+                        : <TableTransaksiKkp grup={transaksiAktif.grup} warna={warnaUnit} onSpm={beriNomorSpm}
+                                             onUbah={setUbahBaris} onHapus={hapusTransaksi}
+                                             kosong={`Belum ada transaksi berstatus ${transaksiAktif.label}.`}/>}
+                    <br/><br/>
+                </div>
+
+                <div className="bg-card wide-card-content">
+                    <div className="wide-card-head">
+                        <h2 className="wide-card-title">
+                            {ubahBaris ? `Ubah Transaksi No. ${ubahBaris.no}` : "Input Transaksi KKP"}
+                        </h2>
+                        <div className="wide-card-actions">
+                            <span className="anggaran-sinkron">
+                                {ubahBaris ? `Kode ${ubahBaris.kode}` : "Status awal: Belum Terbayarkan"}
                             </span>
                         </div>
-
-                        <div className="form-submit">
-                            <input type="submit" className="btn-submit-wide" name="periksa-sbm"
-                                   value={isUnggah ? "Memproses..." : "Periksa Berkas"} disabled={isUnggah}/>
-                        </div>
-                    </form>
-
-                    {/* Blocking problems. Nothing was written, so there is no draft to discard. */}
-                    {masalah.length > 0 &&
-                        <div className="anggaran-pesan">
-                            <h3>Berkas belum dapat diproses</h3>
-                            <ul>
-                                {masalah.map((item, index) => (
-                                    <li key={index}>Baris {item.baris}: {item.pesan}</li>
-                                ))}
-                            </ul>
-                        </div>}
-                </>}
-            </div>
-
-            {/* What the file was read as, waiting for a decision. The prices themselves are
-                shown, not just a count: a mis-shifted column is only obvious as numbers. */}
-            {pratinjau &&
-                <div className="bg-card wide-card-content anggaran-pratinjau">
-                    <div className="wide-card-head">
-                        <h2 className="wide-card-title">Pratinjau Data SBM</h2>
-                        <div className="wide-card-actions">
-                            <span className="anggaran-revisi-aktif">{pratinjau.namaBerkas}</span>
-                        </div>
                     </div>
-                    <div className="anggaran-pratinjau-body">
-                        <p className="anggaran-ringkasan">
-                            <strong>{pratinjau.ringkasan.tiket}</strong> rute tiket pesawat,{' '}
-                            <strong>{pratinjau.ringkasan.hotel}</strong> provinsi tarif hotel.
-                        </p>
-                        <p className="anggaran-belum">
-                            Belum ada yang berubah. Menekan Terapkan akan mengganti seluruh data SBM tahun ini.
-                        </p>
-                        <div className="form-submit">
-                            <input type="button" className="btn-submit-wide" name="terapkan-sbm"
-                                   value={isTerapkan ? "Menerapkan..." : "Terapkan"}
-                                   disabled={isTerapkan} onClick={terapkanDraf}/>
-                            <input type="button" className="btn-submit-wide" name="batal-sbm" value="Batalkan"
-                                   disabled={isTerapkan} onClick={() => batalkanDraf(false)}/>
-                        </div>
-                    </div>
-                    <h3 className="kkp-sub">Tiket Pesawat</h3>
-                    <TableSbmTiket baris={pratinjau.tiket} kosong="Sheet Tiket Pesawat tidak berisi baris."/>
-                    <h3 className="kkp-sub">Tarif Hotel</h3>
-                    <TableSbmHotel baris={pratinjau.hotel} kosong="Sheet Tarif Hotel tidak berisi baris."/>
-                </div>}
-
-            <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
-                    <h2 className="wide-card-title">Kalkulator Standar Biaya Masukan {data?.tahun || ""}</h2>
-                    <div className="wide-card-actions">
-                        <input className="btn-aksi btn-aksi-wide" type="button" value="Kosongkan"
-                               onClick={() => {
-                                   setBarisTiket([barisKosongTiket()]);
-                                   setBarisHotel([barisKosongHotel()]);
-                               }}/>
-                    </div>
+                    {/* Keyed so switching between adding and editing remounts the form: its
+                        fields are internal state and would otherwise keep the previous row */}
+                    <KkpTransaksiForm key={ubahBaris ? `ubah-${ubahBaris.rowNumber}` : "baru"}
+                                      data={transaksi} record={ubahBaris}
+                                      onSelesai={fetchTransaksi} onBatal={() => setUbahBaris(null)}/>
+                    <br/>
                 </div>
-                <p className="anggaran-note anggaran-catatan-realisasi">{kalkulatorKeterangan}</p>
-
-                <div className="kkp-kalkulator">
-                    <div className="kkp-blok">
-                        <div className="kkp-blok-head">
-                            <h3 className="kkp-sub">Kalkulator Tiket Pesawat</h3>
-                            <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
-                                   disabled={opsiKotaAsal.length === 0}
-                                   onClick={() => setBarisTiket(prev => [...prev, barisKosongTiket()])}/>
-                        </div>
-                        {opsiKotaAsal.length === 0
-                            ? <p className="anggaran-note">Belum ada data SBM Tiket Pesawat untuk dihitung.</p>
-                            : <>
-                                <TableKalkulatorRincian baris={hitungTiket} kolom={kolomTiket}
-                                                        onUbah={ubahTiket} onHapus={hapusBaris(setBarisTiket)}/>
-                                <p className="kkp-total">Total Tiket Pesawat <strong>{formatRupiah(totalTiket)}</strong></p>
-                              </>}
-                    </div>
-
-                    <div className="kkp-blok">
-                        <div className="kkp-blok-head">
-                            <h3 className="kkp-sub">Kalkulator Tarif Hotel</h3>
-                            <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
-                                   disabled={opsiProvinsi.length === 0}
-                                   onClick={() => setBarisHotel(prev => [...prev, barisKosongHotel()])}/>
-                        </div>
-                        {opsiProvinsi.length === 0
-                            ? <p className="anggaran-note">Belum ada data SBM Tarif Hotel untuk dihitung.</p>
-                            : <>
-                                <TableKalkulatorRincian baris={hitungHotel} kolom={kolomHotel}
-                                                        onUbah={ubahHotel} onHapus={hapusBaris(setBarisHotel)}/>
-                                <p className="kkp-total">Total Tarif Hotel <strong>{formatRupiah(totalHotel)}</strong></p>
-                              </>}
-                    </div>
-                </div>
-
-                <div className="kkp-grand">
-                    <span>Total Keseluruhan</span>
-                    <strong>{formatRupiah(totalTiket + totalHotel)}</strong>
-                </div>
-                {belumLengkap &&
-                    <p className="kkp-catatan">
-                        Ada baris yang belum lengkap dan belum ikut dijumlahkan.
-                    </p>}
-                <br/><br/>
-            </div>
-
-            {/* The register. Grouped by Kode because a Kode is one SPM: that is the unit an
-                admin gives a number to and the unit the payment sheet settles. */}
-            <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
-                    <h2 className="wide-card-title">Transaksi KKP {transaksi?.tahun || ""}</h2>
-                    <div className="wide-card-actions">
-                        <span className="anggaran-sinkron">
-                            {transaksiAktif.grup.length} kode - {formatRupiah(totalTransaksi)}
-                        </span>
-                        <input className="btn-aksi btn-aksi-wide" type="button"
-                               value={isTransaksi ? "Memuat..." : "Muat Ulang"} disabled={isTransaksi}
-                               onClick={fetchTransaksi}/>
-                    </div>
-                </div>
-                <div className="kkp-tabs" role="tablist">
-                    {daftarTransaksi.map(item => {
-                        const aktif = item.kunci === transaksiAktif.kunci;
-                        return (
-                            <button key={item.kunci} type="button" role="tab" aria-selected={aktif}
-                                    onClick={() => setTabTransaksi(item.kunci)}
-                                    className={`kelola-tab${aktif ? " kelola-tab-active" : ""}`}>
-                                <span>{item.label}</span>
-                                <span className="kelola-tab-count">{item.grup.length}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-                <TableTransaksiKkp grup={transaksiAktif.grup} onSpm={beriNomorSpm}
-                                   onUbah={setUbahBaris} onHapus={hapusTransaksi}
-                                   kosong={`Belum ada transaksi berstatus ${transaksiAktif.label}.`}/>
-                <br/><br/>
-            </div>
-
-            <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
-                    <h2 className="wide-card-title">
-                        {ubahBaris ? `Ubah Transaksi No. ${ubahBaris.no}` : "Input Transaksi KKP"}
-                    </h2>
-                    <div className="wide-card-actions">
-                        <span className="anggaran-sinkron">
-                            {ubahBaris ? `Kode ${ubahBaris.kode}` : "Status awal: Belum Terbayarkan"}
-                        </span>
-                    </div>
-                </div>
-                {/* Keyed so switching between adding and editing remounts the form: its
-                    fields are internal state and would otherwise keep the previous row */}
-                <KkpTransaksiForm key={ubahBaris ? `ubah-${ubahBaris.rowNumber}` : "baru"}
-                                  data={transaksi} record={ubahBaris}
-                                  onSelesai={fetchTransaksi} onBatal={() => setUbahBaris(null)}/>
-                <br/>
-            </div>
-
-            {/* One card for both reference tables: they are read one at a time and stacking
-                them pushed the second below a list hundreds of rutes long. */}
-            <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
-                    <h2 className="wide-card-title">Data SBM {data?.tahun || ""}</h2>
-                    <div className="wide-card-actions">
-                        <span className="anggaran-sinkron">
-                            {refAktif.tampil} dari {refAktif.semua} {refAktif.satuan}
-                        </span>
-                        <input className="type-btn kkp-cari" type="search" placeholder={refAktif.petunjuk}
-                               value={refAktif.cari} onChange={event => refAktif.ubahCari(event.target.value)}/>
-                        <input className="btn-aksi btn-aksi-wide" type="button"
-                               value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
-                               onClick={() => fetchSbm()}/>
-                    </div>
-                </div>
-                <div className="kkp-tabs" role="tablist">
-                    {daftarRef.map(item => {
-                        const aktif = item.kunci === refAktif.kunci;
-                        return (
-                            <button key={item.kunci} type="button" role="tab" aria-selected={aktif}
-                                    onClick={() => setTabRef(item.kunci)}
-                                    className={`kelola-tab${aktif ? " kelola-tab-active" : ""}`}>
-                                <span>{item.label}</span>
-                                <span className="kelola-tab-count">{item.semua}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-                {refAktif.tabel}
-                <br/> <br/>
             </div>
 
             {alert && <PopupAlert isAlert={true} severity={alert.severity} message={alert.message}/>}

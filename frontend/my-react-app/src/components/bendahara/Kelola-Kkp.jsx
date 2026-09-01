@@ -5,12 +5,14 @@ import {AuthContext} from "../../lib/AuthContext";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat,
-    sbmGolonganHotel, sbmUnggahKeterangan, kalkulatorKeterangan, kkpStatusBelum, kkpStatusSudah,
-    kkpWarnaUnit, formatRupiah} from "./head-data.js";
+    sbmGolonganHotel, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian,
+    sbmContohTransportasi, sbmJenisUangHarian, sbmUnggahKeterangan, kalkulatorKeterangan,
+    kkpStatusBelum, kkpStatusSudah, kkpWarnaUnit, formatRupiah} from "./head-data.js";
 import {unduhExcelBanyakSheet, selTeks} from "../../lib/excel.js";
 import KkpTransaksiForm from "./Kkp-Transaksi-Form.jsx";
 // Import Tables
-import {TableSbmTiket, TableSbmHotel, TableKalkulatorRincian, TableTransaksiKkp} from "../../ui/tables.jsx";
+import {TableSbmTiket, TableSbmHotel, TableSbmUangHarian, TableSbmTransportasi,
+    TableKalkulatorRincian, TableTransaksiKkp} from "../../ui/tables.jsx";
 
 // Twin of ANGGARAN_MAX_FILE_MB in server.js - the label has to name the limit multer enforces
 const SBM_MAX_MB = 10;
@@ -24,6 +26,10 @@ const kunci = (teks) => String(teks ?? "").trim().replace(/\s+/g, " ").toUpperCa
 let nomorBaris = 0;
 const barisKosongTiket = () => ({id: ++nomorBaris, kotaAsal: "", kotaTujuan: "", kelas: "", orang: 1});
 const barisKosongHotel = () => ({id: ++nomorBaris, provinsi: "", golongan: "", durasi: 1, orang: 1});
+const barisKosongHarian = () => ({id: ++nomorBaris, provinsi: "", jenis: "", hari: 1, orang: 1});
+// Besaran is per orang per kali, so the row carries both multipliers rather than one
+// combined figure - "6" would not say whether that was 3 people twice or 6 people once.
+const barisKosongTransport = () => ({id: ++nomorBaris, provinsi: "", orang: 1, kali: 1});
 
 const KATEGORI_KEY = 'kelola-kkp-kategori';
 const KKP_KATEGORI = [
@@ -39,11 +45,16 @@ const bulat = (nilai) => {
 };
 
 export default function KelolaKkp() {
-    // A user reaches this screen as "Kalkulator SBM Jaldis": the kalkulator and the SBM
-    // reference only. Everything else here writes, and GET /kkp/transaksi is admin only,
-    // so it must not even be asked for.
+    // Two separate questions, so they get two flags. hanyaKalkulator narrows the whole
+    // screen: a user reaches it as "Kalkulator SBM Jaldis" and gets the kalkulator and the
+    // SBM reference only, because everything else here writes and GET /kkp/transaksi is
+    // admin only, so it must not even be asked for.
     const {user} = useContext(AuthContext);
     const hanyaKalkulator = user?.role === "user";
+    // semuaKalkulator is about the kalkulator alone: Uang Harian and Transportasi are part
+    // of the Jaldis set, and a master admin sees everything on this screen - the full
+    // admin half as well as all four kalkulator.
+    const semuaKalkulator = hanyaKalkulator || user?.role === "master admin";
 
     const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState(null);
@@ -60,6 +71,8 @@ export default function KelolaKkp() {
     // on different kelas or golongan - which is the normal case, not the exception.
     const [barisTiket, setBarisTiket] = useState([barisKosongTiket()]);
     const [barisHotel, setBarisHotel] = useState([barisKosongHotel()]);
+    const [barisHarian, setBarisHarian] = useState([barisKosongHarian()]);
+    const [barisTransport, setBarisTransport] = useState([barisKosongTransport()]);
 
     // The upload is a once-a-year job while the kalkulator below is the daily one, so the
     // panel starts folded away and opens itself only when there is no SBM to calculate with.
@@ -84,6 +97,8 @@ export default function KelolaKkp() {
     const [tabRef, setTabRef] = useState("tiket");
     const [cariTiket, setCariTiket] = useState("");
     const [cariHotel, setCariHotel] = useState("");
+    const [cariHarian, setCariHarian] = useState("");
+    const [cariTransport, setCariTransport] = useState("");
 
     function pilihKategori(kunci) {
         setKategori(kunci);
@@ -168,6 +183,14 @@ export default function KelolaKkp() {
                 nama: "Tarif Hotel", head: sbmKolomHotel, lebar: [24, 18, 18, 24, 26],
                 baris: sbmContohHotel.map(row => row.map(sel => selTeks(sel, true))),
             },
+            {
+                nama: "Uang Harian", head: sbmKolomUangHarian, lebar: [24, 18, 28, 18],
+                baris: sbmContohUangHarian.map(row => row.map(sel => selTeks(sel, true))),
+            },
+            {
+                nama: "Transportasi", head: sbmKolomTransportasi, lebar: [24, 20],
+                baris: sbmContohTransportasi.map(row => row.map(sel => selTeks(sel, true))),
+            },
         ]);
     }
 
@@ -212,8 +235,7 @@ export default function KelolaKkp() {
             setPratinjau(null);
             if (berkasRef.current) berkasRef.current.value = "";
             // Prices the rows were priced against are gone, so the picks are cleared with them
-            setBarisTiket([barisKosongTiket()]);
-            setBarisHotel([barisKosongHotel()]);
+            kosongkanKalkulator();
             showAlert("success", response.data.message || "Data SBM diterapkan.");
             await fetchSbm(true);
         } catch (error) {
@@ -222,6 +244,13 @@ export default function KelolaKkp() {
             setIsTerapkan(false);
         }
     }
+
+    const kosongkanKalkulator = () => {
+        setBarisTiket([barisKosongTiket()]);
+        setBarisHotel([barisKosongHotel()]);
+        setBarisHarian([barisKosongHarian()]);
+        setBarisTransport([barisKosongTransport()]);
+    };
 
     // diam=true when this is housekeeping before a fresh upload, not the admin pressing Batal
     async function batalkanDraf(diam = false) {
@@ -255,6 +284,17 @@ export default function KelolaKkp() {
         hotel.map(row => [kunci(row.provinsi), {nama: row.provinsi, tarif: row.tarif}])
     ), [hotel]);
 
+    const uangHarian = useMemo(() => data?.uangHarian || [], [data]);
+    const transportasi = useMemo(() => data?.transportasi || [], [data]);
+
+    const indeksHarian = useMemo(() => new Map(
+        uangHarian.map(row => [kunci(row.provinsi), {nama: row.provinsi, tarif: row.tarif}])
+    ), [uangHarian]);
+    // Transportasi carries one figure rather than a keyed tarif, so the index holds it flat
+    const indeksTransport = useMemo(() => new Map(
+        transportasi.map(row => [kunci(row.provinsi), {nama: row.provinsi, besaran: row.besaran}])
+    ), [transportasi]);
+
     const opsiKotaAsal = useMemo(() => [...indeksTiket]
         .map(([value, item]) => ({value, title: item.nama}))
         .sort((a, b) => a.title.localeCompare(b.title, "id")), [indeksTiket]);
@@ -262,6 +302,15 @@ export default function KelolaKkp() {
     const opsiProvinsi = useMemo(() => [...indeksHotel]
         .map(([value, item]) => ({value, title: item.nama}))
         .sort((a, b) => a.title.localeCompare(b.title, "id")), [indeksHotel]);
+
+    // Each dataset offers only the provinces it actually prices, so a row can never be
+    // built on a province the calculator has no tariff for
+    const opsiProvinsiHarian = useMemo(() => [...indeksHarian]
+        .map(([value, item]) => ({value, title: item.nama}))
+        .sort((a, b) => a.title.localeCompare(b.title, "id")), [indeksHarian]);
+    const opsiProvinsiTransport = useMemo(() => [...indeksTransport]
+        .map(([value, item]) => ({value, title: item.nama}))
+        .sort((a, b) => a.title.localeCompare(b.title, "id")), [indeksTransport]);
 
     const opsiKotaTujuan = (asal) => [...(indeksTiket.get(asal)?.tujuan || new Map())]
         .map(([value, item]) => ({value, title: item.nama}))
@@ -280,6 +329,10 @@ export default function KelolaKkp() {
 
     const ubahHotel = (id, key, nilai) =>
         setBarisHotel(prev => prev.map(row => row.id === id ? {...row, [key]: nilai} : row));
+    const ubahHarian = (id, key, nilai) =>
+        setBarisHarian(prev => prev.map(row => row.id === id ? {...row, [key]: nilai} : row));
+    const ubahTransport = (id, key, nilai) =>
+        setBarisTransport(prev => prev.map(row => row.id === id ? {...row, [key]: nilai} : row));
 
     // The last row is never removed - an empty calculator has nothing to type into
     const hapusBaris = (setter) => (id) =>
@@ -303,9 +356,40 @@ export default function KelolaKkp() {
         };
     });
 
+    const hitungHarian = barisHarian.map(row => {
+        const tarif = indeksHarian.get(row.provinsi)?.tarif;
+        const hari = bulat(row.hari);
+        const orang = bulat(row.orang);
+        const satuan = tarif && row.jenis ? tarif[row.jenis] : null;
+        return {
+            ...row, satuan,
+            subtotal: satuan !== null && satuan !== undefined && hari && orang ? satuan * hari * orang : null,
+        };
+    });
+
+    // Besaran is quoted per orang per kali, so both multiply
+    const hitungTransport = barisTransport.map(row => {
+        const satuan = indeksTransport.get(row.provinsi)?.besaran;
+        const orang = bulat(row.orang);
+        const kali = bulat(row.kali);
+        return {
+            ...row, satuan,
+            subtotal: satuan !== null && satuan !== undefined && orang && kali ? satuan * orang * kali : null,
+        };
+    });
+
     const totalTiket = hitungTiket.reduce((sum, row) => sum + (row.subtotal || 0), 0);
     const totalHotel = hitungHotel.reduce((sum, row) => sum + (row.subtotal || 0), 0);
-    const belumLengkap = [...hitungTiket, ...hitungHotel].some(row => row.subtotal === null);
+    const totalHarian = hitungHarian.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+    const totalTransport = hitungTransport.reduce((sum, row) => sum + (row.subtotal || 0), 0);
+
+    // Only what is on screen counts toward the grand total: the two lower kalkulator are
+    // not rendered for an admin, so their rows must not quietly join the sum either.
+    const totalSemua = totalTiket + totalHotel
+        + (semuaKalkulator ? totalHarian + totalTransport : 0);
+    const belumLengkap = [...hitungTiket, ...hitungHotel,
+        ...(semuaKalkulator ? [...hitungHarian, ...hitungTransport] : [])]
+        .some(row => row.subtotal === null);
 
     const kolomTiket = [
         {key: "kotaAsal", label: "Kota Asal", pilihan: () => opsiKotaAsal},
@@ -316,8 +400,19 @@ export default function KelolaKkp() {
     const kolomHotel = [
         {key: "provinsi", label: "Provinsi", pilihan: () => opsiProvinsi},
         {key: "golongan", label: "Golongan", pilihan: () => sbmGolonganHotel},
-        {key: "durasi", label: "Durasi (hari)"},
+        {key: "durasi", label: "Durasi (malam)"},
         {key: "orang", label: "Jumlah Orang"},
+    ];
+    const kolomHarian = [
+        {key: "provinsi", label: "Provinsi", pilihan: () => opsiProvinsiHarian},
+        {key: "jenis", label: "Jenis", pilihan: () => sbmJenisUangHarian},
+        {key: "hari", label: "Jumlah Hari"},
+        {key: "orang", label: "Jumlah Orang"},
+    ];
+    const kolomTransport = [
+        {key: "provinsi", label: "Provinsi", pilihan: () => opsiProvinsiTransport},
+        {key: "orang", label: "Jumlah Orang"},
+        {key: "kali", label: "Jumlah Kali"},
     ];
 
     const saring = (baris, teks, ambil) => {
@@ -326,6 +421,8 @@ export default function KelolaKkp() {
     };
     const tiketTampil = saring(tiket, cariTiket, row => [row.kotaAsal, row.kotaTujuan]);
     const hotelTampil = saring(hotel, cariHotel, row => [row.provinsi]);
+    const harianTampil = saring(uangHarian, cariHarian, row => [row.provinsi]);
+    const transportTampil = saring(transportasi, cariTransport, row => [row.provinsi]);
 
     // The two reference tables share one card and one search box, so everything that differs
     // between them is declared here and the card renders whichever tab is active.
@@ -343,6 +440,20 @@ export default function KelolaKkp() {
             petunjuk: "Cari provinsi...",
             tabel: <TableSbmHotel baris={hotelTampil}
                                   kosong={hotel.length === 0 ? undefined : "Tidak ada provinsi yang cocok."}/>,
+        },
+        {
+            kunci: "harian", label: "Uang Harian", satuan: "provinsi", semua: uangHarian.length,
+            tampil: harianTampil.length, cari: cariHarian, ubahCari: setCariHarian,
+            petunjuk: "Cari provinsi...",
+            tabel: <TableSbmUangHarian baris={harianTampil}
+                                       kosong={uangHarian.length === 0 ? undefined : "Tidak ada provinsi yang cocok."}/>,
+        },
+        {
+            kunci: "transportasi", label: "Transportasi", satuan: "provinsi", semua: transportasi.length,
+            tampil: transportTampil.length, cari: cariTransport, ubahCari: setCariTransport,
+            petunjuk: "Cari provinsi...",
+            tabel: <TableSbmTransportasi baris={transportTampil}
+                                         kosong={transportasi.length === 0 ? undefined : "Tidak ada provinsi yang cocok."}/>,
         },
     ];
     const refAktif = daftarRef.find(item => item.kunci === tabRef) || daftarRef[0];
@@ -458,7 +569,9 @@ export default function KelolaKkp() {
                         <div className="anggaran-pratinjau-body">
                             <p className="anggaran-ringkasan">
                                 <strong>{pratinjau.ringkasan.tiket}</strong> rute tiket pesawat,{' '}
-                                <strong>{pratinjau.ringkasan.hotel}</strong> provinsi tarif hotel.
+                                <strong>{pratinjau.ringkasan.hotel}</strong> provinsi tarif hotel,{' '}
+                                <strong>{pratinjau.ringkasan.uangHarian}</strong> provinsi uang harian,{' '}
+                                <strong>{pratinjau.ringkasan.transportasi}</strong> provinsi transportasi.
                             </p>
                             <p className="anggaran-belum">
                                 Belum ada yang berubah. Menekan Terapkan akan mengganti seluruh data SBM tahun ini.
@@ -475,6 +588,10 @@ export default function KelolaKkp() {
                         <TableSbmTiket baris={pratinjau.tiket} kosong="Sheet Tiket Pesawat tidak berisi baris."/>
                         <h3 className="kkp-sub">Tarif Hotel</h3>
                         <TableSbmHotel baris={pratinjau.hotel} kosong="Sheet Tarif Hotel tidak berisi baris."/>
+                        <h3 className="kkp-sub">Uang Harian</h3>
+                        <TableSbmUangHarian baris={pratinjau.uangHarian} kosong="Sheet Uang Harian tidak berisi baris."/>
+                        <h3 className="kkp-sub">Transportasi</h3>
+                        <TableSbmTransportasi baris={pratinjau.transportasi} kosong="Sheet Transportasi tidak berisi baris."/>
                     </div>}
 
                 <div className="bg-card wide-card-content">
@@ -482,10 +599,7 @@ export default function KelolaKkp() {
                         <h2 className="wide-card-title">Kalkulator Standar Biaya Masukan {data?.tahun || ""}</h2>
                         <div className="wide-card-actions">
                             <input className="btn-aksi btn-aksi-wide" type="button" value="Kosongkan"
-                                   onClick={() => {
-                                       setBarisTiket([barisKosongTiket()]);
-                                       setBarisHotel([barisKosongHotel()]);
-                                   }}/>
+                                   onClick={kosongkanKalkulator}/>
                         </div>
                     </div>
                     <p className="anggaran-note anggaran-catatan-realisasi">{kalkulatorKeterangan}</p>
@@ -522,11 +636,48 @@ export default function KelolaKkp() {
                                     <p className="kkp-total">Total Tarif Hotel <strong>{formatRupiah(totalHotel)}</strong></p>
                                   </>}
                         </div>
+
+                        {/* Uang Harian and Transportasi belong to the Kalkulator SBM Jaldis
+                            set, so a plain admin does not get them - but a master admin,
+                            who sees everything on this screen, does */}
+                        {semuaKalkulator && <>
+                        <div className="kkp-blok">
+                            <div className="kkp-blok-head">
+                                <h3 className="kkp-sub">Kalkulator Uang Harian</h3>
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
+                                       disabled={opsiProvinsiHarian.length === 0}
+                                       onClick={() => setBarisHarian(prev => [...prev, barisKosongHarian()])}/>
+                            </div>
+                            {opsiProvinsiHarian.length === 0
+                                ? <p className="anggaran-note">Belum ada data SBM Uang Harian untuk dihitung.</p>
+                                : <>
+                                    <TableKalkulatorRincian baris={hitungHarian} kolom={kolomHarian}
+                                                            onUbah={ubahHarian} onHapus={hapusBaris(setBarisHarian)}/>
+                                    <p className="kkp-total">Total Uang Harian <strong>{formatRupiah(totalHarian)}</strong></p>
+                                  </>}
+                        </div>
+
+                        <div className="kkp-blok">
+                            <div className="kkp-blok-head">
+                                <h3 className="kkp-sub">Kalkulator Transportasi</h3>
+                                <input className="btn-aksi btn-aksi-wide" type="button" value="+ Tambah Baris"
+                                       disabled={opsiProvinsiTransport.length === 0}
+                                       onClick={() => setBarisTransport(prev => [...prev, barisKosongTransport()])}/>
+                            </div>
+                            {opsiProvinsiTransport.length === 0
+                                ? <p className="anggaran-note">Belum ada data SBM Transportasi untuk dihitung.</p>
+                                : <>
+                                    <TableKalkulatorRincian baris={hitungTransport} kolom={kolomTransport}
+                                                            onUbah={ubahTransport} onHapus={hapusBaris(setBarisTransport)}/>
+                                    <p className="kkp-total">Total Transportasi <strong>{formatRupiah(totalTransport)}</strong></p>
+                                  </>}
+                        </div>
+                        </>}
                     </div>
 
                     <div className="kkp-grand">
                         <span>Total Keseluruhan</span>
-                        <strong>{formatRupiah(totalTiket + totalHotel)}</strong>
+                        <strong>{formatRupiah(totalSemua)}</strong>
                     </div>
                     {belumLengkap &&
                         <p className="kkp-catatan">

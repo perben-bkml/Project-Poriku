@@ -344,12 +344,37 @@ const sbmGolonganHotel = [
     {value: "eselon_4", title: "Eselon IV/Golongan III/II/I"},
 ];
 
+// Twins of SBM_JUDUL_UANG_HARIAN and SBM_JUDUL_TRANSPORTASI in server.js. The template is
+// generated from these, so it cannot drift from what the parser checks.
+const sbmKolomUangHarian = ["Provinsi", "Luar Kota", "Dalam Kota Lebih Dari 8 Jam", "Diklat"];
+const sbmKolomTransportasi = ["Provinsi", "Besaran"];
+
+const sbmContohUangHarian = [
+    ["DKI Jakarta", "530.000", "190.000", "180.000"],
+    ["Jawa Timur", "460.000", "170.000", "170.000"],
+];
+const sbmContohTransportasi = [
+    ["DKI Jakarta", "250.000"],
+    ["Jawa Timur", "170.000"],
+];
+
+// value is the key the API returns inside `tarif`, the same arrangement sbmGolonganHotel
+// uses, so the dropdown selection indexes the price directly.
+const sbmJenisUangHarian = [
+    {value: "luar_kota", title: "Luar Kota"},
+    {value: "dalam_kota", title: "Dalam Kota Lebih Dari 8 Jam"},
+    {value: "diklat", title: "Diklat"},
+];
+
 const sbmTiketHeadData = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
 const sbmHotelHeadData = ["Provinsi", ...sbmGolonganHotel.map(item => item.title)];
+const sbmUangHarianHeadData = ["Provinsi", ...sbmJenisUangHarian.map(item => item.title)];
+const sbmTransportasiHeadData = ["Provinsi", "Besaran (per Orang/Kali)"];
 
-const sbmUnggahKeterangan = "Satu berkas .xlsx berisi dua sheet: Tiket Pesawat lalu Tarif Hotel, " +
-    "dalam urutan itu. Nominal harus rupiah bulat - pemisah ribuan (3.500.000 atau 3,500,000) boleh, " +
-    "pecahan ditolak. Menerapkan berkas baru akan mengganti seluruh data SBM tahun berjalan.";
+const sbmUnggahKeterangan = "Satu berkas .xlsx berisi empat sheet, dalam urutan: Tiket Pesawat, " +
+    "Tarif Hotel, Uang Harian, lalu Transportasi. Nominal harus rupiah bulat - pemisah ribuan " +
+    "(3.500.000 atau 3,500,000) boleh, pecahan ditolak. Menerapkan berkas baru akan mengganti " +
+    "seluruh data SBM tahun berjalan.";
 
 const kalkulatorKeterangan = "Setiap baris dihitung sendiri, jadi satu perjalanan dapat memuat orang " +
     "dengan kelas atau golongan yang berbeda. Hasil hanya tampil di layar dan tidak disimpan.";
@@ -387,5 +412,5 @@ const kkpWarnaUnit = (indeks) => indeks < 0
     };
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
 

@@ -6886,13 +6886,22 @@ const SBM_JUDUL_TIKET = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
 const SBM_JUDUL_HOTEL = [
     "Provinsi", "Eselon I", "Eselon II", "Eselon III/Golongan IV", "Eselon IV/Golongan III/II/I",
 ];
+const SBM_JUDUL_UANG_HARIAN = ["Provinsi", "Luar Kota", "Dalam Kota Lebih Dari 8 Jam", "Diklat"];
+const SBM_JUDUL_TRANSPORTASI = ["Provinsi", "Besaran"];
+
 // Column order in sbm_hotel. The four are fixed by the SBM regulation - a fifth golongan
-// would be a new regulation, and a migration either way.
+// would be a new regulation, and a migration either way. The same holds for the three
+// jenis of uang harian below.
 const SBM_GOLONGAN = ["eselon_1", "eselon_2", "eselon_3", "eselon_4"];
+const SBM_JENIS_HARIAN = ["luar_kota", "dalam_kota", "diklat"];
+const SBM_KOLOM_TRANSPORTASI = ["besaran"];
+
+// The sheets the template carries, in the order the parser matches them by
+const SBM_JUMLAH_SHEET = 4;
 
 const sbmBelumSiap = (error, res) => {
     if (error.code !== UNDEFINED_TABLE) return false;
-    console.error("Tabel SBM belum ada - terapkan migrasi 009.", error);
+    console.error("Tabel SBM belum ada - terapkan migrasi 009 dan 010.", error);
     res.status(500).json({ message: "Tabel SBM belum tersedia di database." });
     return true;
 };
@@ -6955,10 +6964,13 @@ function susunTiketDariExcel(baris, masalah) {
     return peta;
 }
 
-function susunHotelDariExcel(baris, masalah) {
-    const sheet = "Sheet 2 (Tarif Hotel)";
+// Tarif Hotel, Uang Harian and Transportasi are all "Provinsi plus N nominal columns", so
+// one parser serves the three; only the header and the column names differ. Keyed on the
+// normalised name, so a province spelled two ways is one row rather than two dropdown
+// entries the calculator would price differently.
+function susunProvinsiDariExcel(baris, judul, kolom, sheet, masalah) {
     const peta = new Map();
-    if (!sbmJudulCocok(baris, SBM_JUDUL_HOTEL, sheet, masalah)) return peta;
+    if (!sbmJudulCocok(baris, judul, sheet, masalah)) return peta;
 
     baris.slice(1).forEach((row, index) => {
         const nomorBaris = index + 2;
@@ -6966,11 +6978,11 @@ function susunHotelDariExcel(baris, masalah) {
         if (provinsi === "") return;
         const provinsiKunci = normalizeSatker(provinsi);
         const tarif = {};
-        SBM_GOLONGAN.forEach((kolom, urutan) => {
-            tarif[kolom] = paguDariSel(row?.[urutan + 1], `${sheet}: ${SBM_JUDUL_HOTEL[urutan + 1]}`, nomorBaris, masalah);
+        kolom.forEach((nama, urutan) => {
+            tarif[nama] = paguDariSel(row?.[urutan + 1], `${sheet}: ${judul[urutan + 1]}`, nomorBaris, masalah);
         });
         sbmTambah(peta, provinsiKunci, { provinsi, provinsi_kunci: provinsiKunci, ...tarif },
-            SBM_GOLONGAN, sheet, `Provinsi ${provinsi}`, nomorBaris, masalah);
+            kolom, sheet, `Provinsi ${provinsi}`, nomorBaris, masalah);
     });
     return peta;
 }
@@ -6985,19 +6997,35 @@ const bentukHotel = (row) => ({
     provinsi: row.provinsi,
     tarif: Object.fromEntries(SBM_GOLONGAN.map(kolom => [kolom, angkaPagu(row[kolom])])),
 });
+const bentukUangHarian = (row) => ({
+    provinsi: row.provinsi,
+    tarif: Object.fromEntries(SBM_JENIS_HARIAN.map(kolom => [kolom, angkaPagu(row[kolom])])),
+});
+// Priced per orang per kali, so a single figure rather than a keyed tarif
+const bentukTransportasi = (row) => ({ provinsi: row.provinsi, besaran: angkaPagu(row.besaran) });
 
 async function bacaSbmAktif(tahun) {
     const [aktif] = await sql`
         SELECT id, nama_berkas, dibuat_oleh, aktif_pada
         FROM sbm_unggahan WHERE tahun = ${tahun} AND status = 'aktif'`;
     if (!aktif) return null;
-    const [tiket, hotel] = await Promise.all([
+    const [tiket, hotel, uangHarian, transportasi] = await Promise.all([
         sql`SELECT kota_asal, kota_tujuan, bisnis, ekonomi FROM sbm_tiket
             WHERE unggahan_id = ${aktif.id} ORDER BY kota_asal, kota_tujuan`,
         sql`SELECT provinsi, eselon_1, eselon_2, eselon_3, eselon_4 FROM sbm_hotel
             WHERE unggahan_id = ${aktif.id} ORDER BY provinsi`,
+        sql`SELECT provinsi, luar_kota, dalam_kota, diklat FROM sbm_uang_harian
+            WHERE unggahan_id = ${aktif.id} ORDER BY provinsi`,
+        sql`SELECT provinsi, besaran FROM sbm_transportasi
+            WHERE unggahan_id = ${aktif.id} ORDER BY provinsi`,
     ]);
-    return { aktif, tiket: tiket.map(bentukTiket), hotel: hotel.map(bentukHotel) };
+    return {
+        aktif,
+        tiket: tiket.map(bentukTiket),
+        hotel: hotel.map(bentukHotel),
+        uangHarian: uangHarian.map(bentukUangHarian),
+        transportasi: transportasi.map(bentukTransportasi),
+    };
 }
 
 app.get("/kkp/sbm", async (req, res) => {
@@ -7006,7 +7034,11 @@ app.get("/kkp/sbm", async (req, res) => {
         if (!tahun) return res.status(400).json({ message: "Tahun tidak valid." });
 
         const data = await bacaSbmAktif(tahun);
-        if (!data) return res.status(200).json({ tahun, unggahan: null, tiket: [], hotel: [] });
+        if (!data) {
+            return res.status(200).json({
+                tahun, unggahan: null, tiket: [], hotel: [], uangHarian: [], transportasi: [],
+            });
+        }
         return res.status(200).json({
             tahun,
             unggahan: {
@@ -7015,6 +7047,8 @@ app.get("/kkp/sbm", async (req, res) => {
             },
             tiket: data.tiket,
             hotel: data.hotel,
+            uangHarian: data.uangHarian,
+            transportasi: data.transportasi,
         });
     } catch (error) {
         if (sbmBelumSiap(error, res)) return;
@@ -7037,18 +7071,24 @@ app.post("/kkp/sbm/unggah", handleAnggaranUpload, async (req, res) => {
             console.error("Gagal membaca berkas SBM:", error);
             return res.status(400).json({ message: "Berkas tidak dapat dibaca sebagai .xlsx." });
         }
-        if (sheets.length < 2) {
+        if (sheets.length < SBM_JUMLAH_SHEET) {
             return res.status(400).json({
-                message: "Berkas harus memuat dua sheet: Tiket Pesawat lalu Tarif Hotel. Gunakan Unduh Template.",
+                message: "Berkas harus memuat empat sheet, berurutan: Tiket Pesawat, Tarif Hotel, "
+                    + "Uang Harian, lalu Transportasi. Gunakan Unduh Template.",
             });
         }
 
         const masalah = [];
         const tiket = susunTiketDariExcel(sheets[0], masalah);
-        const hotel = susunHotelDariExcel(sheets[1], masalah);
+        const hotel = susunProvinsiDariExcel(sheets[1], SBM_JUDUL_HOTEL, SBM_GOLONGAN,
+            "Sheet 2 (Tarif Hotel)", masalah);
+        const uangHarian = susunProvinsiDariExcel(sheets[2], SBM_JUDUL_UANG_HARIAN, SBM_JENIS_HARIAN,
+            "Sheet 3 (Uang Harian)", masalah);
+        const transportasi = susunProvinsiDariExcel(sheets[3], SBM_JUDUL_TRANSPORTASI, SBM_KOLOM_TRANSPORTASI,
+            "Sheet 4 (Transportasi)", masalah);
         // Nothing is written when the file is rejected, so there is no draft to clean up
         if (masalah.length > 0) return res.status(400).json({ message: "Berkas belum dapat diproses.", masalah });
-        if (tiket.size === 0 && hotel.size === 0) {
+        if (tiket.size === 0 && hotel.size === 0 && uangHarian.size === 0 && transportasi.size === 0) {
             return res.status(400).json({ message: "Berkas tidak memuat satu pun baris SBM." });
         }
 
@@ -7065,6 +7105,14 @@ app.post("/kkp/sbm/unggah", handleAnggaranUpload, async (req, res) => {
                 await trx`INSERT INTO sbm_hotel ${trx([...hotel.values()].map(row => ({ unggahan_id: unggahan.id, ...row })),
                     "unggahan_id", "provinsi", "provinsi_kunci", ...SBM_GOLONGAN)}`;
             }
+            if (uangHarian.size > 0) {
+                await trx`INSERT INTO sbm_uang_harian ${trx([...uangHarian.values()].map(row => ({ unggahan_id: unggahan.id, ...row })),
+                    "unggahan_id", "provinsi", "provinsi_kunci", ...SBM_JENIS_HARIAN)}`;
+            }
+            if (transportasi.size > 0) {
+                await trx`INSERT INTO sbm_transportasi ${trx([...transportasi.values()].map(row => ({ unggahan_id: unggahan.id, ...row })),
+                    "unggahan_id", "provinsi", "provinsi_kunci", ...SBM_KOLOM_TRANSPORTASI)}`;
+            }
             return unggahan;
         });
 
@@ -7074,9 +7122,14 @@ app.post("/kkp/sbm/unggah", handleAnggaranUpload, async (req, res) => {
             unggahanId: draf.id,
             tahun,
             namaBerkas: req.file.originalname || "",
-            ringkasan: { tiket: tiket.size, hotel: hotel.size },
+            ringkasan: {
+                tiket: tiket.size, hotel: hotel.size,
+                uangHarian: uangHarian.size, transportasi: transportasi.size,
+            },
             tiket: [...tiket.values()].map(bentukTiket),
             hotel: [...hotel.values()].map(bentukHotel),
+            uangHarian: [...uangHarian.values()].map(bentukUangHarian),
+            transportasi: [...transportasi.values()].map(bentukTransportasi),
             masalah: [],
         });
     } catch (error) {

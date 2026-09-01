@@ -24,7 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, kkpTransaksiHeadData } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmJenisUangHarian, kkpTransaksiHeadData } from '../components/bendahara/head-data.js';
 import { anggaranSebabLabel, anggaranTandaMak, tandaMakPesan } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
@@ -1755,6 +1755,57 @@ TableSbmHotel.propTypes = {
     kosong: PropTypes.string,
 };
 
+export function TableSbmUangHarian({baris, kosong = "Belum ada data SBM Uang Harian."}) {
+    if (!baris || baris.length === 0) return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={sbmUangHarianHeadData}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.provinsi)}</TableCell>
+                            {sbmJenisUangHarian.map(({value}) => (
+                                <TableCell key={value}>{formatRupiah(row.tarif[value])}</TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableSbmUangHarian.propTypes = {
+    baris: PropTypes.array,
+    kosong: PropTypes.string,
+};
+
+// Besaran is a single figure rather than a keyed tarif, so this one reads row.besaran
+export function TableSbmTransportasi({baris, kosong = "Belum ada data SBM Transportasi."}) {
+    if (!baris || baris.length === 0) return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
+    return (
+        <TableContainer sx={{...realisasiContainer, maxHeight: "420px"}}>
+            <Table size="small" stickyHeader>
+                <RealisasiHead heads={sbmTransportasiHeadData}/>
+                <TableBody>
+                    {baris.map((row, index) => (
+                        <TableRow key={index} hover>
+                            <TableCell>{dash(row.provinsi)}</TableCell>
+                            <TableCell>{formatRupiah(row.besaran)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
+}
+
+TableSbmTransportasi.propTypes = {
+    baris: PropTypes.array,
+    kosong: PropTypes.string,
+};
+
 // The transaksi register, grouped by Kode - a Kode is one SPM, so the group is the unit an
 // admin acts on and a single row is only ever a line inside it. Follows TableAnggaranPohon:
 // one Fragment per group, expansion held in a map keyed by Kode.
@@ -1916,8 +1967,10 @@ TableTransaksiKkp.propTypes = {
 // half the content width: tighter cells and a smaller header keep every column
 // visible instead of pushing the table into a horizontal scroll.
 const KALKULATOR_SEL = {
-    "& .MuiTableCell-root": {padding: "6px 8px"},
-    "& .MuiTableCell-head": {fontSize: "0.9rem"},
+    "& .MuiTableCell-root": {padding: "6px 6px"},
+    // Header labels wrap onto a second line rather than setting the column width:
+    // "Jumlah Orang" on one line is wider than the control underneath it.
+    "& .MuiTableCell-head": {fontSize: "0.82rem", lineHeight: 1.25, whiteSpace: "normal"},
 };
 
 // The kalkulator line items. Not a reference list but an editable form laid out as a table,

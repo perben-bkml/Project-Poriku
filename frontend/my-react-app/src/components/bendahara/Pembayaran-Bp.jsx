@@ -18,10 +18,19 @@ const EMPTY_OPTIONS = {unitKerja: [], jenis: [], statusBayar: [], statusPajak: [
 const EMPTY_FILTER = {unitKerja: "", jenis: "", statusBayar: "", statusPajak: "", berkas: ""};
 // Fixed, unlike the other filters: these are conditions, not values read off the sheet
 const BERKAS_FILTER = [
-    {value: "", title: ""},
-    {value: "buktiBayar", title: "Bukti Bayar belum ada"},
-    {value: "buktiBayarDepositPajak", title: "Deposit Pajak belum ada"},
-    {value: "any", title: "Ada yang belum"},
+    {value: "", label: "Semua"},
+    {value: "buktiBayar", label: "Bukti Bayar belum ada"},
+    {value: "buktiBayarDepositPajak", label: "Deposit Pajak belum ada"},
+    {value: "any", label: "Ada yang belum"},
+];
+// One entry per select. A field without its own list takes the server's, which is keyed
+// by the same name, so adding a filter here is enough to wire it up.
+const FILTER_FIELDS = [
+    {name: "unitKerja", label: "Unit Kerja"},
+    {name: "jenis", label: "Jenis"},
+    {name: "statusBayar", label: "Status Bayar"},
+    {name: "statusPajak", label: "Status Pajak"},
+    {name: "berkas", label: "Berkas", options: BERKAS_FILTER},
 ];
 
 export default function PembayaranBp(props) {
@@ -182,66 +191,40 @@ export default function PembayaranBp(props) {
 
     return (
         <div>
-            <div className="pengajuan-filter filter-monitoring">
+            <div className="pengajuan-filter filter-monitoring filter-bp">
                 <h3 className="wide-card-title">Filter</h3>
-                <label className="filter-label2">Bulan:</label>
-                <div className="filter-select filter-select2">
-                    <select value={bulan ?? ""} name="bulan" onChange={handleBulanChange}>
-                        {monthNames.map((month, index) => (
-                            <option key={index} value={month.value}>{month.title}</option>
-                        ))}
-                    </select>
-                </div>
-                <label className="filter-label2">Unit Kerja:</label>
-                <div className="filter-select filter-select2">
-                    <select value={filterSelect.unitKerja} name="unitKerja" onChange={handleFilterChange}>
-                        <option value=""></option>
-                        {options.unitKerja.map((unit, index) => (
-                            <option key={index} value={unit}>{unit}</option>
-                        ))}
-                    </select>
-                </div>
-                <label className="filter-label2">Jenis:</label>
-                <div className="filter-select filter-select2">
-                    <select value={filterSelect.jenis} name="jenis" onChange={handleFilterChange}>
-                        <option value=""></option>
-                        {options.jenis.map((jenis, index) => (
-                            <option key={index} value={jenis}>{jenis}</option>
-                        ))}
-                    </select>
-                </div>
-                <br /><br /><br />
-                <label className="filter-label2">Status Bayar:</label>
-                <div className="filter-select filter-select2">
-                    <select value={filterSelect.statusBayar} name="statusBayar" onChange={handleFilterChange}>
-                        <option value=""></option>
-                        {options.statusBayar.map((status, index) => (
-                            <option key={index} value={status}>{status}</option>
-                        ))}
-                    </select>
-                </div>
-                <label className="filter-label2">Status Pajak:</label>
-                <div className="filter-select filter-select2">
-                    <select value={filterSelect.statusPajak} name="statusPajak" onChange={handleFilterChange}>
-                        <option value=""></option>
-                        {options.statusPajak.map((status, index) => (
-                            <option key={index} value={status}>{status}</option>
-                        ))}
-                    </select>
-                </div>
-                <label className="filter-label2">Berkas:</label>
-                <div className="filter-select filter-select2">
-                    <select value={filterSelect.berkas} name="berkas" onChange={handleFilterChange}>
-                        {BERKAS_FILTER.map((item, index) => (
-                            <option key={index} value={item.value}>{item.title}</option>
-                        ))}
-                    </select>
+                <div className="filter-bp-grid">
+                    <div className="filter-bp-item">
+                        <label className="filter-label2" htmlFor="filter-bulan">Bulan:</label>
+                        <div className="filter-select filter-select2">
+                            <select id="filter-bulan" name="bulan" value={bulan ?? ""}
+                                    onChange={handleBulanChange}>
+                                {monthNames.map(month => (
+                                    <option key={month.value} value={month.value}>{month.title || "Semua"}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    {FILTER_FIELDS.map(({name, label, options: tetap}) => (
+                        <div className="filter-bp-item" key={name}>
+                            <label className="filter-label2" htmlFor={`filter-${name}`}>{label}:</label>
+                            <div className="filter-select filter-select2">
+                                <select id={`filter-${name}`} name={name} value={filterSelect[name]}
+                                        onChange={handleFilterChange}>
+                                    {!tetap && <option value="">Semua</option>}
+                                    {(tetap ?? options[name]).map(option => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
-                <div className={"filter-search"}>
+                <div className="filter-search cari-bp">
                     <h3 className="wide-card-title">Cari</h3>
-                    <input className={'cari-input'} type={"text"} name={"cari"} value={cariInput}
-                           placeholder={"Nomor SPM..."} onChange={handleCariChange} />
+                    <input className="cari-input" type="text" name="cari" value={cariInput}
+                           placeholder="Nomor SPM..." onChange={handleCariChange}/>
                 </div>
             </div>
 

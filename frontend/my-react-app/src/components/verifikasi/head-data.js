@@ -122,7 +122,7 @@ const anggaranKolomEkspor = [
 // LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
 // their nominal can never be attributed to an akun. Said out loud on the screen rather than
 // left for someone to discover by reconciling by hand.
-const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku"
+const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku."
 
 // Twin of the SEBAB_* constants in server.js. "akun-belum-dirinci" never reaches these
 // panels - it is folded into its MAK - so it is not listed here.

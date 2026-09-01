@@ -311,5 +311,81 @@ const pembayaranBpHeadData = ["No.", "Tanggal SP2D", "Nomor SPM", "Jenis", "VA",
     "Bukti Bayar Deposit Pajak"];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN };
+//For Kelola-Kkp.jsx - the Standar Biaya Masukan reference and the two kalkulator.
+// The Excel layout POST /kkp/sbm/unggah expects: two sheets, matched by ORDER rather than
+// by tab name. Twins of SBM_JUDUL_TIKET and SBM_JUDUL_HOTEL in server.js - the upload
+// rejects a sheet whose first column is not the one named here.
+const sbmKolomTiket = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
+const sbmKolomHotel = ["Provinsi", "Eselon I", "Eselon II", "Eselon III/Golongan IV",
+    "Eselon IV/Golongan III/II/I"];
+
+// A city repeats across rows by design: the key is the ordered pair, so a return leg is a
+// separate row and may be priced differently.
+const sbmContohTiket = [
+    ["Jakarta", "Surabaya", "3.500.000", "1.800.000"],
+    ["Surabaya", "Jakarta", "3.400.000", "1.750.000"],
+    ["Jakarta", "Makassar", "5.200.000", "2.600.000"],
+];
+const sbmContohHotel = [
+    ["DKI Jakarta", "8.720.000", "1.490.000", "992.000", "730.000"],
+    ["Jawa Timur", "4.400.000", "1.605.000", "664.000", "480.000"],
+];
+
+// value is the key the API returns inside `tarif`, so the dropdown selection indexes the
+// price directly and a change to the display order cannot re-point every tariff.
+const sbmKelasPesawat = [
+    {value: "bisnis", title: "Bisnis"},
+    {value: "ekonomi", title: "Ekonomi"},
+];
+const sbmGolonganHotel = [
+    {value: "eselon_1", title: "Eselon I"},
+    {value: "eselon_2", title: "Eselon II"},
+    {value: "eselon_3", title: "Eselon III/Golongan IV"},
+    {value: "eselon_4", title: "Eselon IV/Golongan III/II/I"},
+];
+
+const sbmTiketHeadData = ["Kota Asal", "Kota Tujuan", "Bisnis", "Ekonomi"];
+const sbmHotelHeadData = ["Provinsi", ...sbmGolonganHotel.map(item => item.title)];
+
+const sbmUnggahKeterangan = "Satu berkas .xlsx berisi dua sheet: Tiket Pesawat lalu Tarif Hotel, " +
+    "dalam urutan itu. Nominal harus rupiah bulat - pemisah ribuan (3.500.000 atau 3,500,000) boleh, " +
+    "pecahan ditolak. Menerapkan berkas baru akan mengganti seluruh data SBM tahun berjalan.";
+
+const kalkulatorKeterangan = "Setiap baris dihitung sendiri, jadi satu perjalanan dapat memuat orang " +
+    "dengan kelas atau golongan yang berbeda. Hasil hanya tampil di layar dan tidak disimpan.";
+
+// The transaksi register on the 'Database KKP' tab. Twins of KKP_TRANSAKSI_VIA, KKP_BELUM
+// and KKP_SUDAH in server.js - the create route refuses a Transaksi Via not on this list.
+const kkpTransaksiVia = ["Traveloka", "Tiket.com", "Payment Link", "EDC", "Shopee",
+    "Tokopedia", "Gojek/Grab", "KAI Access"];
+
+const kkpStatusBelum = "Belum Terbayarkan";
+const kkpStatusSudah = "Sudah Terbayarkan";
+
+const kkpTransaksiHeadData = [
+    {label: "No."}, {label: "Tanggal"}, {label: "Nama PIC"}, {label: "Nama Pejalan"},
+    {label: "Keterangan"}, {label: "Transaksi Via"}, {label: "Nominal", align: "right"},
+    {label: "Bukti", align: "center"}, {label: "Aksi", align: "center"},
+];
+
+// One hue per unit kerja rather than 20 hand-picked colours: the chip, its text and the
+// accent are all derived from a single number, so they cannot drift out of contrast with
+// each other. Hues are spread rather than evenly stepped - 18 degrees apart would put four
+// near-identical greens in a row. There are exactly 20 registered unit kerja; a 21st wraps
+// and shares a hue, which is a repeat rather than a bug.
+const kkpWarnaHue = [210, 12, 145, 275, 32, 190, 330, 95, 250, 5,
+                     165, 45, 300, 220, 120, 20, 200, 285, 60, 175];
+
+// indeks is the unit's position in the sorted list the API returns, so a colour is stable
+// for as long as the unit kerja list is. -1 (an unknown or blank unit) stays neutral.
+const kkpWarnaUnit = (indeks) => indeks < 0
+    ? {aksen: "#9AA4B2", latar: "#EDF1F7", teks: "#5A6472"}
+    : {
+        aksen: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 62% 46%)`,
+        latar: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 78% 95%)`,
+        teks: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 68% 27%)`,
+    };
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
 

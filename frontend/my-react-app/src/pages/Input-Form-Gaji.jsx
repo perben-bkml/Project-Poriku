@@ -166,6 +166,12 @@ export default function InputFormGaji() {
                             <div><dt>Status</dt><dd>{hasil.status}</dd></div>
                             <div><dt>Dikirim ke</dt><dd>{hasil.email}</dd></div>
                         </dl>
+                        {hasil.emailTerkirim === false &&
+                            <p className="fg-peringatan">
+                                E-mail konfirmasi gagal dikirim ke <b>{hasil.email}</b>. Permintaan Anda
+                                tetap tercatat, namun pastikan alamat tersebut benar dan aktif — dokumen
+                                akan dikirim ke alamat yang sama. Hubungi Bagian Keuangan bila alamatnya keliru.
+                            </p>}
                         <p className="fg-catatan">
                             Dokumen akan kami kirimkan ke alamat e-mail di atas melalui perbend.bakamla@gmail.com.
                             Pantau perkembangan permintaan Anda pada tabel Antrian Pelayanan.

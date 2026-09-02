@@ -1105,6 +1105,18 @@ textarea.fg-input {
     color: #C62828;
 }
 
+/* A warning, not an error: the permintaan was recorded, only the confirmation mail bounced */
+.fg-peringatan {
+    margin: 0 0 20px 0;
+    padding: 12px 15px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: left;
+    color: #8A6100;
+    background-color: #FFF6E0;
+    border-radius: 8px;
+}
+
 .fg-gagal {
     margin: 20px 0 0 0;
     padding: 12px 15px;

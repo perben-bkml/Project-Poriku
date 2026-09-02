@@ -20,11 +20,12 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import RemoveRedEyeIcon from '@mui/icons-material/RemoveRedEye';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmJenisUangHarian, kkpTransaksiHeadData, layananGajiDetailFields, layananGajiStatusStyle } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmJenisUangHarian, kkpTransaksiHeadData, layananGajiDetailFields, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal } from '../components/bendahara/head-data.js';
 import { anggaranSebabLabel, anggaranTandaMak, tandaMakPesan } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
@@ -1447,12 +1448,18 @@ TableDaftarPengajuan.propTypes = {
 // screen, so the rest live in the dropdown. Records arrive as named objects straight from
 // GET /layanan-gaji/antrian, not as positional arrays - there is no canonical row shape
 // here to index against, and the keys are the sheet's own column meanings.
-// toggle, No., Nama Lengkap, Jenis Permintaan, Status, Petugas, Aksi
-const LAYANAN_GAJI_COLUMN_COUNT = 7;
+// toggle, No., Nama Lengkap, Jenis Permintaan, Status, Status E-mail, Petugas, Aksi
+const LAYANAN_GAJI_COLUMN_COUNT = 8;
 
-const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, mengunggah }) {
+const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlang, onUbahEmail, sibuk }) {
     const [open, setOpen] = useState(false);
+    // null means not editing, which "" cannot say - a cleared box is still an open editor
+    const [emailBaru, setEmailBaru] = useState(null);
     const status = layananGajiStatusStyle(row.status);
+    const email = layananGajiEmailStyle(row.statusEmail);
+    // Disabled rather than hidden: the button is the obvious next move after a bounce, so it
+    // has to say why it cannot be used instead of quietly disappearing
+    const alamatGagal = row.statusEmail === layananGajiEmailGagal;
 
     return (
         <Fragment>
@@ -1471,20 +1478,45 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, mengunggah 
                         {dash(row.status)}
                     </span>
                 </td>
+                <td>
+                    {email
+                        ? <span className="dp-status" style={{ backgroundColor: email.bg, color: email.fg }}>
+                            {row.statusEmail}
+                        </span>
+                        : dash("")}
+                </td>
                 <td>{dash(row.petugas)}</td>
                 <td>
                     <div className="dp-actions">
                         {/* The 5px margin is the small IconButton's own padding, so swapping the
                             two does not change the row height */}
-                        {mengunggah
+                        {sibuk
                             ? <CircularProgress size={21} sx={{ color: "#00449C", m: "5px" }} />
-                            : <Tooltip title={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"} arrow>
-                                <IconButton size="small"
-                                    aria-label={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"}
-                                    onClick={() => onUnggah(row)}>
-                                    <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
-                                </IconButton>
-                            </Tooltip>}
+                            : <>
+                                {/* Offered whenever a document exists: the retry re-sends the
+                                    file already on Drive, so re-uploading is only for a
+                                    document that was itself wrong */}
+                                {row.lampiran.url &&
+                                    <Tooltip arrow title={alamatGagal
+                                        ? "Perbaiki alamat e-mail dahulu — alamat ini tidak aktif"
+                                        : "Kirim ulang e-mail lampiran"}>
+                                        <span>
+                                            <IconButton size="small" disabled={alamatGagal}
+                                                aria-label="Kirim ulang e-mail lampiran"
+                                                onClick={() => onKirimUlang(row)}>
+                                                <ForwardToInboxIcon
+                                                    sx={{ fontSize: 21, color: alamatGagal ? "#9AA4B2" : "#8A6100" }} />
+                                            </IconButton>
+                                        </span>
+                                    </Tooltip>}
+                                <Tooltip title={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"} arrow>
+                                    <IconButton size="small"
+                                        aria-label={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"}
+                                        onClick={() => onUnggah(row)}>
+                                        <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </>}
                     </div>
                 </td>
             </tr>
@@ -1496,7 +1528,30 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, mengunggah 
                                 {layananGajiDetailFields.map(field => (
                                     <div className="dp-detail-item" key={field.key}>
                                         <dt>{field.label}</dt>
-                                        <dd>{dash(row[field.key])}</dd>
+                                        {/* E-mail is the one field the desk may correct: a bounced
+                                            row is unreachable until the address is fixed, and the
+                                            pemohon cannot resubmit without taking a new antrian */}
+                                        {field.key !== "email"
+                                            ? <dd>{dash(row[field.key])}</dd>
+                                            : emailBaru === null
+                                                ? <dd className="lg-email">
+                                                    {dash(row.email)}
+                                                    <Tooltip title="Ubah alamat e-mail" arrow>
+                                                        <IconButton size="small" aria-label="Ubah alamat e-mail"
+                                                            onClick={() => setEmailBaru(row.email)}>
+                                                            <EditIcon sx={{ fontSize: 16 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </dd>
+                                                : <dd className="lg-email">
+                                                    <input className="lg-email-input" type="email" value={emailBaru}
+                                                        autoFocus onChange={event => setEmailBaru(event.target.value)} />
+                                                    <Button size="small" sx={{ textTransform: "none" }}
+                                                        disabled={sibuk || !emailBaru.trim() || emailBaru === row.email}
+                                                        onClick={() => onUbahEmail(row, emailBaru.trim())}>Simpan</Button>
+                                                    <Button size="small" color="inherit" sx={{ textTransform: "none" }}
+                                                        onClick={() => setEmailBaru(null)}>Batal</Button>
+                                                </dd>}
                                     </div>
                                 ))}
                             </dl>
@@ -1514,11 +1569,14 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, mengunggah 
 LayananGajiRow.propTypes = {
     row: PropTypes.object.isRequired,
     onUnggah: PropTypes.func.isRequired,
-    mengunggah: PropTypes.bool,
+    onKirimUlang: PropTypes.func.isRequired,
+    onUbahEmail: PropTypes.func.isRequired,
+    sibuk: PropTypes.bool,
 };
 
 export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
-                                   onPageChange, onRowsPerPageChange, onUnggah, barisUnggah }) {
+                                   onPageChange, onRowsPerPageChange, onUnggah, onKirimUlang,
+                                   onUbahEmail, barisSibuk }) {
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1541,6 +1599,7 @@ export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage,
                             <th>Nama Lengkap</th>
                             <th>Jenis Permintaan</th>
                             <th>Status</th>
+                            <th>Status E-mail</th>
                             <th>Petugas</th>
                             <th className="dp-th-right">Aksi</th>
                         </tr>
@@ -1552,7 +1611,8 @@ export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage,
                                 ? <tr><td colSpan={LAYANAN_GAJI_COLUMN_COUNT} className="dp-placeholder dp-empty">Belum ada permintaan dokumen.</td></tr>
                                 : rows.map(row => (
                                     <LayananGajiRow key={row.rowNumber} row={row} onUnggah={onUnggah}
-                                        mengunggah={barisUnggah === row.rowNumber} />
+                                        onKirimUlang={onKirimUlang} onUbahEmail={onUbahEmail}
+                                        sibuk={barisSibuk === row.rowNumber} />
                                 ))}
                     </tbody>
                 </table>
@@ -1573,7 +1633,9 @@ TableLayananGaji.propTypes = {
     onPageChange: PropTypes.func.isRequired,
     onRowsPerPageChange: PropTypes.func.isRequired,
     onUnggah: PropTypes.func.isRequired,
-    barisUnggah: PropTypes.number,
+    onKirimUlang: PropTypes.func.isRequired,
+    onUbahEmail: PropTypes.func.isRequired,
+    barisSibuk: PropTypes.number,
 };
 
 // Anggaran.jsx - the pagu tree, Unit Kerja -> MAK -> Akun Belanja.

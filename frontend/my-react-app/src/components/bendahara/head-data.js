@@ -414,18 +414,32 @@ const kkpWarnaUnit = (indeks) => indeks < 0
 
 // Layanan Gaji. Twins of LAYANAN_GAJI_PROSES/LAYANAN_GAJI_SELESAI in server.js - a blank
 // Status cell is served as "Sedang Diproses", and the upload route stamps "Selesai".
-const layananGajiStatus = ["Sedang Diproses", "Selesai"];
+const layananGajiStatus = ["Sedang Diproses", "Selesai", "Gagal Kirim Email File"];
 
 // Its own palette rather than DAFTAR_STATUS_STYLE: neither label is in that map, and adding
 // them there would repaint Pembayaran BP's SELESAI along with them. Amber in progress, green
 // done - the same language as the pengajuan pills.
 const LAYANAN_GAJI_STATUS_STYLE = {
-    "sedang diproses": {bg: "#FFF1CF", fg: "#8A6100"},
-    "selesai":         {bg: "#D6F5E1", fg: "#0F7A3D"},
+    "sedang diproses":        {bg: "#FFF1CF", fg: "#8A6100"},
+    "selesai":                {bg: "#D6F5E1", fg: "#0F7A3D"},
+    "gagal kirim email file": {bg: "#FDE0E0", fg: "#A81E1E"},
 };
 const layananGajiStatusStyle = (status) =>
     LAYANAN_GAJI_STATUS_STYLE[String(status ?? "").trim().toLowerCase()]
     || LAYANAN_GAJI_STATUS_STYLE["sedang diproses"];
+
+// Column S, the verdict on the row's address. Blank means untested - rows written before the
+// mailer existed, and rows whose address was just corrected - so an unset value is left
+// unstyled rather than reported as a failure that never happened.
+const LAYANAN_GAJI_EMAIL_STYLE = {
+    "aktif":       {bg: "#D6F5E1", fg: "#0F7A3D"},
+    "tidak aktif": {bg: "#FDE0E0", fg: "#A81E1E"},
+};
+// Twin of LAYANAN_GAJI_EMAIL_MATI in server.js: the address is known not to receive mail, so
+// every send to it is blocked until the address is corrected.
+const layananGajiEmailGagal = "Tidak Aktif";
+const layananGajiEmailStyle = (status) =>
+    LAYANAN_GAJI_EMAIL_STYLE[String(status ?? "").trim().toLowerCase()] || null;
 
 // Everything the row carries that the table itself does not show. The five promoted
 // columns (No., Nama Lengkap, Jenis Permintaan, Status, Petugas) are deliberately absent:
@@ -443,6 +457,7 @@ const layananGajiDetailFields = [
     {key: "unitKerja", label: "Unit Kerja"},
     {key: "detailDokumen", label: "Detail Dokumen"},
     {key: "tujuanDokumen", label: "Tujuan Dokumen"},
+    {key: "keterangan", label: "Keterangan"},
 ];
 
 // Input-Form-Gaji.jsx, the public form. The sheet holds no data validation, so these lists
@@ -576,5 +591,5 @@ const layananGajiFormFields = [
 ];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiDetailFields, layananGajiFormFields };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
 

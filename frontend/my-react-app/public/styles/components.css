@@ -726,6 +726,29 @@
     color: #8A6100;
 }
 
+/* Layanan Gaji: the editable e-mail inside a row's detail panel */
+.lg-email {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.lg-email-input {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    border: 1px solid #C9D2E0;
+    border-radius: 6px;
+    outline: none;
+}
+
+.lg-email-input:focus {
+    border-color: #00449C;
+}
+
 .dp-actions {
     display: flex;
     align-items: center;
@@ -2412,6 +2435,30 @@ input[type="number"]::-webkit-inner-spin-button {
 /* The shared 50px is sized for the old inline run and leaves a hole in a gap-based row */
 .bar-cari .spm-button {
     margin-left: 0;
+}
+
+/* .spm-button is a fixed 80x25 pill sized for the word "Reset", so a real sentence and an
+   icon overflow it. Two classes rather than one, because that rule is declared further down
+   the file and would otherwise win on order. */
+.spm-button.lg-periksa {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    height: auto;
+    min-height: 30px;
+    padding: 4px 16px;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.spm-button.lg-periksa:disabled {
+    background-color: #7A8699;
+    box-shadow: none;
+    cursor: not-allowed;
 }
 
 /* Inside the card, under its title and above the table, on the same 35px gutter the head and

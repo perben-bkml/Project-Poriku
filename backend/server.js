@@ -12,6 +12,7 @@ import dateFormat from "dateformat";
 import multer from 'multer';
 import stream from 'stream';
 import readXlsxFile from 'read-excel-file/node';
+import dns from 'node:dns/promises';
 
 
 // Initialize tools
@@ -301,6 +302,9 @@ const ROUTE_ROLES = {
     // NIP, pangkat and jabatan for named staff, which only the gaji desk handles.
     "GET /layanan-gaji/antrian": GAJI,
     "POST /layanan-gaji/lampiran": GAJI,
+    "POST /layanan-gaji/kirim-ulang": GAJI,
+    "PATCH /layanan-gaji/email": GAJI,
+    "POST /layanan-gaji/periksa-email": GAJI,
 
     // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
     "GET /bendahara/pembayaran-bp": USER_ADMIN,
@@ -4370,6 +4374,14 @@ const oauth2ClientGaji = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI_GAJI
 );
 let driveGaji = null;
+let gmailGaji = null;
+
+// Both clients ride the one token: the Drive folder that stores the document and the mailbox
+// that sends it are the same account, which is what lets a pemohon reply to a real address.
+const bangunKlienGaji = () => {
+    driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+    gmailGaji = google.gmail({ version: "v1", auth: oauth2ClientGaji });
+};
 
 async function saveGajiOAuthTokens(tokens) {
     try {
@@ -4398,7 +4410,7 @@ async function loadGajiOAuthTokens() {
                 refresh_token: result[0].refresh_token,
                 expiry_date: result[0].expiry_date ? Number(result[0].expiry_date) : undefined,
             });
-            driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+            bangunKlienGaji();
             console.log('Dokumen Gaji OAuth tokens loaded from database');
             return true;
         }
@@ -4416,7 +4428,7 @@ async function ensureGajiDriveReady() {
     }
     if (oauth2ClientGaji.credentials.expiry_date && oauth2ClientGaji.credentials.expiry_date < Date.now()) {
         await oauth2ClientGaji.refreshAccessToken();
-        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        bangunKlienGaji();
         await saveGajiOAuthTokens(oauth2ClientGaji.credentials);
     }
     return true;
@@ -4451,6 +4463,13 @@ app.get("/auth/google/gaji", (req, res) => {
         access_type: 'offline',
         scope: [
             'https://www.googleapis.com/auth/drive',
+            // Layanan Gaji mails the pemohon from this same account. Adding a scope does not
+            // widen a token already issued, so this needs one fresh consent to take effect.
+            'https://www.googleapis.com/auth/gmail.send',
+            // Read is what makes "Berhasil" mean delivered: a send only reports that Gmail
+            // accepted the message, and a dead mailbox answers minutes later as a bounce
+            // sitting in this account's own inbox.
+            'https://www.googleapis.com/auth/gmail.readonly',
             'https://www.googleapis.com/auth/userinfo.profile'
         ],
         prompt: 'consent'
@@ -4463,7 +4482,7 @@ app.get("/auth/google/gaji/callback", async (req, res) => {
     try {
         const { tokens } = await oauth2ClientGaji.getToken(code);
         oauth2ClientGaji.setCredentials(tokens);
-        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        bangunKlienGaji();
         await saveGajiOAuthTokens(tokens);
         res.send("Akun Google untuk Dokumen Gaji berhasil terhubung. Halaman ini boleh ditutup.");
     } catch (error) {
@@ -8820,6 +8839,148 @@ app.post("/kkp/transaksi/spm", async (req, res) => {
     }
 });
 
+// --- Layanan Gaji: surat elektronik --------------------------------------------------
+// Sent through the Gaji OAuth account, the same identity that owns the Drive folder, so the
+// document and the mail carrying it come from one mailbox.
+//
+// The address is configured, never asked for: gmail.send is write only, and every call that
+// would report the account back - users.getProfile included - needs a Gmail read scope this
+// app has no business holding. Gmail stamps From with the authenticated account anyway, so
+// the env var only decides the display name; left unset, the header is omitted and Gmail
+// fills the whole thing in.
+const EMAIL_POLA = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_NAMA_PENGIRIM = "Perbendaharaan Bakamla RI";
+const EMAIL_ALAMAT_PENGIRIM = process.env.EMAIL_LAYANAN_GAJI || "";
+const EMAIL_BATAS_MS = 20_000;
+
+// RFC 2047. A header carrying a non ASCII character is illegal raw, and Indonesian names
+// reach these two through Nama Lengkap and the file name built from it.
+const kepalaUtf8 = (teks) => /^[\x20-\x7E]*$/.test(teks) ? teks
+    : `=?UTF-8?B?${Buffer.from(teks, "utf8").toString("base64")}?=`;
+const potongBase64 = (data) => data.toString("base64").replace(/(.{76})/g, "$1\r\n");
+
+function susunSurat({ dari, ke, subjek, teks, lampiran }) {
+    const kepala = [
+        ...(dari ? [`From: ${kepalaUtf8(EMAIL_NAMA_PENGIRIM)} <${dari}>`] : []),
+        `To: ${ke}`,
+        `Subject: ${kepalaUtf8(subjek)}`,
+        "MIME-Version: 1.0",
+    ];
+    const badan = [
+        'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        potongBase64(Buffer.from(teks, "utf8")),
+    ];
+    if (!lampiran) return [...kepala, ...badan].join("\r\n");
+
+    const batas = `poriku-${Date.now().toString(36)}`;
+    return [
+        ...kepala,
+        `Content-Type: multipart/mixed; boundary="${batas}"`,
+        "",
+        `--${batas}`,
+        ...badan,
+        "",
+        `--${batas}`,
+        `Content-Type: application/pdf; name="${kepalaUtf8(lampiran.nama)}"`,
+        // filename* carries the real name; the quoted filename is the ASCII fallback for
+        // clients that do not read the extended form
+        `Content-Disposition: attachment; filename="${kepalaUtf8(lampiran.nama)}"; `
+            + `filename*=UTF-8''${encodeURIComponent(lampiran.nama)}`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        potongBase64(lampiran.isi),
+        "",
+        `--${batas}--`,
+    ].join("\r\n");
+}
+
+// Nothing here may hang a caller: the form route sends inside the write queue, so a stalled
+// Gmail call would hold every other submission behind it.
+const dalamBatas = (janji, ms) => Promise.race([janji, new Promise((resolve, reject) => {
+    setTimeout(() => reject(new Error("Pengiriman e-mail melebihi batas waktu.")), ms).unref?.();
+})]);
+
+// An MX lookup catches the typo class the send cannot: a domain that does not exist, or one
+// that accepts no mail at all. It says nothing about the name in front of the @ - that only
+// ever surfaces as a bounce, which sapuPantulan picks up afterwards. A DNS failure of any
+// other kind lets the submission through: a resolver hiccup must not refuse a valid form.
+async function domainMenerimaSurat(email) {
+    const domain = email.split("@")[1];
+    try {
+        const mx = await dns.resolveMx(domain);
+        return mx.length > 0;
+    } catch (error) {
+        return !["ENOTFOUND", "ENODATA"].includes(error.code);
+    }
+}
+
+async function kirimSurat({ ke, subjek, teks, lampiran }) {
+    if (!await ensureGajiDriveReady()) throw new Error("Akun pengirim e-mail belum terhubung.");
+    // Checked here rather than only on the public form, so an address corrected by hand or a
+    // domain that has since lapsed is caught before a send that could only bounce
+    if (!await domainMenerimaSurat(ke)) throw new Error(`Domain alamat "${ke}" tidak menerima e-mail.`);
+    const mime = susunSurat({ dari: EMAIL_ALAMAT_PENGIRIM, ke, subjek, teks, lampiran });
+    // media upload, not a raw request body: a 10 MB attachment is base64 past the cap for a
+    // plain JSON send, and the failure mode there is a 413 rather than anything readable
+    await dalamBatas(gmailGaji.users.messages.send({
+        userId: "me",
+        media: { mimeType: "message/rfc822", body: mime },
+    }), EMAIL_BATAS_MS);
+}
+
+// Never throws: every caller records the outcome in the sheet and carries on, because the
+// permintaan and the uploaded document are both valid whether or not the mail left.
+async function cobaKirimSurat(surat) {
+    try {
+        await kirimSurat(surat);
+        return { berhasil: true, pesan: "" };
+    } catch (error) {
+        console.error("Gagal mengirim e-mail Layanan Gaji:", error);
+        const sebab = error?.errors?.[0]?.message || error?.response?.data?.error?.message || error.message;
+        // The one failure an admin can fix themselves, and Google words it as "insufficient
+        // authentication scopes", which says nothing about what to do next
+        const pesan = /insufficient authentication scopes|insufficientPermissions/i.test(String(sebab))
+            ? "Akun pengirim belum diizinkan mengirim e-mail. Buka /auth/google/gaji dan setujui akses Gmail."
+            : String(sebab);
+        return { berhasil: false, pesan: pesan.slice(0, 300) };
+    }
+}
+
+const TANDA_TANGAN = "Mohon tidak membalas surat elektronik ini.\n\n"
+    + "Hormat kami,\nBagian Keuangan\nBadan Keamanan Laut Republik Indonesia";
+
+const suratAntrian = (baris) => ({
+    ke: baris.email,
+    subjek: `[Pelayanan Gaji] Permintaan ${baris.jenisPermintaan} - Nomor Antrian ${baris.no}`,
+    teks: `Yth. ${baris.namaLengkap},\n\n`
+        + "Permintaan dokumen Anda telah kami terima dan sedang diproses.\n\n"
+        + `Nomor Antrian    : ${baris.no}\n`
+        + `Jenis Permintaan : ${baris.jenisPermintaan}\n`
+        + `Detail Dokumen   : ${baris.detailDokumen}\n`
+        + `Unit Kerja       : ${baris.unitKerja}\n`
+        + `Waktu Permintaan : ${baris.timestamp}\n\n`
+        + "Dokumen akan kami kirimkan ke alamat surat elektronik ini setelah selesai diproses. "
+        + "Untuk hardcopy dapat diambil di Bagian Keuangan pada hari dan jam kerja.\n\n"
+        + TANDA_TANGAN,
+});
+
+const suratDokumen = (record, petugas, lampiran) => ({
+    ke: record.email,
+    subjek: `[Pelayanan Gaji] ${record.jenisPermintaan} - Nomor Antrian ${record.no}`,
+    teks: `Yth. ${record.namaLengkap},\n\n`
+        + "Dokumen yang Anda minta telah selesai diproses dan terlampir pada surat elektronik ini.\n\n"
+        + `Nomor Antrian    : ${record.no}\n`
+        + `Jenis Permintaan : ${record.jenisPermintaan}\n`
+        + `Berkas           : ${lampiran.nama}\n`
+        + `Petugas          : ${petugas || "-"}\n\n`
+        + "Apabila terdapat kekeliruan pada dokumen tersebut, silakan hubungi Bagian Keuangan "
+        + "pada hari dan jam kerja dengan menyebutkan nomor antrian di atas.\n\n"
+        + TANDA_TANGAN,
+    lampiran,
+});
+
 // --- Layanan Gaji: antrian ----------------------------------------------------
 // Permintaan dokumen gaji from Bakamla staff, on the 'Database Antrian' tab of its own
 // spreadsheet. That spreadsheet lives on the verifikasi account, so every call here goes
@@ -8837,6 +8998,27 @@ const LAYANAN_GAJI_FIRST_ROW = 2;   // row 1 is the header
 // row nobody has opened yet still reads as being worked on, never as unknown or as waiting.
 const LAYANAN_GAJI_PROSES = "Sedang Diproses";
 const LAYANAN_GAJI_SELESAI = "Selesai";
+// The document is on Drive and the row is finished, but the pemohon has not received it.
+// A state of its own rather than a flag, because it is the desk's queue of work left to do.
+const LAYANAN_GAJI_GAGAL_EMAIL = "Gagal Kirim Email File";
+
+// Column S is a verdict on the address in column E, not a log of one send. Every attempt
+// keeps it current - the antrian mail, the document mail and each retry - so a corrected
+// address is re-tested by the very next send rather than staying unknown until a bounce.
+// Blank means untested. Aktif is what the evidence supports at the time: Gmail accepted the
+// message and no bounce has come back for it, which the sweep downgrades the moment one does.
+const LAYANAN_GAJI_EMAIL_AKTIF = "Aktif";
+const LAYANAN_GAJI_EMAIL_MATI = "Tidak Aktif";
+// Sending to a proven dead address only manufactures another bounce: Gmail accepts anything
+// on a live domain, so the send would report success while the document went nowhere.
+// Correcting the address blanks S, which is what lifts this.
+// Rows written while S recorded a single send still carry that wording. Translated on read
+// so the pill and the send block treat them alike, and the next send rewrites the cell - a
+// migration nobody has to run, over a column that heals itself.
+const LAYANAN_GAJI_EMAIL_LAMA = { Berhasil: LAYANAN_GAJI_EMAIL_AKTIF, Gagal: LAYANAN_GAJI_EMAIL_MATI };
+
+const LAYANAN_GAJI_ALAMAT_GAGAL =
+    "Alamat e-mail ini terbukti tidak aktif. Perbaiki alamatnya, lalu kirim ulang.";
 
 // index is the sheet column, 0 based - the read starts at A.
 const LAYANAN_GAJI_COLUMNS = [
@@ -8858,11 +9040,20 @@ const LAYANAN_GAJI_COLUMNS = [
     { index: 15, key: "status" },                    // P
     { index: 16, key: "petugas" },                   // Q
     { index: 17, key: "lampiran", link: true },      // R
+    { index: 18, key: "statusEmail" },               // S
+    { index: 19, key: "keterangan" },                // T
 ];
-const LAYANAN_GAJI_RANGE = `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:R`;
+const LAYANAN_GAJI_RANGE = `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:T`;
 
 // P, Q and R are adjacent, which is why finishing a row is one updateCells rather than three
 const LAYANAN_GAJI_SELESAI_COLUMN = 15;
+// T, the reason the last e-mail failed. Not adjacent to P:R because S records the antrian
+// mail and must survive an upload, so a finished row is two ranges in one batchUpdate.
+const LAYANAN_GAJI_KETERANGAN_COLUMN = 19;
+// S, the antrian e-mail. Adjacent to T, so a bounce writes the pair as one range.
+const LAYANAN_GAJI_EMAIL_COLUMN = 18;
+// E, the pemohon's address - the one cell of their half the desk may correct
+const LAYANAN_GAJI_EMAIL_ISIAN_COLUMN = 4;
 
 // No bare SPREADSHEET_ID_LAYANAN_GAJI exists, so getSpreadsheetId returns nothing for a
 // year that was never configured. Failing here beats reading an unrelated spreadsheet.
@@ -8894,6 +9085,7 @@ function layananGajiToRecord(cells, rowNumber) {
         record[column.key] = column.link ? pembayaranBpLink(cell) : trimmed(cell?.formattedValue);
     }
     if (!record.status) record.status = LAYANAN_GAJI_PROSES;
+    record.statusEmail = LAYANAN_GAJI_EMAIL_LAMA[record.statusEmail] || record.statusEmail;
     return record;
 }
 
@@ -8918,11 +9110,147 @@ const bacaLayananGaji = (spreadsheetId) => cached(layananGajiRowsKey(spreadsheet
     () => readLayananGajiRecords(spreadsheetId), PEMBAYARAN_BP_SEARCH_TTL_MS);
 const forgetLayananGajiRows = (spreadsheetId) => pembayaranBpCache.delete(layananGajiRowsKey(spreadsheetId));
 
+// --- Layanan Gaji: pantulan ---------------------------------------------------------
+// A send reports that Gmail accepted the message, never that it arrived; a mailbox that does
+// not exist answers minutes later with a bounce into the sender's own inbox. So delivery is
+// established by reading that inbox back, not by anything the send returned.
+
+const PANTULAN_JENDELA = "newer_than:7d";
+const PANTULAN_TTL_MS = 5 * 60 * 1000;
+// id -> the bounce already read, so a sweep re-fetches nothing. Deliberately not a record of
+// what has been *applied*: a bounce that matched no row must stay available, or one sweep
+// against a stale snapshot swallows it and the row keeps claiming the mail arrived.
+const pantulanDibaca = new Map();
+
+// Metadata rather than the whole message, which would drag the original attachment back down.
+// X-Failed-Recipients is the test as well as the source: Gmail sets it on a permanent failure
+// and omits it on a Delay notice, whose text names the same address while Gmail is still
+// retrying for another day. Reading the address out of that text would fail a row that is
+// still on its way.
+async function bacaPantulan(id) {
+    const pesan = await withBackoff(() => gmailGaji.users.messages.get({
+        userId: "me", id, format: "metadata", metadataHeaders: ["X-Failed-Recipients"],
+    }));
+    const gagal = (pesan.data.payload?.headers || [])
+        .find(item => item.name.toLowerCase() === "x-failed-recipients")?.value;
+    return {
+        alamat: (gagal || "").split(",").map(item => item.trim().toLowerCase()).filter(Boolean),
+        snippet: String(pesan.data.snippet || ""),
+    };
+}
+
+// One list call per window however many admins have the screen open, and one metadata call per
+// bounce it has never seen. Never throws: the antrian read must not fail because a sweep did.
+async function cariPantulan() {
+    try {
+        if (!await ensureGajiDriveReady()) return [];
+        const daftar = await withBackoff(() => gmailGaji.users.messages.list({
+            userId: "me", q: `from:mailer-daemon ${PANTULAN_JENDELA}`, maxResults: 50,
+        }));
+        const ids = (daftar.data.messages || []).map(pesan => pesan.id);
+        for (const id of ids) {
+            if (!pantulanDibaca.has(id)) pantulanDibaca.set(id, await bacaPantulan(id));
+        }
+        // Rebuilt from the listing, so an id that has aged out of the window is dropped too
+        for (const id of pantulanDibaca.keys()) {
+            if (!ids.includes(id)) pantulanDibaca.delete(id);
+        }
+        return ids.map(id => pantulanDibaca.get(id)).filter(item => item.alamat.length > 0);
+    } catch (error) {
+        console.error("Gagal membaca pantulan e-mail:", error);
+        return [];
+    }
+}
+
+// Matching runs against the current rows on every sweep, never once against whatever snapshot
+// happened to be loaded when the bounce first appeared. Only rows that disagree are written,
+// so a bounce already recorded costs nothing the next time round.
+//
+// One bounce marks one row: each send produces its own, so an address that submitted three
+// times and failed three times gets three bounces and three rows - matching every row to
+// every bounce would instead fail a delivery that had already succeeded. The newest unmarked
+// row is the one claimed, because rows are only ever appended.
+async function selaraskanPantulan(spreadsheetId, baris) {
+    const pantulan = await cariPantulan();
+    if (pantulan.length === 0) return false;
+
+    const requests = [];
+    const sheetId = await layananGajiSheetId(spreadsheetId);
+    const sel = (record, mulai, values) => requests.push({ updateCells: {
+        range: {
+            sheetId, startRowIndex: record.rowNumber - 1, endRowIndex: record.rowNumber,
+            startColumnIndex: mulai, endColumnIndex: mulai + values.length,
+        },
+        rows: [{ values }],
+        fields: "userEnteredValue",
+    } });
+
+    for (const item of pantulan) {
+        for (const alamat of item.alamat) {
+            const record = [...baris].reverse().find(row =>
+                row.email.toLowerCase() === alamat && row.statusEmail !== LAYANAN_GAJI_EMAIL_MATI);
+            if (!record) continue;
+
+            record.statusEmail = LAYANAN_GAJI_EMAIL_MATI;
+            record.keterangan = `E-mail dipantulkan: ${item.snippet}`.slice(0, 300);
+            sel(record, LAYANAN_GAJI_EMAIL_COLUMN,
+                [selTeksKkp(record.statusEmail), selTeksKkp(record.keterangan)]);
+            // The attachment demonstrably did not arrive, and this status is what puts the
+            // retry button on the row
+            if (record.status === LAYANAN_GAJI_SELESAI) {
+                record.status = LAYANAN_GAJI_GAGAL_EMAIL;
+                sel(record, LAYANAN_GAJI_SELESAI_COLUMN, [selTeksKkp(record.status)]);
+            }
+        }
+    }
+    if (requests.length === 0) return false;
+
+    await withBackoff(() => sheets2.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }));
+    return true;
+}
+
+// The timed sweep answers within five minutes, but a bounce can take a minute or two to come
+// back and the desk is often watching for one it has just caused. This is the same sweep with
+// the interval taken off, so nobody has to reload and wait it out.
+app.post("/layanan-gaji/periksa-email", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const jumlah = baris.filter(row => row.statusEmail === LAYANAN_GAJI_EMAIL_MATI).length;
+        if (await selaraskanPantulan(spreadsheetId, baris)) forgetLayananGajiRows(spreadsheetId);
+        // Dropped so the timed sweep does not answer from a window this check has overtaken
+        pembayaranBpCache.delete(`pantulan|${spreadsheetId}`);
+
+        const baru = baris.filter(row => row.statusEmail === LAYANAN_GAJI_EMAIL_MATI).length - jumlah;
+        return res.status(200).json({
+            message: baru > 0
+                ? `${baru} alamat e-mail ditandai tidak aktif.`
+                : "Belum ada pantulan baru. Coba lagi beberapa menit lagi.",
+            data: baris,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/periksa-email:", error);
+        return res.status(500).json({ message: "Gagal memeriksa status e-mail." });
+    }
+});
+
+// Swept on the admin's own read rather than on a timer: a bounce nobody is looking at can
+// wait, and this way the sweep costs nothing while the screen is closed.
+const sapuPantulan = (spreadsheetId, baris) => cached(`pantulan|${spreadsheetId}`, async () => {
+    if (await selaraskanPantulan(spreadsheetId, baris)) forgetLayananGajiRows(spreadsheetId);
+    return Date.now();
+}, PANTULAN_TTL_MS);
+
 app.get("/layanan-gaji/antrian", async (req, res) => {
     try {
         const spreadsheetId = layananGajiSpreadsheet(req, res);
         if (!spreadsheetId) return;
         const baris = await bacaLayananGaji(spreadsheetId);
+        // Mutates baris in place when it finds one, so the response already carries the
+        // correction that was just written rather than showing it a request later
+        await sapuPantulan(spreadsheetId, baris);
         return res.status(200).json({ data: baris });
     } catch (error) {
         console.error("Error in GET /layanan-gaji/antrian:", error);
@@ -8976,29 +9304,25 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
         const lampiran = await unggahLampiranGaji(req, res, record);
         if (!lampiran) return;
 
-        const sheetId = await layananGajiSheetId(spreadsheetId);
         const petugas = trimmed(req.viewer?.name);
-        await withBackoff(() => sheets2.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: { requests: [{ updateCells: {
-                range: {
-                    sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
-                    startColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN,
-                    endColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN + 3,
-                },
-                rows: [{ values: [
-                    selTeksKkp(LAYANAN_GAJI_SELESAI),
-                    selTeksKkp(petugas),
-                    selTautanKkp(lampiran),
-                ] }],
-                fields: "userEnteredValue,textFormatRuns",
-            } }] },
-        }));
-        forgetLayananGajiRows(spreadsheetId);
+        // The document is already safe on Drive, so a bounced mail is a state to record and
+        // retry rather than a failed upload: the desk keeps the file and the pemohon does not
+        // have to send the permintaan again.
+        const surat = record.statusEmail === LAYANAN_GAJI_EMAIL_MATI
+            ? { berhasil: false, pesan: LAYANAN_GAJI_ALAMAT_GAGAL }
+            : await cobaKirimSurat(suratDokumen(record, petugas, { ...lampiran, isi: req.file.buffer }));
+        const status = surat.berhasil ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_GAGAL_EMAIL;
+
+        await tulisSelesaiLayananGaji(spreadsheetId, rowNumber, {
+            status, petugas, lampiran, keterangan: surat.pesan,
+            statusEmail: surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI,
+        });
 
         return res.status(200).json({
-            message: `Lampiran untuk ${record.namaLengkap || "permintaan ini"} berhasil diunggah.`,
-            status: LAYANAN_GAJI_SELESAI, petugas, lampiran,
+            message: surat.berhasil
+                ? `Lampiran untuk ${record.namaLengkap || "permintaan ini"} terkirim ke ${record.email}.`
+                : `Lampiran tersimpan, tetapi e-mail gagal dikirim: ${surat.pesan}`,
+            status, petugas, lampiran, keterangan: surat.pesan, emailTerkirim: surat.berhasil,
         });
     } catch (error) {
         console.error("Error in POST /layanan-gaji/lampiran:", error);
@@ -9006,11 +9330,128 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
     }
 });
 
+// Status, Petugas, Lampiran, Status E-mail and Keterangan are P through T, one unbroken run,
+// so finishing a row is a single range. S belongs in it now that every send re-tests the
+// address rather than only the antrian mail claiming a verdict over it.
+async function tulisSelesaiLayananGaji(spreadsheetId, rowNumber, { status, petugas, lampiran, statusEmail, keterangan }) {
+    const sheetId = await layananGajiSheetId(spreadsheetId);
+    await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ updateCells: {
+            range: {
+                sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                startColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN,
+                endColumnIndex: LAYANAN_GAJI_KETERANGAN_COLUMN + 1,
+            },
+            rows: [{ values: [
+                selTeksKkp(status), selTeksKkp(petugas), selTautanKkp(lampiran),
+                selTeksKkp(statusEmail), selTeksKkp(keterangan),
+            ] }],
+            fields: "userEnteredValue,textFormatRuns",
+        } }] },
+    }));
+    forgetLayananGajiRows(spreadsheetId);
+}
+
+// Correcting the address on a row whose e-mail bounced. Writes E, then clears S and T: both
+// are the verdict on the address that has just been replaced, and leaving S at Gagal would
+// block every send to the corrected address as well. The bounce itself stays in the mailbox,
+// which is the real record; the sweep can mark the new address on its own evidence.
+app.patch("/layanan-gaji/email", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const email = trimmed(req.body?.email);
+        if (!EMAIL_POLA.test(email)) return res.status(400).json({ message: "Alamat e-mail tidak valid." });
+        if (!await domainMenerimaSurat(email)) {
+            return res.status(400).json({ message: "Domain alamat e-mail tidak ditemukan. Periksa kembali penulisannya." });
+        }
+
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+
+        const sheetId = await layananGajiSheetId(spreadsheetId);
+        const sel = (mulai, values) => ({ updateCells: {
+            range: {
+                sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                startColumnIndex: mulai, endColumnIndex: mulai + values.length,
+            },
+            rows: [{ values }],
+            fields: "userEnteredValue",
+        } });
+        await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [
+                sel(LAYANAN_GAJI_EMAIL_ISIAN_COLUMN, [selTeksKkp(email)]),
+                sel(LAYANAN_GAJI_EMAIL_COLUMN, [selTeksKkp(""), selTeksKkp("")]),
+            ] },
+        }));
+        forgetLayananGajiRows(spreadsheetId);
+
+        return res.status(200).json({ message: `Alamat e-mail diubah menjadi ${email}.`, email });
+    } catch (error) {
+        console.error("Error in PATCH /layanan-gaji/email:", error);
+        return res.status(500).json({ message: "Gagal mengubah alamat e-mail." });
+    }
+});
+
+// Retry after a bounced document e-mail. The file is fetched back from Drive rather than
+// re-uploaded, so a retry costs the admin nothing and cannot land a second copy in the folder.
+app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (!record.lampiran.url) {
+            return res.status(400).json({ message: "Belum ada lampiran untuk dikirim." });
+        }
+        // Refused rather than attempted: a retry to the same dead address is one more bounce
+        if (record.statusEmail === LAYANAN_GAJI_EMAIL_MATI) {
+            return res.status(400).json({ message: LAYANAN_GAJI_ALAMAT_GAGAL });
+        }
+        if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return;
+
+        const fileId = driveFileIdFromLink(record.lampiran.url);
+        if (!fileId) return res.status(400).json({ message: "Tautan lampiran tidak dikenal." });
+        const berkas = await driveGaji.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+
+        const petugas = trimmed(record.petugas) || trimmed(req.viewer?.name);
+        const surat = await cobaKirimSurat(suratDokumen(record, petugas, {
+            nama: record.lampiran.nama, isi: Buffer.from(berkas.data),
+        }));
+        const status = surat.berhasil ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_GAGAL_EMAIL;
+
+        // Q and R already hold the right values, but the range has to start at P, so both are
+        // rewritten as they stand rather than read back and diffed
+        await tulisSelesaiLayananGaji(spreadsheetId, rowNumber, {
+            status, petugas, lampiran: record.lampiran, keterangan: surat.pesan,
+            statusEmail: surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI,
+        });
+
+        return res.status(surat.berhasil ? 200 : 502).json({
+            message: surat.berhasil
+                ? `Lampiran terkirim ke ${record.email}.`
+                : `E-mail masih gagal dikirim: ${surat.pesan}`,
+            status, keterangan: surat.pesan, emailTerkirim: surat.berhasil,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/kirim-ulang:", error);
+        return res.status(500).json({ message: "Gagal mengirim ulang lampiran." });
+    }
+});
+
 // --- Layanan Gaji: form permintaan --------------------------------------------------
 // The public entry point: Bakamla staff hold no account, so this route is in PUBLIC_ROUTES
-// and the checks below are the only thing between the internet and the sheet. It appends
-// A:O only - Status, Petugas and Lampiran are the gaji desk's half of the row, and a blank
-// Status already reads as "Sedang Diproses".
+// and the checks below are the only thing between the internet and the sheet. It writes A:T
+// in one go, leaving P:R blank - Status, Petugas and Lampiran are the gaji desk's half of the
+// row, and a blank Status already reads as "Sedang Diproses".
 
 // Kelas Jabatan and Eselon are absent on purpose: neither applies to every pegawai.
 const LAYANAN_GAJI_WAJIB = ["namaLengkap", "nip", "email", "jenisPegawai", "pangkat", "golongan",
@@ -9056,7 +9497,7 @@ function periksaFormGaji(body) {
     if (Object.values(nilai).some(isi => isi.length > LAYANAN_GAJI_BATAS_PANJANG)) {
         return { pesan: `Isian melebihi ${LAYANAN_GAJI_BATAS_PANJANG} karakter.` };
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nilai.email)) return { pesan: "Alamat e-mail tidak valid." };
+    if (!EMAIL_POLA.test(nilai.email)) return { pesan: "Alamat e-mail tidak valid." };
     // NIP is 18 digits and an NRP is shorter, so the check is a shape rather than a length
     if (!/^[0-9]{6,25}$/.test(nilai.nip)) return { pesan: "NIP/NRP harus berupa angka." };
     return { nilai };
@@ -9069,6 +9510,9 @@ app.post("/layanan-gaji/form", async (req, res) => {
 
         const { nilai, pesan } = periksaFormGaji(req.body);
         if (pesan) return res.status(400).json({ message: pesan });
+        if (!await domainMenerimaSurat(nilai.email)) {
+            return res.status(400).json({ message: "Domain alamat e-mail tidak ditemukan. Periksa kembali penulisannya." });
+        }
 
         if (!lolosJejak(`ip|${alamatPemohon(req)}`, LAYANAN_GAJI_IP_JENDELA_MS, LAYANAN_GAJI_IP_BATAS)) {
             return res.status(429).json({ message: "Terlalu banyak permintaan. Silakan coba lagi nanti." });
@@ -9082,27 +9526,34 @@ app.post("/layanan-gaji/form", async (req, res) => {
         // Serialised on the same queue Pembayaran BP uses: two submits would otherwise read the
         // same last row and one would overwrite the other. Column A only - the narrowest read
         // that answers both where the row goes and what number it gets.
-        const no = await queuePembayaranBpWrite(spreadsheetId, async () => {
+        const hasil = await queuePembayaranBpWrite(spreadsheetId, async () => {
             const kolom = await readRange(sheets2, spreadsheetId,
                 `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:A`);
             const isi = kolom.data.values || [];
             const nomor = isi.map(row => parseInt(row?.[0], 10)).filter(Number.isInteger);
             // max + 1, not count + 1: a deleted row leaves a gap rather than a duplicate
             const berikutnya = nomor.length === 0 ? 1 : Math.max(...nomor) + 1;
-
             const baris = { ...nilai, no: berikutnya, timestamp: getFormattedDate().fullDateTimeVerifFormat };
+
+            // Mailed before the row is written, not after, so the outcome lands in the same
+            // write as the permintaan itself - one Sheets write per submission rather than two,
+            // and the row never briefly claims an e-mail that had not been attempted.
+            const surat = await cobaKirimSurat(suratAntrian(baris));
+            baris.statusEmail = surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI;
+            baris.keterangan = surat.pesan;
+
             const row = LAYANAN_GAJI_FIRST_ROW + isi.length;
             // Built from the column table so a new column cannot land in the wrong cell. RAW:
             // an 18 digit NIP would come back in scientific notation once Sheets parsed it.
-            await writeRange(sheets2, spreadsheetId, `'${LAYANAN_GAJI_SHEET}'!A${row}:O${row}`,
-                [LAYANAN_GAJI_COLUMNS.slice(0, LAYANAN_GAJI_SELESAI_COLUMN).map(column => baris[column.key] ?? "")]);
-            return berikutnya;
+            await writeRange(sheets2, spreadsheetId, `'${LAYANAN_GAJI_SHEET}'!A${row}:T${row}`,
+                [LAYANAN_GAJI_COLUMNS.map(column => baris[column.key] ?? "")]);
+            return { no: berikutnya, surat };
         });
         forgetLayananGajiRows(spreadsheetId);
 
         return res.status(201).json({
-            message: `Permintaan Anda tercatat dengan nomor antrian ${no}.`,
-            no, status: LAYANAN_GAJI_PROSES,
+            message: `Permintaan Anda tercatat dengan nomor antrian ${hasil.no}.`,
+            no: hasil.no, status: LAYANAN_GAJI_PROSES, emailTerkirim: hasil.surat.berhasil,
         });
     } catch (error) {
         console.error("Error in POST /layanan-gaji/form:", error);

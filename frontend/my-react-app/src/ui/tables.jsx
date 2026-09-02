@@ -1451,7 +1451,7 @@ TableDaftarPengajuan.propTypes = {
 // toggle, No., Nama Lengkap, Jenis Permintaan, Status, Status E-mail, Petugas, Aksi
 const LAYANAN_GAJI_COLUMN_COUNT = 8;
 
-const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlang, onUbahEmail, sibuk }) {
+const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlang, onUbahEmail, onHapus, sibuk }) {
     const [open, setOpen] = useState(false);
     // null means not editing, which "" cannot say - a cleared box is still an open editor
     const [emailBaru, setEmailBaru] = useState(null);
@@ -1516,6 +1516,12 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                         <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
                                     </IconButton>
                                 </Tooltip>
+                                <Tooltip title="Hapus permintaan" arrow>
+                                    <IconButton size="small" aria-label="Hapus permintaan"
+                                        onClick={() => onHapus(row)}>
+                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "#A81E1E" }} />
+                                    </IconButton>
+                                </Tooltip>
                             </>}
                     </div>
                 </td>
@@ -1571,12 +1577,13 @@ LayananGajiRow.propTypes = {
     onUnggah: PropTypes.func.isRequired,
     onKirimUlang: PropTypes.func.isRequired,
     onUbahEmail: PropTypes.func.isRequired,
+    onHapus: PropTypes.func.isRequired,
     sibuk: PropTypes.bool,
 };
 
 export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
                                    onPageChange, onRowsPerPageChange, onUnggah, onKirimUlang,
-                                   onUbahEmail, barisSibuk }) {
+                                   onUbahEmail, onHapus, barisSibuk }) {
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1612,7 +1619,7 @@ export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage,
                                 : rows.map(row => (
                                     <LayananGajiRow key={row.rowNumber} row={row} onUnggah={onUnggah}
                                         onKirimUlang={onKirimUlang} onUbahEmail={onUbahEmail}
-                                        sibuk={barisSibuk === row.rowNumber} />
+                                        onHapus={onHapus} sibuk={barisSibuk === row.rowNumber} />
                                 ))}
                     </tbody>
                 </table>
@@ -1635,6 +1642,7 @@ TableLayananGaji.propTypes = {
     onUnggah: PropTypes.func.isRequired,
     onKirimUlang: PropTypes.func.isRequired,
     onUbahEmail: PropTypes.func.isRequired,
+    onHapus: PropTypes.func.isRequired,
     barisSibuk: PropTypes.number,
 };
 

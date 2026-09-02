@@ -39,7 +39,7 @@ export default function Gaji() {
         const maxRow = 5;
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/bendahara/antrian-gaji', { params: { page, limit: maxRow } });
+            const response = await apiClient.get('/layanan-gaji/antrian-publik', { params: { page, limit: maxRow } });
             if (response.status === 200) {
                 setTableData(response.data.data);
                 setTotalPage(Math.ceil(response.data.rowLength/maxRow));
@@ -99,7 +99,8 @@ export default function Gaji() {
         )
     }
 
-    const headData = ["NO URUT PELAYANAN", "STATUS", "KETERANGAN"];
+    // Positional, matching the two columns /layanan-gaji/antrian-publik projects
+    const headData = ["NOMOR URUT", "STATUS"];
 
     const tableContent = () => {
         return (

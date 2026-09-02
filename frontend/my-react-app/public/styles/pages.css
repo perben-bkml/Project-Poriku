@@ -1543,6 +1543,21 @@ textarea.fg-input {
         min-height: 200px;
     }
 
+    /* Two columns, both short. .table-cell sets nowrap for the pengajuan screens, where it
+       keeps many narrow columns aligned; here it would force a sideways scroll on a phone, so
+       the cells wrap and split the width evenly instead. Scoped so those screens keep their
+       own behaviour. */
+    .gaji-table table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .gaji-table .table-cell {
+        white-space: normal;
+        word-break: break-word;
+        text-align: center;
+    }
+
     .table-cell {
         font-size: 0.9rem;
         padding: 8px;
@@ -1765,16 +1780,8 @@ textarea.fg-input {
         height: auto;
     }
 
-    /* Scoped to the gaji table: .table-cell is shared with the pengajuan screens, and the
-       nowrap there is what keeps their many narrow columns aligned. Here there are three
-       columns and no phone is wide enough for them, so wrapping beats a sideways scroll. */
-    .gaji-table .table-cell {
-        white-space: normal;
-        word-break: break-word;
-    }
-
     .gaji-table .head-data {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
 
     .gaji-guide {

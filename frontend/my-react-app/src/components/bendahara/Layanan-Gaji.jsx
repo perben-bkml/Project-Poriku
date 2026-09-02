@@ -1,8 +1,8 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import apiClient from "../../lib/apiClient";
-import {PopupAlert} from "../../ui/Popup.jsx";
+import Popup, {PopupAlert} from "../../ui/Popup.jsx";
 import {TableLayananGaji} from "../../ui/tables.jsx";
-import {layananGajiStatus, rowsPerPageOptions} from "./head-data.js";
+import {layananGajiStatus, monthNames, rowsPerPageOptions} from "./head-data.js";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 
 const ALERT_MS = 3000;
@@ -14,15 +14,22 @@ const cocokCari = (row, kata) => !kata
     || [row.no, row.namaLengkap, row.nip, row.jenisPermintaan, row.unitKerja]
         .some(nilai => String(nilai ?? "").toLowerCase().includes(kata));
 
+// Timestamp is the sheet's own dd/mm/yyyy text, so the month is the second segment. Compared
+// as a string against monthNames' zero padded values rather than parsed into a Date - the
+// spreadsheet is already scoped to one year, so the month alone is the whole filter.
+const bulanBaris = (row) => String(row.timestamp ?? "").split("/")[1] || "";
+
 export default function LayananGaji() {
     const [baris, setBaris] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [cari, setCari] = useState("");
     const [status, setStatus] = useState("");
+    const [bulan, setBulan] = useState("");
     const [halaman, setHalaman] = useState(1);
     const [barisPerHalaman, setBarisPerHalaman] = useState(rowsPerPageOptions[0]);
     const [barisSibuk, setBarisSibuk] = useState(null);
     const [memeriksa, setMemeriksa] = useState(false);
+    const [hapusTarget, setHapusTarget] = useState(null);
     const [isAlert, setIsAlert] = useState(false);
     const [alertMessage, setAlertMessage] = useState({message: "", severity: ""});
     const alertTimer = useRef(null);
@@ -58,14 +65,18 @@ export default function LayananGaji() {
 
     useEffect(() => { muatData(); }, [muatData]);
 
+    // Newest first: rows are only ever appended, so the sheet order reversed is chronological
+    // without parsing a single timestamp
     const tersaring = useMemo(() => {
         const kata = cari.trim().toLowerCase();
-        return baris.filter(row => cocokCari(row, kata) && (!status || row.status === status));
-    }, [baris, cari, status]);
+        return baris.filter(row => cocokCari(row, kata)
+            && (!status || row.status === status)
+            && (!bulan || bulanBaris(row) === bulan)).reverse();
+    }, [baris, cari, status, bulan]);
 
     const totalHalaman = Math.ceil(tersaring.length / barisPerHalaman);
     // A filter can shrink the list under the page being viewed, leaving it out of range
-    useEffect(() => { setHalaman(1); }, [cari, status, barisPerHalaman]);
+    useEffect(() => { setHalaman(1); }, [cari, status, bulan, barisPerHalaman]);
 
     const tampil = useMemo(() => {
         const mulai = (halaman - 1) * barisPerHalaman;
@@ -92,6 +103,9 @@ export default function LayananGaji() {
         setBarisSibuk(row.rowNumber);
         const formData = new FormData();
         formData.append("rowNumber", row.rowNumber);
+        // The backend refuses the write if this no longer matches the row - a table left open
+        // while someone else deleted an entry would otherwise address the wrong permintaan
+        formData.append("timestamp", row.timestamp);
         formData.append("lampiran", berkas);
         try {
             const {data} = await apiClient.post("/layanan-gaji/lampiran", formData);
@@ -110,7 +124,8 @@ export default function LayananGaji() {
     const kirimUlang = useCallback(async (row) => {
         setBarisSibuk(row.rowNumber);
         try {
-            const {data} = await apiClient.post("/layanan-gaji/kirim-ulang", {rowNumber: row.rowNumber});
+            const {data} = await apiClient.post("/layanan-gaji/kirim-ulang",
+                {rowNumber: row.rowNumber, timestamp: row.timestamp});
             showAlert(data.message, "success");
         } catch (error) {
             console.error("Failed to resend lampiran.", error);
@@ -126,7 +141,8 @@ export default function LayananGaji() {
     const ubahEmail = useCallback(async (row, email) => {
         setBarisSibuk(row.rowNumber);
         try {
-            const {data} = await apiClient.patch("/layanan-gaji/email", {rowNumber: row.rowNumber, email});
+            const {data} = await apiClient.patch("/layanan-gaji/email",
+                {rowNumber: row.rowNumber, timestamp: row.timestamp, email});
             showAlert(data.message, "success");
             await muatData({quiet: true});
         } catch (error) {
@@ -153,29 +169,57 @@ export default function LayananGaji() {
         }
     }, [showAlert]);
 
+    const hapus = useCallback(async () => {
+        const row = hapusTarget;
+        setHapusTarget(null);
+        setBarisSibuk(row.rowNumber);
+        try {
+            const {data} = await apiClient.delete("/layanan-gaji/antrian",
+                {data: {rowNumber: row.rowNumber, timestamp: row.timestamp}});
+            showAlert(data.message, "success");
+        } catch (error) {
+            console.error("Failed to delete permintaan.", error);
+            showAlert(error.response?.data?.message || "Permintaan gagal dihapus.", "error");
+        } finally {
+            setBarisSibuk(null);
+            await muatData({quiet: true});
+        }
+    }, [hapusTarget, muatData, showAlert]);
+
     return (
-        <div className="pengajuan bg-card">
+        <div className="pengajuan pengajuan-layanan bg-card">
             {isAlert && <PopupAlert isAlert={isAlert} severity={alertMessage.severity} message={alertMessage.message} />}
             <div className="pengajuan-filter">
-                <form className="bar-cari" onSubmit={event => event.preventDefault()}>
-                    <label htmlFor="cari-layanan">Cari</label>
-                    <input id="cari-layanan" className="type-btn bar-cari-nomor" type="text"
-                           value={cari} placeholder="Nama, NIP, jenis permintaan…"
-                           onChange={event => setCari(event.target.value)} />
+                <form className="bar-cari lg-filter" onSubmit={event => event.preventDefault()}>
+                    <div className="lg-filter-baris">
+                        <label htmlFor="cari-layanan">Cari</label>
+                        <input id="cari-layanan" className="type-btn lg-cari" type="text"
+                               value={cari} placeholder="Nama, NIP, jenis permintaan…"
+                               onChange={event => setCari(event.target.value)} />
+                    </div>
+                    <div className="lg-filter-baris">
                     <label htmlFor="filter-status-layanan">Status</label>
                     <select id="filter-status-layanan" className="type-btn" value={status}
                             onChange={event => setStatus(event.target.value)}>
                         <option value="">Semua Status</option>
                         {layananGajiStatus.map(item => <option key={item} value={item}>{item}</option>)}
                     </select>
-                    {(cari || status) &&
+                    <label htmlFor="filter-bulan-layanan">Bulan</label>
+                    <select id="filter-bulan-layanan" className="type-btn" value={bulan}
+                            onChange={event => setBulan(event.target.value)}>
+                        <option value="">Semua Bulan</option>
+                        {monthNames.filter(item => item.value).map(item =>
+                            <option key={item.value} value={item.value}>{item.title}</option>)}
+                    </select>
+                    {(cari || status || bulan) &&
                         <button className="spm-button" type="button"
-                                onClick={() => { setCari(""); setStatus(""); }}>Reset</button>}
+                                onClick={() => { setCari(""); setStatus(""); setBulan(""); }}>Reset</button>}
                     <button className="spm-button lg-periksa" type="button"
                             disabled={memeriksa || isLoading} onClick={periksaEmail}>
                         <MarkEmailReadIcon fontSize="small" />
                         {memeriksa ? "Memeriksa…" : "Periksa Status E-mail"}
                     </button>
+                    </div>
                 </form>
             </div>
             <input ref={berkasRef} type="file" accept="application/pdf" hidden onChange={kirimBerkas} />
@@ -191,8 +235,13 @@ export default function LayananGaji() {
                 onUnggah={mintaBerkas}
                 onKirimUlang={kirimUlang}
                 onUbahEmail={ubahEmail}
+                onHapus={setHapusTarget}
                 barisSibuk={barisSibuk}
             />
+            {hapusTarget &&
+                <Popup type="delete" whenCancel={() => setHapusTarget(null)} whenDel={hapus}
+                       message={`Hapus permintaan No. ${hapusTarget.no} atas nama `
+                           + `${hapusTarget.namaLengkap || "-"}? Berkas di Google Drive tetap tersimpan.`} />}
         </div>
     );
 }

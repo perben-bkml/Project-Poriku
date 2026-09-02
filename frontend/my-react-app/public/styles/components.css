@@ -36,6 +36,13 @@
     grid-template-rows: 90px 1fr;
 }
 
+/* The 90px above is a fixed track sized for a single row of filters, and the table starts at
+   90px whatever the filters actually need - Layanan Gaji puts Cari on a line of its own, which
+   overruns it. Scoped rather than changed in place: that rule is shared with six screens. */
+.pengajuan.pengajuan-layanan {
+    grid-template-rows: auto 1fr;
+}
+
 .pengajuan-filter {
     background-color:none;
     margin: 8px 8px;
@@ -1136,19 +1143,27 @@
     z-index: 99;
 }
 
+/* height, not min-height, used to be fixed at 210px with two equal rows - fine for the one
+   line default, but a message naming a person and a file ran into the border and out of the
+   box. The message row now takes what it needs and the buttons keep to their own. */
 .popup {
     position: inherit;
     display: grid;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: 1fr auto;
+    box-sizing: border-box;
     width: 550px;
-    height: 210px;
+    max-width: 90vw;
+    height: auto;
+    min-height: 210px;
     background-color: #f5f6fa;
     border-radius: 20px;
 }
 
 .popup.ketentuan {
     width: 80%;
+    max-width: none;
     height: 80%;
+    overflow-y: auto;
 }
 
 .ketentuan-text {
@@ -1161,12 +1176,24 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 28px 40px 0 40px;
     font-size: 1rem;
     font-weight: 400;
 }
 
+/* The h2 carries a browser default margin that fought the padding above, and at heading size
+   a two line message wrapped badly against the 550px width */
+.popup-text h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.55;
+    text-align: center;
+}
+
 .popup-footer {
-    margin-top: 30px;
+    margin-top: 24px;
+    padding-bottom: 24px;
 }
 
 .popup-btn {
@@ -2435,6 +2462,28 @@ input[type="number"]::-webkit-inner-spin-button {
 /* The shared 50px is sized for the old inline run and leaves a hole in a gap-based row */
 .bar-cari .spm-button {
     margin-left: 0;
+}
+
+/* Cari takes a line of its own: it is the only control here anyone types into, and sharing a
+   row with two selects and two buttons left it too narrow to hold a name. */
+.bar-cari.lg-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.lg-filter-baris {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+}
+
+/* .type-btn is 230px, sized for a unit kerja name; on its own line the search box can hold
+   the whole of what people paste into it */
+.lg-cari {
+    width: 320px;
+    max-width: 100%;
 }
 
 /* .spm-button is a fixed 80x25 pill sized for the word "Reset", so a real sentence and an

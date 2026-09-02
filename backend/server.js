@@ -211,6 +211,8 @@ const PUBLIC_ROUTES = new Set([
     // Input-Form-Gaji.jsx: Bakamla staff hold no account, so the form has to be reachable
     // signed out. Guarded by a per IP rate limit and a repeat check instead of by a role.
     "POST /layanan-gaji/form",
+    // Gaji.jsx's Antrian Pelayanan table. Three projected columns, rate limited per IP.
+    "GET /layanan-gaji/antrian-publik",
     "GET /auth/google/callback",
     "GET /auth/google/verif/callback",
     "GET /auth/google/gaji/callback",
@@ -305,6 +307,7 @@ const ROUTE_ROLES = {
     "POST /layanan-gaji/kirim-ulang": GAJI,
     "PATCH /layanan-gaji/email": GAJI,
     "POST /layanan-gaji/periksa-email": GAJI,
+    "DELETE /layanan-gaji/antrian": GAJI,
 
     // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
     "GET /bendahara/pembayaran-bp": USER_ADMIN,
@@ -8992,6 +8995,12 @@ const suratDokumen = (record, petugas, lampiran) => ({
 
 const LAYANAN_GAJI_SHEET = "Database Antrian";
 const LAYANAN_GAJI_FIRST_ROW = 2;   // row 1 is the header
+// The highest No ever issued, kept off to the side of A:T so no read or write of the table
+// touches it. Deleting a row must not hand its number to the next pemohon - that number is in
+// the confirmation e-mail the pemohon already has, and on the public queue they check it
+// against. Same device as the pengajuan flows' counterCell, and read the same way: never
+// below the highest number actually present, so a row typed in by hand still counts.
+const LAYANAN_GAJI_COUNTER_CELL = "Z1";
 
 // Only two states, and a blank Status cell is the first of them: a permintaan is in hand the
 // moment the form is submitted, which is what the confirmation e-mail tells the pemohon. So a
@@ -9236,6 +9245,45 @@ app.post("/layanan-gaji/periksa-email", async (req, res) => {
     }
 });
 
+// --- Layanan Gaji: antrian publik ----------------------------------------------------
+// The queue as an anonymous visitor sees it on /layanan-gaji: a number and a status, nothing
+// else. The row it is built from holds NIP, e-mail, pangkat and jabatan for a named person,
+// so this projects two fields rather than dropping the rest - a field that is never built
+// cannot be leaked by a later edit here. Keterangan is deliberately not among them: the app
+// writes bounce notices into it that quote the pemohon's own address.
+// It reads the same 60 second snapshot the admin screen uses, so public traffic adds no
+// Sheets calls at all, and it deliberately does not sweep - an anonymous request must not be
+// able to drive Gmail calls.
+
+const ANTRIAN_PUBLIK_BATAS = 25;
+const ANTRIAN_PUBLIK_IP_BATAS = 120;
+const ANTRIAN_PUBLIK_JENDELA_MS = 5 * 60 * 1000;
+
+app.get("/layanan-gaji/antrian-publik", async (req, res) => {
+    try {
+        // The snapshot caps what this can cost Google, but not what it can cost this server
+        if (!lolosJejak(`publik|${alamatPemohon(req)}`, ANTRIAN_PUBLIK_JENDELA_MS, ANTRIAN_PUBLIK_IP_BATAS)) {
+            return res.status(429).json({ message: "Terlalu banyak permintaan. Silakan coba lagi nanti." });
+        }
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), ANTRIAN_PUBLIK_BATAS);
+        const baris = await bacaLayananGaji(spreadsheetId);
+
+        // Newest first: someone who has just submitted is looking for their own row
+        const mulai = (page - 1) * limit;
+        const data = [...baris].reverse().slice(mulai, mulai + limit)
+            .map(record => [record.no, record.status]);
+
+        return res.status(200).json({ data, rowLength: baris.length });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/antrian-publik:", error);
+        return res.status(500).json({ message: "Gagal memuat antrian." });
+    }
+});
+
 // Swept on the admin's own read rather than on a timer: a bounce nobody is looking at can
 // wait, and this way the sweep costs nothing while the screen is closed.
 const sapuPantulan = (spreadsheetId, baris) => cached(`pantulan|${spreadsheetId}`, async () => {
@@ -9299,6 +9347,7 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
         const baris = await bacaLayananGaji(spreadsheetId);
         const record = baris.find(row => row.rowNumber === rowNumber);
         if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
 
         // Uploaded only once the row has been found, so a rejected request leaves no orphan
         const lampiran = await unggahLampiranGaji(req, res, record);
@@ -9353,6 +9402,61 @@ async function tulisSelesaiLayananGaji(spreadsheetId, rowNumber, { status, petug
     forgetLayananGajiRows(spreadsheetId);
 }
 
+// A rowNumber only means something against the snapshot it came from, and a delete shifts
+// every row below it up. Timestamp is the one field two permintaan cannot share, so it is
+// what proves the client is still talking about the row it thinks it is - without it, an
+// upload made from a stale table could mail one pemohon's document to another.
+function barisTakCocok(record, req, res) {
+    const stempel = trimmed(req.body?.timestamp);
+    if (!stempel || stempel === record.timestamp) return false;
+    res.status(409).json({ message: "Data antrian sudah berubah. Muat ulang halaman lalu coba lagi." });
+    return true;
+}
+
+// Removing a permintaan outright. Located by timestamp against a freshly read sheet rather
+// than by the rowNumber the browser sent: a delete is the one operation that invalidates
+// every other row number, so it must not trust one. The Drive file is deliberately left in
+// place - the row can no longer reach it, but an accidental delete stays recoverable.
+app.delete("/layanan-gaji/antrian", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const stempel = trimmed(req.body?.timestamp);
+        if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
+            return res.status(400).json({ message: "Baris permintaan tidak dikenal." });
+        }
+
+        const sheetId = await layananGajiSheetId(spreadsheetId);
+        const terhapus = await queuePembayaranBpWrite(spreadsheetId, async () => {
+            const segar = await readLayananGajiRecords(spreadsheetId);
+            const record = stempel
+                ? segar.find(row => row.timestamp === stempel)
+                : segar.find(row => row.rowNumber === rowNumber);
+            if (!record) return null;
+
+            await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: { requests: [{ deleteDimension: { range: {
+                    sheetId, dimension: "ROWS",
+                    startIndex: record.rowNumber - 1, endIndex: record.rowNumber,
+                } } }] },
+            }));
+            return record;
+        });
+        forgetLayananGajiRows(spreadsheetId);
+
+        if (!terhapus) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        return res.status(200).json({
+            message: `Permintaan No. ${terhapus.no} atas nama ${terhapus.namaLengkap || "-"} dihapus.`,
+        });
+    } catch (error) {
+        console.error("Error in DELETE /layanan-gaji/antrian:", error);
+        return res.status(500).json({ message: "Gagal menghapus permintaan." });
+    }
+});
+
 // Correcting the address on a row whose e-mail bounced. Writes E, then clears S and T: both
 // are the verdict on the address that has just been replaced, and leaving S at Gagal would
 // block every send to the corrected address as well. The bounce itself stays in the mailbox,
@@ -9372,6 +9476,7 @@ app.patch("/layanan-gaji/email", async (req, res) => {
         const baris = await bacaLayananGaji(spreadsheetId);
         const record = baris.find(row => row.rowNumber === rowNumber);
         if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
 
         const sheetId = await layananGajiSheetId(spreadsheetId);
         const sel = (mulai, values) => ({ updateCells: {
@@ -9409,6 +9514,7 @@ app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
         const baris = await bacaLayananGaji(spreadsheetId);
         const record = baris.find(row => row.rowNumber === rowNumber);
         if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
         if (!record.lampiran.url) {
             return res.status(400).json({ message: "Belum ada lampiran untuk dikirim." });
         }
@@ -9527,12 +9633,17 @@ app.post("/layanan-gaji/form", async (req, res) => {
         // same last row and one would overwrite the other. Column A only - the narrowest read
         // that answers both where the row goes and what number it gets.
         const hasil = await queuePembayaranBpWrite(spreadsheetId, async () => {
-            const kolom = await readRange(sheets2, spreadsheetId,
-                `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:A`);
-            const isi = kolom.data.values || [];
+            // Both ranges in one batchGet: the column answers where the row goes, the counter
+            // what number it gets, and neither is worth a call of its own
+            const [kolom, hitungan] = (await readRanges(sheets2, spreadsheetId, [
+                `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:A`,
+                `'${LAYANAN_GAJI_SHEET}'!${LAYANAN_GAJI_COUNTER_CELL}`,
+            ])).data.valueRanges;
+            const isi = kolom.values || [];
             const nomor = isi.map(row => parseInt(row?.[0], 10)).filter(Number.isInteger);
-            // max + 1, not count + 1: a deleted row leaves a gap rather than a duplicate
-            const berikutnya = nomor.length === 0 ? 1 : Math.max(...nomor) + 1;
+            // Never below what the counter has issued, and never below what is on the sheet:
+            // the counter is authoritative for deleted rows, the rows for hand typed ones
+            const berikutnya = Math.max(parseInt(hitungan.values?.[0]?.[0], 10) || 0, 0, ...nomor) + 1;
             const baris = { ...nilai, no: berikutnya, timestamp: getFormattedDate().fullDateTimeVerifFormat };
 
             // Mailed before the row is written, not after, so the outcome lands in the same
@@ -9543,10 +9654,16 @@ app.post("/layanan-gaji/form", async (req, res) => {
             baris.keterangan = surat.pesan;
 
             const row = LAYANAN_GAJI_FIRST_ROW + isi.length;
-            // Built from the column table so a new column cannot land in the wrong cell. RAW:
-            // an 18 digit NIP would come back in scientific notation once Sheets parsed it.
-            await writeRange(sheets2, spreadsheetId, `'${LAYANAN_GAJI_SHEET}'!A${row}:T${row}`,
-                [LAYANAN_GAJI_COLUMNS.map(column => baris[column.key] ?? "")]);
+            // Row and counter in one batchUpdate. Built from the column table so a new column
+            // cannot land in the wrong cell, and RAW throughout: an 18 digit NIP would come
+            // back in scientific notation once Sheets had parsed it.
+            await writeRanges(sheets2, spreadsheetId, [
+                {
+                    range: `'${LAYANAN_GAJI_SHEET}'!A${row}:T${row}`,
+                    values: [LAYANAN_GAJI_COLUMNS.map(column => baris[column.key] ?? "")],
+                },
+                { range: `'${LAYANAN_GAJI_SHEET}'!${LAYANAN_GAJI_COUNTER_CELL}`, values: [[berikutnya]] },
+            ]);
             return { no: berikutnya, surat };
         });
         forgetLayananGajiRows(spreadsheetId);

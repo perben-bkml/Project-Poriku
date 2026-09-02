@@ -1017,6 +1017,185 @@
 }
 
 
+/* Input-Form-Gaji Page - shares the gaji-page shell, but not .gaji-content: that sets a
+   2rem font meant for headings and would blow the form fields up with it */
+.fg-content {
+    width: 90%;
+    margin: 50px auto 0 auto;
+    padding: 0 5%;
+    color: #00204A;
+}
+
+.fg-card {
+    background-color: white;
+    border: 1px solid rgb(214, 214, 214);
+    border-radius: 20px;
+    padding: 25px 3% 30px 3%;
+}
+
+.fg-card h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.6rem;
+}
+
+.fg-catatan {
+    margin: 0 0 25px 0;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #41506B;
+}
+
+.fg-wajib {
+    color: #C62828;
+}
+
+.fg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px 25px;
+}
+
+.fg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fg-field-lebar {
+    grid-column: 1 / -1;
+}
+
+.fg-field label {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.fg-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: #00204A;
+    background-color: #fcfcfc;
+    border: 1px solid #C9D2E0;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.fg-input:focus {
+    border-color: #00449C;
+}
+
+.fg-input-salah {
+    border-color: #C62828;
+}
+
+textarea.fg-input {
+    resize: vertical;
+}
+
+.fg-pesan {
+    font-size: 0.85rem;
+    color: #6B7A90;
+}
+
+.fg-pesan-salah {
+    color: #C62828;
+}
+
+.fg-gagal {
+    margin: 20px 0 0 0;
+    padding: 12px 15px;
+    font-size: 1rem;
+    color: #8A1C1C;
+    background-color: #FDECEC;
+    border-radius: 8px;
+}
+
+.fg-aksi {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.fg-kirim {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 30px;
+    font-family: inherit;
+    font-size: 1.1rem;
+    color: white;
+    background-color: #00204A;
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 1px 10px #00204A;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.fg-kirim:hover:enabled {
+    background-color: #016FFC;
+    box-shadow: 0 1px 20px #016FFC;
+}
+
+.fg-kirim:disabled {
+    background-color: #7A8699;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.fg-kembali {
+    font-size: 1.1rem;
+    color: #00449C;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.fg-kembali:hover {
+    text-decoration: underline;
+}
+
+.fg-selesai {
+    text-align: center;
+}
+
+.fg-antrian {
+    margin: 0 0 20px 0;
+    font-size: 1.3rem;
+}
+
+.fg-antrian b {
+    font-size: 1.8rem;
+    color: #00449C;
+}
+
+.fg-ringkas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 0 0 25px 0;
+    text-align: left;
+}
+
+.fg-ringkas dt {
+    font-size: 0.85rem;
+    color: #6B7A90;
+}
+
+.fg-ringkas dd {
+    margin: 3px 0 0 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+
   /* Adding Media Queries */
 @media screen and (min-width: 1900px) {
     .landing-page-ship-img {
@@ -1318,15 +1497,26 @@
         align-items: center;
     }
 
+    /* Was a fixed 400px, which is wider than the column it sits in on any phone and pushed
+       the whole page sideways. The button also grows to fit its label rather than clipping
+       it, since .page-button pins a 60px height that two lines of text overflow. */
     .gaji-button {
-        width: 400px;
-        max-width: 650px;
+        width: 100%;
+        max-width: 420px;
+        min-width: 0;
+        height: auto;
+        min-height: 60px;
+        padding: 12px 20px;
+        box-sizing: border-box;
+        line-height: 1.25;
+        text-align: left;
     }
 
     .gaji-content {
         width: 95%;
         height: auto;
-        margin-bottom: 30px;
+        margin: 50px auto 30px auto;
+        box-sizing: border-box;
     }
 
     .gaji-desc {
@@ -1354,6 +1544,23 @@
         display: flex;
         justify-content: center;
         margin-top: 15px;
+    }
+
+    /* Input-Form-Gaji Page */
+    .fg-content {
+        width: 95%;
+        margin-top: 30px;
+        padding: 0;
+    }
+
+    .fg-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .fg-kirim {
+        width: 100%;
+        justify-content: center;
     }
 }
 
@@ -1498,22 +1705,39 @@
     }
 
     /* Gaji Page */
+    /* 100% rather than 100vw: vw counts the scrollbar gutter, so the page was a few pixels
+       wider than the viewport and scrolled sideways */
     .gaji-page {
-        width: 100vw;
+        width: 100%;
+        gap: 10px;
     }
 
     .gaji-title {
+        width: 100%;
         height: auto;
+        padding: 25px 20px;
+        box-sizing: border-box;
         font-size: 1.5rem;
+    }
+
+    /* h1 inherits 2em of the block, which is three wrapped lines of ribbon on a phone */
+    .gaji-title h1 {
+        font-size: 1.6rem;
+    }
+
+    .gaji-title h3 {
+        font-size: 1rem;
     }
 
     .gaji-buttonList {
         flex-direction: column;
+        gap: 15px;
+        margin-bottom: 0;
     }
 
     .gaji-button {
-        width: 350px;
-        font-size: 1.2rem;
+        margin-top: 10px;
+        font-size: 1.1rem;
     }
 
     .gaji-title-desc {
@@ -1521,9 +1745,24 @@
     }
 
     .gaji-content {
-        width: 90%;
+        width: 100%;
+        margin: 20px auto 20px auto;
+        padding: 0 12px;
+        box-sizing: border-box;
         font-size: 1.5rem;
         height: auto;
+    }
+
+    /* Scoped to the gaji table: .table-cell is shared with the pengajuan screens, and the
+       nowrap there is what keeps their many narrow columns aligned. Here there are three
+       columns and no phone is wide enough for them, so wrapping beats a sideways scroll. */
+    .gaji-table .table-cell {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .gaji-table .head-data {
+        font-size: 0.85rem;
     }
 
     .gaji-guide {
@@ -1568,6 +1807,75 @@
 
     .pagination {
         transform: scale(0.9);
+    }
+
+    /* Input-Form-Gaji Page - the form is filled on a phone far more often than on a
+       desktop, so the touch sizes below are the intended shape rather than a fallback */
+    .fg-content {
+        width: 100%;
+        margin-top: 20px;
+        padding: 0 12px;
+        box-sizing: border-box;
+    }
+
+    .fg-card {
+        border-radius: 14px;
+        padding: 20px 15px 25px 15px;
+    }
+
+    .fg-card h2 {
+        font-size: 1.3rem;
+    }
+
+    .fg-catatan {
+        margin-bottom: 20px;
+        font-size: 0.95rem;
+    }
+
+    /* 44px is the smallest comfortable tap target, and the 1rem font is what stops iOS
+       Safari zooming the whole page the moment a field takes focus */
+    .fg-input {
+        min-height: 44px;
+        font-size: 1rem;
+    }
+
+    textarea.fg-input {
+        min-height: auto;
+    }
+
+    .fg-field label {
+        font-size: 1rem;
+    }
+
+    .fg-pesan {
+        font-size: 0.9rem;
+    }
+
+    .fg-aksi {
+        flex-direction: column;
+        gap: 15px;
+        margin-top: 25px;
+    }
+
+    .fg-kirim {
+        min-height: 50px;
+        font-size: 1.05rem;
+    }
+
+    .fg-ringkas {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        text-align: center;
+    }
+
+    .fg-antrian {
+        font-size: 1.1rem;
+    }
+
+    .fg-antrian b {
+        display: block;
+        margin-top: 5px;
+        font-size: 2.2rem;
     }
 }
 

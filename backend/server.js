@@ -207,6 +207,9 @@ const PUBLIC_ROUTES = new Set([
     "POST /logout",
     "GET /check-auth",
     "GET /bendahara/antrian-gaji",
+    // Input-Form-Gaji.jsx: Bakamla staff hold no account, so the form has to be reachable
+    // signed out. Guarded by a per IP rate limit and a repeat check instead of by a role.
+    "POST /layanan-gaji/form",
     "GET /auth/google/callback",
     "GET /auth/google/verif/callback",
     "GET /auth/google/gaji/callback",
@@ -9000,6 +9003,110 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
     } catch (error) {
         console.error("Error in POST /layanan-gaji/lampiran:", error);
         return res.status(500).json({ message: "Gagal mengunggah lampiran." });
+    }
+});
+
+// --- Layanan Gaji: form permintaan --------------------------------------------------
+// The public entry point: Bakamla staff hold no account, so this route is in PUBLIC_ROUTES
+// and the checks below are the only thing between the internet and the sheet. It appends
+// A:O only - Status, Petugas and Lampiran are the gaji desk's half of the row, and a blank
+// Status already reads as "Sedang Diproses".
+
+// Kelas Jabatan and Eselon are absent on purpose: neither applies to every pegawai.
+const LAYANAN_GAJI_WAJIB = ["namaLengkap", "nip", "email", "jenisPegawai", "pangkat", "golongan",
+    "jabatan", "unitKerja", "jenisPermintaan", "detailDokumen", "tujuanDokumen"];
+const LAYANAN_GAJI_BATAS_PANJANG = 300;
+
+const LAYANAN_GAJI_IP_JENDELA_MS = 60 * 60 * 1000;
+const LAYANAN_GAJI_IP_BATAS = 5;
+const LAYANAN_GAJI_ULANG_MS = 10 * 60 * 1000;
+
+// Both guards are one Map of key -> submission times, filtered to the window on every read,
+// so nothing accumulates and neither costs a Sheets call. In process only: a restart forgets
+// them, which is the right trade for a guard whose job is to blunt a flood, not to audit one.
+const layananGajiJejak = new Map();
+function lolosJejak(kunci, jendelaMs, batas) {
+    const sekarang = Date.now();
+    if (layananGajiJejak.size > 500) {
+        for (const [lama, waktu] of layananGajiJejak) {
+            if (sekarang - waktu[waktu.length - 1] > LAYANAN_GAJI_IP_JENDELA_MS) layananGajiJejak.delete(lama);
+        }
+    }
+    const jejak = (layananGajiJejak.get(kunci) || []).filter(waktu => sekarang - waktu < jendelaMs);
+    if (jejak.length >= batas) return false;
+    layananGajiJejak.set(kunci, [...jejak, sekarang]);
+    return true;
+}
+
+// x-forwarded-for over req.ip: the app sits behind a proxy, so req.ip is the proxy for
+// everyone and would rate limit the whole of Bakamla as one visitor.
+const alamatPemohon = (req) => trimmed(req.headers["x-forwarded-for"]).split(",")[0].trim() || req.ip || "?";
+
+// C..O, the pemohon's half of the row. No and Timestamp are stamped by the server, and P..R
+// belong to the gaji desk, so neither is ever taken from the body.
+const LAYANAN_GAJI_ISIAN = LAYANAN_GAJI_COLUMNS.slice(2, LAYANAN_GAJI_SELESAI_COLUMN);
+
+function periksaFormGaji(body) {
+    const nilai = {};
+    for (const column of LAYANAN_GAJI_ISIAN) nilai[column.key] = trimmed(body?.[column.key]);
+
+    for (const key of LAYANAN_GAJI_WAJIB) {
+        if (!nilai[key]) return { pesan: "Semua isian wajib harus diisi." };
+    }
+    if (Object.values(nilai).some(isi => isi.length > LAYANAN_GAJI_BATAS_PANJANG)) {
+        return { pesan: `Isian melebihi ${LAYANAN_GAJI_BATAS_PANJANG} karakter.` };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nilai.email)) return { pesan: "Alamat e-mail tidak valid." };
+    // NIP is 18 digits and an NRP is shorter, so the check is a shape rather than a length
+    if (!/^[0-9]{6,25}$/.test(nilai.nip)) return { pesan: "NIP/NRP harus berupa angka." };
+    return { nilai };
+}
+
+app.post("/layanan-gaji/form", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const { nilai, pesan } = periksaFormGaji(req.body);
+        if (pesan) return res.status(400).json({ message: pesan });
+
+        if (!lolosJejak(`ip|${alamatPemohon(req)}`, LAYANAN_GAJI_IP_JENDELA_MS, LAYANAN_GAJI_IP_BATAS)) {
+            return res.status(429).json({ message: "Terlalu banyak permintaan. Silakan coba lagi nanti." });
+        }
+        // Counted only once the request is otherwise sound, so a rejected form does not spend
+        // the pemohon's quota on a typo they are about to fix
+        if (!lolosJejak(`ulang|${nilai.nip}|${nilai.jenisPermintaan}`, LAYANAN_GAJI_ULANG_MS, 1)) {
+            return res.status(409).json({ message: "Permintaan yang sama baru saja dikirim dan sedang diproses." });
+        }
+
+        // Serialised on the same queue Pembayaran BP uses: two submits would otherwise read the
+        // same last row and one would overwrite the other. Column A only - the narrowest read
+        // that answers both where the row goes and what number it gets.
+        const no = await queuePembayaranBpWrite(spreadsheetId, async () => {
+            const kolom = await readRange(sheets2, spreadsheetId,
+                `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:A`);
+            const isi = kolom.data.values || [];
+            const nomor = isi.map(row => parseInt(row?.[0], 10)).filter(Number.isInteger);
+            // max + 1, not count + 1: a deleted row leaves a gap rather than a duplicate
+            const berikutnya = nomor.length === 0 ? 1 : Math.max(...nomor) + 1;
+
+            const baris = { ...nilai, no: berikutnya, timestamp: getFormattedDate().fullDateTimeVerifFormat };
+            const row = LAYANAN_GAJI_FIRST_ROW + isi.length;
+            // Built from the column table so a new column cannot land in the wrong cell. RAW:
+            // an 18 digit NIP would come back in scientific notation once Sheets parsed it.
+            await writeRange(sheets2, spreadsheetId, `'${LAYANAN_GAJI_SHEET}'!A${row}:O${row}`,
+                [LAYANAN_GAJI_COLUMNS.slice(0, LAYANAN_GAJI_SELESAI_COLUMN).map(column => baris[column.key] ?? "")]);
+            return berikutnya;
+        });
+        forgetLayananGajiRows(spreadsheetId);
+
+        return res.status(201).json({
+            message: `Permintaan Anda tercatat dengan nomor antrian ${no}.`,
+            no, status: LAYANAN_GAJI_PROSES,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/form:", error);
+        return res.status(500).json({ message: "Gagal mengirim permintaan. Silakan coba lagi." });
     }
 });
 

@@ -412,5 +412,39 @@ const kkpWarnaUnit = (indeks) => indeks < 0
     };
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
+// Layanan Gaji. Twins of LAYANAN_GAJI_PROSES/LAYANAN_GAJI_SELESAI in server.js - a blank
+// Status cell is served as "Sedang Diproses", and the upload route stamps "Selesai".
+const layananGajiStatus = ["Sedang Diproses", "Selesai"];
+
+// Its own palette rather than DAFTAR_STATUS_STYLE: neither label is in that map, and adding
+// them there would repaint Pembayaran BP's SELESAI along with them. Amber in progress, green
+// done - the same language as the pengajuan pills.
+const LAYANAN_GAJI_STATUS_STYLE = {
+    "sedang diproses": {bg: "#FFF1CF", fg: "#8A6100"},
+    "selesai":         {bg: "#D6F5E1", fg: "#0F7A3D"},
+};
+const layananGajiStatusStyle = (status) =>
+    LAYANAN_GAJI_STATUS_STYLE[String(status ?? "").trim().toLowerCase()]
+    || LAYANAN_GAJI_STATUS_STYLE["sedang diproses"];
+
+// Everything the row carries that the table itself does not show. The five promoted
+// columns (No., Nama Lengkap, Jenis Permintaan, Status, Petugas) are deliberately absent:
+// the dropdown is the rest of the permintaan, not a repeat of the row above it.
+const layananGajiDetailFields = [
+    {key: "timestamp", label: "Timestamp"},
+    {key: "nip", label: "NIP/NRP"},
+    {key: "email", label: "E-mail"},
+    {key: "jenisPegawai", label: "Jenis Pegawai"},
+    {key: "pangkat", label: "Pangkat"},
+    {key: "golongan", label: "Golongan"},
+    {key: "jabatan", label: "Jabatan"},
+    {key: "kelasJabatan", label: "Kelas Jabatan Tunjangan Kinerja"},
+    {key: "eselon", label: "Tunjangan Jabatan Struktural - Eselon"},
+    {key: "unitKerja", label: "Unit Kerja"},
+    {key: "detailDokumen", label: "Detail Dokumen"},
+    {key: "tujuanDokumen", label: "Tujuan Dokumen"},
+];
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiDetailFields };
 

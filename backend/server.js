@@ -294,6 +294,11 @@ const ROUTE_ROLES = {
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
 
+    // Layanan Gaji: the permintaan dokumen queue. Closed to plain admin - the rows carry
+    // NIP, pangkat and jabatan for named staff, which only the gaji desk handles.
+    "GET /layanan-gaji/antrian": GAJI,
+    "POST /layanan-gaji/lampiran": GAJI,
+
     // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
     "GET /bendahara/pembayaran-bp": USER_ADMIN,
     "GET /bendahara/pembayaran-bp/options": ADMIN,
@@ -8809,6 +8814,192 @@ app.post("/kkp/transaksi/spm", async (req, res) => {
     } catch (error) {
         console.error("Error in POST /kkp/transaksi/spm:", error);
         return res.status(500).json({ message: "Gagal menyimpan Nomor SPM." });
+    }
+});
+
+// --- Layanan Gaji: antrian ----------------------------------------------------
+// Permintaan dokumen gaji from Bakamla staff, on the 'Database Antrian' tab of its own
+// spreadsheet. That spreadsheet lives on the verifikasi account, so every call here goes
+// through sheets2 - the pengajuan service account is not shared on it and would 403.
+// The rows are entered elsewhere (the public form comes later); this screen only reads
+// them and attaches the finished document. Borrows Pembayaran BP's multer and cache and
+// the KKP cell builders: R holds a file drop attachment exactly as those sheets do, so
+// writing and reading one back is the same problem, not a similar one.
+
+const LAYANAN_GAJI_SHEET = "Database Antrian";
+const LAYANAN_GAJI_FIRST_ROW = 2;   // row 1 is the header
+
+// Only two states, and a blank Status cell is the first of them: a permintaan is in hand the
+// moment the form is submitted, which is what the confirmation e-mail tells the pemohon. So a
+// row nobody has opened yet still reads as being worked on, never as unknown or as waiting.
+const LAYANAN_GAJI_PROSES = "Sedang Diproses";
+const LAYANAN_GAJI_SELESAI = "Selesai";
+
+// index is the sheet column, 0 based - the read starts at A.
+const LAYANAN_GAJI_COLUMNS = [
+    { index: 0,  key: "no" },                        // A
+    { index: 1,  key: "timestamp" },                 // B
+    { index: 2,  key: "namaLengkap" },               // C
+    { index: 3,  key: "nip" },                       // D
+    { index: 4,  key: "email" },                     // E
+    { index: 5,  key: "jenisPegawai" },              // F
+    { index: 6,  key: "pangkat" },                   // G
+    { index: 7,  key: "golongan" },                  // H
+    { index: 8,  key: "jabatan" },                   // I
+    { index: 9,  key: "kelasJabatan" },              // J
+    { index: 10, key: "eselon" },                    // K
+    { index: 11, key: "unitKerja" },                 // L
+    { index: 12, key: "jenisPermintaan" },           // M
+    { index: 13, key: "detailDokumen" },             // N
+    { index: 14, key: "tujuanDokumen" },             // O
+    { index: 15, key: "status" },                    // P
+    { index: 16, key: "petugas" },                   // Q
+    { index: 17, key: "lampiran", link: true },      // R
+];
+const LAYANAN_GAJI_RANGE = `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:R`;
+
+// P, Q and R are adjacent, which is why finishing a row is one updateCells rather than three
+const LAYANAN_GAJI_SELESAI_COLUMN = 15;
+
+// No bare SPREADSHEET_ID_LAYANAN_GAJI exists, so getSpreadsheetId returns nothing for a
+// year that was never configured. Failing here beats reading an unrelated spreadsheet.
+function layananGajiSpreadsheet(req, res) {
+    const spreadsheetId = getSpreadsheetId(req, 'LAYANAN_GAJI');
+    if (!spreadsheetId) {
+        res.status(400).json({ message: "Spreadsheet Layanan Gaji untuk tahun ini belum dikonfigurasi." });
+        return null;
+    }
+    return spreadsheetId;
+}
+
+// The tab is resolved rather than assumed: updateCells addresses a sheetId, not a name.
+const layananGajiSheetId = (spreadsheetId) =>
+    cached(`id|${spreadsheetId}|${LAYANAN_GAJI_SHEET}`, async () => {
+        const response = await withBackoff(() => sheets2.spreadsheets.get({
+            spreadsheetId, fields: "sheets.properties(sheetId,title)",
+        }));
+        const match = (response.data.sheets || []).find(sheet => sheet.properties?.title === LAYANAN_GAJI_SHEET);
+        if (!match) throw new Error(`Tab "${LAYANAN_GAJI_SHEET}" tidak ditemukan.`);
+        return match.properties.sheetId;
+    });
+
+function layananGajiToRecord(cells, rowNumber) {
+    const record = { rowNumber };
+    for (const column of LAYANAN_GAJI_COLUMNS) {
+        const cell = cells?.[column.index];
+        // Column R holds a file drop attachment, read back the way Pembayaran BP reads M and S
+        record[column.key] = column.link ? pembayaranBpLink(cell) : trimmed(cell?.formattedValue);
+    }
+    if (!record.status) record.status = LAYANAN_GAJI_PROSES;
+    return record;
+}
+
+// Grid data, not values.get: the hyperlink in R comes back no other way.
+async function readLayananGajiRecords(spreadsheetId) {
+    const response = await withBackoff(() => sheets2.spreadsheets.get({
+        spreadsheetId,
+        includeGridData: true,
+        ranges: [LAYANAN_GAJI_RANGE],
+        fields: "sheets(data(rowData(values(formattedValue,hyperlink))))",
+    }));
+    return (response.data.sheets?.[0]?.data?.[0]?.rowData || [])
+        .map((row, index) => layananGajiToRecord(row.values, LAYANAN_GAJI_FIRST_ROW + index))
+        .filter(record => record.namaLengkap !== "" || record.no !== "");
+}
+
+// One Sheets read per minute however many admins have the screen open, and the whole list
+// goes to the browser at once - paging on the client costs nothing, paging here would cost
+// a read per page. Same TTL the Pembayaran BP snapshot uses.
+const layananGajiRowsKey = (spreadsheetId) => `layanan-gaji|${spreadsheetId}`;
+const bacaLayananGaji = (spreadsheetId) => cached(layananGajiRowsKey(spreadsheetId),
+    () => readLayananGajiRecords(spreadsheetId), PEMBAYARAN_BP_SEARCH_TTL_MS);
+const forgetLayananGajiRows = (spreadsheetId) => pembayaranBpCache.delete(layananGajiRowsKey(spreadsheetId));
+
+app.get("/layanan-gaji/antrian", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const baris = await bacaLayananGaji(spreadsheetId);
+        return res.status(200).json({ data: baris });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/antrian:", error);
+        return res.status(500).json({ message: "Gagal memuat antrian Layanan Gaji." });
+    }
+});
+
+const driveFolderIdSlipGaji = process.env.DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI;
+// Same multer as Pembayaran BP: PDF only, same 10 MB cap
+const handleSlipGajiUpload = runPembayaranBpUpload(uploadPembayaranBp.single("lampiran"));
+
+// The folder is on the perbendaharaan uploader account, not on the verifikasi one that
+// owns the spreadsheet - the two identities are unrelated and both are needed here.
+async function unggahLampiranGaji(req, res, record) {
+    if (!driveFolderIdSlipGaji) {
+        console.error("DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI belum diatur - upload dibatalkan.");
+        res.status(503).json({ message: "Folder penyimpanan Lampiran File belum dikonfigurasi." });
+        return null;
+    }
+    if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return null;
+    // yyyy-mm-dd hh-mm-ss: the timestamp as the sheet spells it, with the colons swapped for
+    // dashes because Drive shows a colon but Windows refuses to save a file holding one
+    const waktu = getFormattedDate().fullDateTimeFormat.replace(/:/g, "-");
+    const nama = `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(record.jenisPermintaan) || "Dokumen"} `
+        + `${waktu}.pdf`;
+    return { nama, url: await uploadToDriveFolder(req.file, driveFolderIdSlipGaji, nama) };
+}
+
+// Attaching the finished document is what completes the request, so Status and Petugas are
+// stamped in the same write rather than left for the admin to remember. Petugas comes off
+// the JWT, never off the body. A replacement upload overwrites all three; the superseded
+// Drive file is left in place, as on Pembayaran BP - the row's link is what moves on.
+app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        if (!req.file) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
+            return res.status(400).json({ message: "Baris permintaan tidak dikenal." });
+        }
+
+        // Rows are only ever appended here, so a row number from the snapshot still points
+        // at the same permintaan even once the snapshot itself has gone stale.
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+
+        // Uploaded only once the row has been found, so a rejected request leaves no orphan
+        const lampiran = await unggahLampiranGaji(req, res, record);
+        if (!lampiran) return;
+
+        const sheetId = await layananGajiSheetId(spreadsheetId);
+        const petugas = trimmed(req.viewer?.name);
+        await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [{ updateCells: {
+                range: {
+                    sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                    startColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN,
+                    endColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN + 3,
+                },
+                rows: [{ values: [
+                    selTeksKkp(LAYANAN_GAJI_SELESAI),
+                    selTeksKkp(petugas),
+                    selTautanKkp(lampiran),
+                ] }],
+                fields: "userEnteredValue,textFormatRuns",
+            } }] },
+        }));
+        forgetLayananGajiRows(spreadsheetId);
+
+        return res.status(200).json({
+            message: `Lampiran untuk ${record.namaLengkap || "permintaan ini"} berhasil diunggah.`,
+            status: LAYANAN_GAJI_SELESAI, petugas, lampiran,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/lampiran:", error);
+        return res.status(500).json({ message: "Gagal mengunggah lampiran." });
     }
 });
 

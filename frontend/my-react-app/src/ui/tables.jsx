@@ -24,7 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Button from '@mui/material/Button';
 // Components
 import LoadingAnimate from './loading';
-import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmJenisUangHarian, kkpTransaksiHeadData } from '../components/bendahara/head-data.js';
+import { sorotPotongan, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, rowsPerPageOptions, formatNomorSpp, sbmTiketHeadData, sbmHotelHeadData, sbmGolonganHotel, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmJenisUangHarian, kkpTransaksiHeadData, layananGajiDetailFields, layananGajiStatusStyle } from '../components/bendahara/head-data.js';
 import { anggaranSebabLabel, anggaranTandaMak, tandaMakPesan } from '../components/verifikasi/head-data.js';
 
 // dash() stringifies, so it must never reach a cell whose content is already a node -
@@ -1440,6 +1440,140 @@ TableDaftarPengajuan.propTypes = {
     onView: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
     onDelete: PropTypes.func.isRequired,
+};
+
+// Layanan-Gaji.jsx - permintaan dokumen gaji. Built on the Daftar Pengajuan shell rather
+// than on TableKelola: the row carries eighteen sheet columns and only five belong on
+// screen, so the rest live in the dropdown. Records arrive as named objects straight from
+// GET /layanan-gaji/antrian, not as positional arrays - there is no canonical row shape
+// here to index against, and the keys are the sheet's own column meanings.
+// toggle, No., Nama Lengkap, Jenis Permintaan, Status, Petugas, Aksi
+const LAYANAN_GAJI_COLUMN_COUNT = 7;
+
+const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, mengunggah }) {
+    const [open, setOpen] = useState(false);
+    const status = layananGajiStatusStyle(row.status);
+
+    return (
+        <Fragment>
+            <tr className={`dp-row${open ? " dp-row-open" : ""}`}>
+                <td className="dp-cell-toggle">
+                    <IconButton size="small" aria-label={open ? "Tutup rincian" : "Lihat rincian"}
+                        aria-expanded={open} onClick={() => setOpen(value => !value)}>
+                        {open ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
+                    </IconButton>
+                </td>
+                <td><span className="dp-id">{dash(row.no)}</span></td>
+                <td>{dash(row.namaLengkap)}</td>
+                <td>{dash(row.jenisPermintaan)}</td>
+                <td>
+                    <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>
+                        {dash(row.status)}
+                    </span>
+                </td>
+                <td>{dash(row.petugas)}</td>
+                <td>
+                    <div className="dp-actions">
+                        {/* The 5px margin is the small IconButton's own padding, so swapping the
+                            two does not change the row height */}
+                        {mengunggah
+                            ? <CircularProgress size={21} sx={{ color: "#00449C", m: "5px" }} />
+                            : <Tooltip title={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"} arrow>
+                                <IconButton size="small"
+                                    aria-label={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"}
+                                    onClick={() => onUnggah(row)}>
+                                    <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
+                                </IconButton>
+                            </Tooltip>}
+                    </div>
+                </td>
+            </tr>
+            <tr className="dp-detail-row">
+                <td className="dp-detail-cell" colSpan={LAYANAN_GAJI_COLUMN_COUNT}>
+                    <Collapse in={open} timeout={160} unmountOnExit>
+                        <div className="dp-detail">
+                            <dl className="dp-detail-grid">
+                                {layananGajiDetailFields.map(field => (
+                                    <div className="dp-detail-item" key={field.key}>
+                                        <dt>{field.label}</dt>
+                                        <dd>{dash(row[field.key])}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            <div className="dp-detail-files">
+                                <DaftarBerkas label={row.lampiran.nama || "Lampiran File"} url={row.lampiran.url} />
+                            </div>
+                        </div>
+                    </Collapse>
+                </td>
+            </tr>
+        </Fragment>
+    );
+});
+
+LayananGajiRow.propTypes = {
+    row: PropTypes.object.isRequired,
+    onUnggah: PropTypes.func.isRequired,
+    mengunggah: PropTypes.bool,
+};
+
+export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
+                                   onPageChange, onRowsPerPageChange, onUnggah, barisUnggah }) {
+    return (
+        <div className="dp-table-card">
+            <div className="dp-toolbar">
+                <span className="dp-toolbar-info">
+                    {loading ? "Memuat data…" : totalPages > 0 ? `Halaman ${page} dari ${totalPages}` : "Tidak ada permintaan"}
+                </span>
+                <label className="dp-perpage">
+                    Baris per halaman
+                    <select value={rowsPerPage} onChange={event => onRowsPerPageChange(Number(event.target.value))}>
+                        {rowsPerPageOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </label>
+            </div>
+            <div className="dp-scroll">
+                <table className="dp-table">
+                    <thead>
+                        <tr>
+                            <th className="dp-cell-toggle"><span className="dp-sr-only">Rincian</span></th>
+                            <th>No.</th>
+                            <th>Nama Lengkap</th>
+                            <th>Jenis Permintaan</th>
+                            <th>Status</th>
+                            <th>Petugas</th>
+                            <th className="dp-th-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading
+                            ? <tr><td colSpan={LAYANAN_GAJI_COLUMN_COUNT} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
+                            : rows.length === 0
+                                ? <tr><td colSpan={LAYANAN_GAJI_COLUMN_COUNT} className="dp-placeholder dp-empty">Belum ada permintaan dokumen.</td></tr>
+                                : rows.map(row => (
+                                    <LayananGajiRow key={row.rowNumber} row={row} onUnggah={onUnggah}
+                                        mengunggah={barisUnggah === row.rowNumber} />
+                                ))}
+                    </tbody>
+                </table>
+            </div>
+            {totalPages > 1 &&
+                <Pagination className="dp-pagination" size="medium" count={totalPages} page={page} onChange={onPageChange} />}
+        </div>
+    );
+}
+
+TableLayananGaji.propTypes = {
+    rows: PropTypes.array.isRequired,
+    loading: PropTypes.bool,
+    page: PropTypes.number.isRequired,
+    totalPages: PropTypes.number.isRequired,
+    rowsPerPage: PropTypes.number.isRequired,
+    rowsPerPageOptions: PropTypes.array.isRequired,
+    onPageChange: PropTypes.func.isRequired,
+    onRowsPerPageChange: PropTypes.func.isRequired,
+    onUnggah: PropTypes.func.isRequired,
+    barisUnggah: PropTypes.number,
 };
 
 // Anggaran.jsx - the pagu tree, Unit Kerja -> MAK -> Akun Belanja.

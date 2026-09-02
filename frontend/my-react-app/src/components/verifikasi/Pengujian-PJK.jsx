@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 
@@ -37,6 +37,11 @@ const POLL_LIMIT = 15;
 // A rejected verdict parks the row until the verifikator revisits it
 const ditolak = row => [row[SUBSTANSI], row[KELENGKAPAN]]
     .some(value => String(value ?? "").trim() === "Ditolak");
+
+// Tanggal Perbaikan, appended after the source id rather than at its own column S so no index
+// above shifts. Filled means the satker has saved a change since this verdict was written.
+const PERBAIKAN = 19;
+const diperbaiki = row => ditolak(row) && String(row[PERBAIKAN] ?? "").trim() !== "";
 
 const TAB_KEY = 'pengujianPjkTab';
 
@@ -106,8 +111,12 @@ function PengujianPJK(props) {
             empty: "Tidak ada pengajuan yang perlu diuji."},
         {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
             empty: "Tidak ada pengajuan yang sedang diverifikasi."},
-        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(ditolak), alert: true,
+        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+            rows: sections[1].filter(row => ditolak(row) && !diperbaiki(row)), alert: true,
             empty: "Tidak ada pengajuan bermasalah."},
+        {title: STATUS_DIPERBAIKI, head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+            rows: sections[1].filter(diperbaiki),
+            empty: "Tidak ada pengajuan yang telah diperbaiki."},
         {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
             rows: sections[2].filter(row =>
                 (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))

@@ -145,6 +145,9 @@ function BendaharaPage(props) {
     // The heading follows whatever the sidebar calls the menu. Menus opened from a parent
     // screen are not in MENU_BUTTONS, so the name itself stays the fallback.
     function judulMenu() {
+        // Same guard renderComponent uses, or a menu the viewer cannot open still leaves its
+        // heading behind - a blocked screen has to be invisible, not an empty page titled with it
+        if (!canOpen(buttonSelect)) return "";
         const item = MENU_BUTTONS.find(entry => entry.name === buttonSelect);
         return item ? labelMenu(item) : formatText(buttonSelect);
     }

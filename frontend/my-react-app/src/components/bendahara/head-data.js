@@ -128,6 +128,9 @@ const statusSudahVerifikasi = [
 ];
 const statusSudahMaju = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
 const OK_CATATAN = "OK Catatan";
+// Twin of STATUS_DIPERBAIKI in server.js. Must not contain the word "masalah": daftarStatusStyle
+// tests for that first and would paint a repaired row red.
+const STATUS_DIPERBAIKI = "Telah Diperbaiki";
 
 //Status pill colours, shared by the daftar table and the pengajuan detail view
 // Ordered as the row travels: neutral, blue, amber while in progress, then olive for
@@ -137,6 +140,9 @@ const DAFTAR_STATUS_STYLE = {
     "dalam antrian":                { bg: "#E7ECF4", fg: "#41506B" },
     "diajukan hari ini":            { bg: "#DCE9FF", fg: "#00449C" },
     "sedang di verifikasi":         { bg: "#FFF1CF", fg: "#8A6100" },
+    // The satker has answered a problem and the desk owes it a second look, so it reads as
+    // outstanding work rather than as a pass
+    "telah diperbaiki":             { bg: "#FFE2CC", fg: "#A64B00" },
     "verifikasi ok dengan catatan": { bg: "#E9F2C6", fg: "#55700D" },
     "sudah di verifikasi":          { bg: "#D6F5E1", fg: "#0F7A3D" },
     "sudah verifikasi":             { bg: "#D6F5E1", fg: "#0F7A3D" },
@@ -596,5 +602,5 @@ const layananGajiFormFields = [
 ];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, STATUS_DIPERBAIKI, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
 

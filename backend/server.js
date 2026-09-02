@@ -458,49 +458,67 @@ function findNotificationColumnIndex(headerRow, recipientName) {
     return normalized.findIndex(columnName => columnName !== '' && columnName.includes(target));
 }
 
-// Append one notification to a recipient's block. The id MUST equal (sheet row - 2)
-// because /notification/mark-read resolves a row with `Number(notifId) + 2` - any
-// other id makes a later "mark as read" stamp 'yes' onto the wrong notification.
-// Returns {ok:false} for expected misses; real API failures still reject.
-async function writeNotification(spreadsheetId, recipientName, title, description) {
-    const recipient = String(recipientName || '').trim();
-    if (!spreadsheetId || !recipient || !title) {
-        console.warn("[notifikasi] dilewati, data tidak lengkap:", { recipient, title });
-        return { ok: false, reason: "missing-args" };
+// Append one notification per recipient. The id MUST equal (sheet row - 2) because
+// /notification/mark-read resolves a row with `Number(notifId) + 2` - any other id makes a later
+// "mark as read" stamp 'yes' onto the wrong notification. Recipients share the header read and the
+// write, so notifying both admin blocks costs three calls rather than six.
+// Returns a per-entry result; expected misses are {ok:false}, real API failures still reject.
+async function writeNotifications(spreadsheetId, entries) {
+    const wanted = (entries || []).filter(entry => String(entry?.recipient || '').trim() && entry?.title);
+    if (!spreadsheetId || wanted.length === 0) {
+        console.warn("[notifikasi] dilewati, data tidak lengkap:", entries);
+        return wanted.map(() => ({ ok: false, reason: "missing-args" }));
     }
 
     const headerResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A1:CB1");
     const headerRow = headerResponse.data.values?.[0] || [];
-    const columnIndex = findNotificationColumnIndex(headerRow, recipient);
-    if (columnIndex === -1) {
-        console.warn(`[notifikasi] kolom tidak ditemukan untuk: "${recipient}"`);
-        return { ok: false, reason: "recipient-not-found" };
+
+    const targets = wanted.map(entry => {
+        const recipient = String(entry.recipient).trim();
+        const columnIndex = findNotificationColumnIndex(headerRow, recipient);
+        if (columnIndex === -1) console.warn(`[notifikasi] kolom tidak ditemukan untuk: "${recipient}"`);
+        return {
+            entry,
+            recipient,
+            idColumnLetter: columnIndex === -1 ? "" : getColumnLetter(columnIndex),
+            statusColumnLetter: columnIndex === -1 ? "" : getColumnLetter(columnIndex + 3),
+        };
+    });
+
+    const found = targets.filter(target => target.idColumnLetter);
+    if (found.length === 0) return targets.map(() => ({ ok: false, reason: "recipient-not-found" }));
+
+    // Sheets trims trailing empty rows but returns interior ones as [], so `length` is the offset
+    // of the last populated row - an interior gap cannot shift it.
+    const blockResponse = await readRanges(sheets, spreadsheetId,
+        found.map(target => `'Notifikasi'!${target.idColumnLetter}3:${target.statusColumnLetter}`));
+
+    // Two entries addressed to one recipient resolve to the same block length, so the second
+    // would land on the first's row and silently replace it. Track the next free row per column.
+    const barisTerpakai = new Map();
+    found.forEach((target, index) => {
+        const kosong = 3 + (blockResponse.data.valueRanges?.[index]?.values || []).length;
+        target.row = Math.max(kosong, barisTerpakai.get(target.idColumnLetter) ?? 0);
+        barisTerpakai.set(target.idColumnLetter, target.row + 1);
+        target.id = target.row - 2;
+    });
+
+    await writeRanges(sheets, spreadsheetId, found.map(target => ({
+        range: `'Notifikasi'!${target.idColumnLetter}${target.row}:${target.statusColumnLetter}${target.row}`,
+        values: [[target.id, target.entry.title, target.entry.description || "", 'no']],
+    })), "RAW");
+
+    for (const target of found) {
+        console.log(`[notifikasi] "${target.recipient}" <- id ${target.id} baris ${target.row}: ${target.entry.title}`);
     }
+    return targets.map(target => target.idColumnLetter
+        ? { ok: true, id: target.id, row: target.row }
+        : { ok: false, reason: "recipient-not-found" });
+}
 
-    const idColumnLetter = getColumnLetter(columnIndex);
-    const statusColumnLetter = getColumnLetter(columnIndex + 3);
-
-    // Sheets trims trailing empty rows but returns interior ones as [], so `length`
-    // is the offset of the last populated row - an interior gap cannot shift it.
-    const blockResponse = await readRange(
-        sheets,
-        spreadsheetId,
-        `'Notifikasi'!${idColumnLetter}3:${statusColumnLetter}`,
-    );
-    const blockRows = blockResponse.data.values || [];
-    const newRow = 3 + blockRows.length;
-    const newId = newRow - 2;
-
-    await writeRange(
-        sheets,
-        spreadsheetId,
-        `'Notifikasi'!${idColumnLetter}${newRow}:${statusColumnLetter}${newRow}`,
-        [[newId, title, description || "", 'no']],
-        "RAW",
-    );
-
-    console.log(`[notifikasi] "${recipient}" <- id ${newId} baris ${newRow}: ${title}`);
-    return { ok: true, id: newId, row: newRow };
+async function writeNotification(spreadsheetId, recipientName, title, description) {
+    const [result] = await writeNotifications(spreadsheetId, [{ recipient: recipientName, title, description }]);
+    return result || { ok: false, reason: "missing-args" };
 }
 
 // Gdrive API Setup (will be initialized with OAuth2 tokens)
@@ -1189,6 +1207,8 @@ const AJUAN_FLOWS = {
         unitKerjaColumn: "L",
         lampiranColumn: "T",
         antrianLastColumn: "T",
+        // Past the canonical width, so widening the read cannot shift an existing index
+        perbaikanColumn: "U",
         tableColumnCount: 22,
         hasRequestTanggal: true,
         antrianMap: null, // already the canonical layout
@@ -1217,6 +1237,8 @@ const AJUAN_FLOWS = {
             tanggalSp2d: "R",
             defaults: { substansi: "Belum", kelengkapan: "Belum Verif" },
         },
+        // Past the PJK columns, which already run beyond antrianLastColumn
+        perbaikanColumn: "S",
         // canonical index ('Write Antrian' layout) -> column on this sheet
         antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
@@ -1231,6 +1253,21 @@ const PJK_COLUMN = Object.fromEntries(
         .map(([name, letter]) => [name, letter.charCodeAt(0) - 65])
 );
 const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
+
+// Tanggal Perbaikan: stamped by edit-table, cleared by whichever route writes a verdict, so a
+// filled cell means "the satker saved a change since the last verification decision on this row".
+// Derived from the letter, like PJK_COLUMN, so the two cannot drift.
+const perbaikanIndex = (flowConfig) => flowConfig.perbaikanColumn.charCodeAt(0) - 65;
+const STATUS_DIPERBAIKI = "Telah Diperbaiki";
+
+// The four verdict columns share one rule: a real negative answer, not a blank and not a
+// not-yet-checked one. Substansi/Kelengkapan start at "Belum"/"Belum Verif" and Status Pajak at
+// "", so treating those as problems would flag every pengajuan the moment it is submitted.
+const PJK_BELUM_VALUES = ["Belum", "Belum Verif"];
+const bermasalahNilai = (value) => {
+    const text = trimmed(value);
+    return text !== "" && !PJK_VERIFIED_VALUES.includes(text) && !PJK_BELUM_VALUES.includes(text);
+};
 
 // Status column F on 'Write Antrian Verif'. The sheet owns that column; these are the
 // values the app has to recognise. Twin of daftarStatusLists in head-data.js.
@@ -1280,6 +1317,7 @@ const ANTRIAN_HASIL_VERIF_ID_INDEX = ANTRIAN_ROW_WIDTH + 4;
 // however far its status has moved, and neither column is in the canonical layout.
 const ANTRIAN_SUBSTANSI_INDEX = ANTRIAN_ROW_WIDTH + 5;
 const ANTRIAN_KELENGKAPAN_INDEX = ANTRIAN_ROW_WIDTH + 6;
+const ANTRIAN_PERBAIKAN_INDEX = ANTRIAN_ROW_WIDTH + 7;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1293,7 +1331,10 @@ const antrianKategori = (row) =>
 // a problem or an open verification outranks the other row's optimistic status.
 function antrianStatusRank(status) {
     const value = String(status ?? "").toLowerCase();
-    if (value.includes("masalah")) return 2;
+    if (value.includes("masalah")) return 3;
+    // Below Ada Masalah on purpose: one sheet being satisfied must not hide the other sheet's
+    // still-open complaint, so a repaired side never outranks an unrepaired one.
+    if (value.includes("diperbaiki")) return 2;
     if (value.includes("sedang di verifikasi")) return 1;
     return 0;
 }
@@ -1348,7 +1389,8 @@ async function fetchMergedAntrianRows(spreadsheetId) {
     const response = await readRanges(
         sheets,
         spreadsheetId,
-        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.pjk?.dokVerif || flow.antrianLastColumn}`),
+        // Through Tanggal Perbaikan, the furthest column either sheet carries - still one request
+        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.perbaikanColumn}`),
     );
 
     // The mirrors are dropped from the list itself, but they hold the only copy of the PJK
@@ -1360,6 +1402,13 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         const rows = response.data.valueRanges?.[index]?.values || [];
         for (const row of rows) {
             const canonical = toCanonicalAntrianRow(row, flow);
+            canonical[ANTRIAN_PERBAIKAN_INDEX] = row?.[perbaikanIndex(flow)] ?? "";
+            // Overlay, never an override: only a row the sheet already calls bermasalah can read
+            // as repaired. Applied per row and before the mirror is stashed, so each sheet answers
+            // for its own complaint and the rank merge below picks the worse of the two.
+            if (antrianStatusRank(canonical[7]) === 3 && filled(canonical[ANTRIAN_PERBAIKAN_INDEX])) {
+                canonical[7] = STATUS_DIPERBAIKI;
+            }
             if (flow.key === "verif") {
                 canonical[ANTRIAN_DOK_VERIF_INDEX] = row?.[PJK_COLUMN.dokVerif] ?? "";
                 canonical[ANTRIAN_SUBSTANSI_INDEX] = row?.[PJK_COLUMN.substansi] ?? "";
@@ -1900,19 +1949,20 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         const antriResponse = await readRange(
             sheets,
             spreadsheetId,
-            `'${flowConfig.antrianSheet}'!A3:${flowConfig.antrianLastColumn}`,
+            `'${flowConfig.antrianSheet}'!A3:${flowConfig.perbaikanColumn}`,
         );
 
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
         let currentAntrianValues = null;
+        let currentCanonical = null;
         let currentLampiran = "";
         let currentUnitKerja = "";
         for (let i = 0; i < matchResult.length; i++) {
             if (String(matchResult[i][0]) === String(antriPosition)) {
                 antriRow = i + 1 + 2; //Convert to 1-based row index. +2 to exclude header and start from A3
                 currentAntrianValues = matchResult[i];
-                const currentCanonical = toCanonicalAntrianRow(matchResult[i], flowConfig);
+                currentCanonical = toCanonicalAntrianRow(matchResult[i], flowConfig);
                 currentLampiran = currentCanonical[19];
                 currentUnitKerja = currentCanonical[ANTRIAN_UNIT_KERJA_INDEX];
                 break;
@@ -2049,12 +2099,15 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         // Where this pengajuan's PJK lives: on its own row for a verifikasi jenis, on the
         // mirror row on the other sheet for GUP/PTUP
         let pjkTarget = null;
+        // The row that actually carries the PJK verdicts, so the repair notification can tell
+        // whether the verifikator is the one waiting on this edit
+        let pjkRowValues = null;
         if (flowConfig.key === "gup") {
             // The mirror row is matched on the values this row had before the edit, so it has
             // to be re-synced here or the two drift apart and can never be paired again.
             const mirrorFlow = AJUAN_FLOWS.verif;
             const mirrorResponse = await readRanges(sheets, spreadsheetId, [
-                `'${mirrorFlow.antrianSheet}'!A:${mirrorFlow.antrianLastColumn}`,
+                `'${mirrorFlow.antrianSheet}'!A:${mirrorFlow.perbaikanColumn}`,
                 `'${mirrorFlow.antrianSheet}'!${mirrorFlow.counterCell}`,
             ]);
             const mirrorRows = mirrorResponse.data.valueRanges[0].values || [];
@@ -2069,6 +2122,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
                     values: [mirrorValues]
                 });
                 pjkTarget = { flow: mirrorFlow, row: mirrorMatch.row, currentLink: mirrorMatch.canonical[19] };
+                pjkRowValues = mirrorRows[mirrorMatch.row - 1] || [];
             } else if (mirrorMatches.length === 0 && pjkLink) {
                 // GUP/PTUP only started registering a mirror when the PJK upload shipped, so
                 // rows submitted before that have no verifikasi row for the PJK to hang off.
@@ -2092,6 +2146,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
             }
         } else {
             pjkTarget = { flow: flowConfig, row: antriRow, currentLink: currentLampiran };
+            pjkRowValues = currentAntrianValues;
         }
 
         // A missing mirror is registered above, so what is left here is a mirror that cannot be
@@ -2117,11 +2172,50 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
             linksToDelete.push(currentLampiran);
         }
 
+        // Tanggal Perbaikan on every save, not only on a flagged row: the cell means "edited since
+        // the last verdict", and the verdict routes are what clear it. GUP/PTUP get both rows -
+        // one edit answers whichever sheet raised the complaint.
+        const perbaikanStamp = getFormattedDate().fullDateTimeFormat;
+        batchDataUpdates.push({
+            range: `'${flowConfig.antrianSheet}'!${flowConfig.perbaikanColumn}${antriRow}`,
+            values: [[perbaikanStamp]]
+        });
+        if (flowConfig.key === "gup" && pjkTarget) {
+            batchDataUpdates.push({
+                range: `'${pjkTarget.flow.antrianSheet}'!${pjkTarget.flow.perbaikanColumn}${pjkTarget.row}`,
+                values: [[perbaikanStamp]]
+            });
+        }
+
         // Execute batch data update with backoff (preserves text format)
         await writeRanges(sheets, spreadsheetId, batchDataUpdates, "RAW");
         forgetSisaGup(spreadsheetId); // nominal or tanggal may have moved to another day
         forgetWriteTable(spreadsheetId);
         await tandaiRealisasiUsang(anggaranTahun(req));
+
+        // Tell whichever desk raised a problem that the satker has responded. Only the first save
+        // after a verdict notifies - a still-empty Tanggal Perbaikan is what says the desk has not
+        // heard about this row yet. Not awaited: the edit is already on the sheet, so a handful of
+        // Notifikasi round trips has no business holding up the response.
+        const perluKabar = [];
+        if (bermasalahNilai(currentCanonical[12]) || bermasalahNilai(currentCanonical[13])) {
+            if (!filled(currentAntrianValues[perbaikanIndex(flowConfig)])) perluKabar.push("Bendahara");
+        }
+        if (pjkRowValues && (bermasalahNilai(pjkRowValues[PJK_COLUMN.substansi])
+            || bermasalahNilai(pjkRowValues[PJK_COLUMN.kelengkapan]))) {
+            if (!filled(pjkRowValues[perbaikanIndex(AJUAN_FLOWS.verif)])) perluKabar.push("Verifikasi");
+        }
+        if (perluKabar.length > 0) {
+            writeNotifications(spreadsheetId, perluKabar.map(recipient => ({
+                recipient,
+                title: "Pengajuan Telah Diperbaiki",
+                // Each desk gets the No. its own screen shows: for a GUP/PTUP the verifikator
+                // works off the mirror row, whose id is not the one on 'Write Antrian'
+                description: `No. Antri ${recipient === "Verifikasi" ? trimmed(pjkRowValues[0]) : antriPosition}` +
+                    ` - ${perbaikanStamp.split(' ')[0]}` +
+                    `\n${editJenis.sheetValue}${currentUnitKerja ? ` - ${currentUnitKerja}` : ""}`,
+            }))).catch(error => console.error("Gagal menulis notifikasi (edit-table):", error));
+        }
 
         console.log("✅ Update successful!");
 
@@ -2356,7 +2450,8 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         const minRow = Math.min(...rowIndices);
         const maxRow = Math.max(...rowIndices);
 
-        const batchGetResponse = await readRange(sheets, spreadsheetId, `'Write Antrian'!A${minRow}:T${maxRow}`);
+        const batchGetResponse = await readRange(sheets, spreadsheetId,
+            `'Write Antrian'!A${minRow}:${AJUAN_FLOWS.gup.perbaikanColumn}${maxRow}`);
 
         const allRowsData = batchGetResponse.data.values || [];
 
@@ -2365,11 +2460,17 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
             const dataIndex = row.rowIndex - minRow;
             return allRowsData[dataIndex] || [];
         });
-        const num_Columns = 20;
+        // A..U: the canonical 20 plus Tanggal Perbaikan, which lands at index 20 and pushes the
+        // PJK verdicts appended below to 21/22
+        const num_Columns = 21;
+        const perbaikanAt = perbaikanIndex(AJUAN_FLOWS.gup);
         rowData = rowData.map(row => {
             while (row.length < num_Columns) {
                 row.push("");
             }
+            // The same overlay the daftar applies, so a row in the Telah Diperbaiki table cannot
+            // still be showing a red Ada Masalah pill in its Status column
+            if (antrianStatusRank(row[7]) === 3 && filled(row[perbaikanAt])) row[7] = STATUS_DIPERBAIKI;
             return row;
         });
 
@@ -2399,9 +2500,20 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
                     && PJK_VERIFIED_VALUES.includes(String(pjk[1] ?? "").trim()));
         };
 
-        const sedangAll = filterByStatus(rowData, "Sedang Di Verifikasi");
+        // The Status formula overwrites the stage with "Ada Masalah" the moment Pajak or
+        // Ketersediaan Anggaran goes bad, so a flagged row matches none of the stage buckets and
+        // drops out of this screen entirely - the very rows the admin most needs to see. They
+        // belong with Sedang Diverifikasi, whose three tables split them by verdict. Matched on
+        // rank rather than the exact wording, so a reworded formula cannot hide them again.
+        const perluTindakan = (row) => antrianStatusRank(row[7]) >= 2;
+        // Set, because filterByStatus matches any cell in the row: a Catatan someone typed as
+        // "Sedang Di Verifikasi" would otherwise put the row in both lists and render it twice
+        const sedangAll = [...new Set([
+            ...filterByStatus(rowData, "Sedang Di Verifikasi"),
+            ...rowData.filter(perluTindakan),
+        ])];
         const sudahAll = filterByStatus(rowData, STATUS_SUDAH_VERIFIKASI);
-        // Substansi/Kelengkapan appended past the 20 'Write Antrian' columns, so every
+        // Substansi/Kelengkapan appended past the 21 columns read above, so every
         // index the aksi page reads keeps its meaning
         const menungguPJK = [...sedangAll, ...sudahAll].filter(waitingPjk)
             .map(row => [...row, ...(pjkByKey.get(mirrorRowKey(row[1], row[2])) || ["", ""])]);
@@ -2443,7 +2555,9 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                "'Write Antrian'!A:N",
+                // Through Q: the pre-update satker (L), pajak/anggaran (M/N) and Catatan (Q) all
+                // feed the checks below, and widening the range costs nothing
+                "'Write Antrian'!A:Q",
                 `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
             ],
         );
@@ -2466,6 +2580,17 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
 
+        // Whether this save is actually a new decision. Ticking Buat DRPP or filling a date is
+        // not one, and both the notification below and the Tanggal Perbaikan clear turn on it.
+        const previousAntrianRow = allRows[rowIndex - 1] || [];
+        const verdictChanged = trimmed(status_pajak) !== trimmed(previousAntrianRow[12])
+            || trimmed(sedia_anggaran) !== trimmed(previousAntrianRow[13]);
+        // A fresh note on an unchanged verdict is still this desk answering the satker, so it
+        // clears Tanggal Perbaikan too - the rule aksi-pjk already applies through
+        // documentFieldChanged. The notification below deliberately stays on the verdict alone,
+        // which is what it has always fired on.
+        const keputusanBaru = verdictChanged || trimmed(catatan) !== trimmed(previousAntrianRow[16]);
+
         // Update multiple columns in a single request. If tgl_verifikasi exist then don't update tgl mulai verif.
         const updateData = [
             [`'Write Antrian'!P${rowIndex}`, tgl_verifikasi],
@@ -2477,6 +2602,12 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             [`'Write Antrian'!K${rowIndex}`, spm],
             [`'Write Antrian'!Q${rowIndex}`, catatan],
             tgl_verifikasi === "" ? [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue]  : null, // Condition for column O
+            // Cleared whenever the verdict moves, including back to OK, so Tanggal Perbaikan keeps
+            // meaning "edited since this desk last decided" - a row that goes bad a second time
+            // must not still be claiming it was repaired. Not on an unchanged save, or re-opening
+            // the form to set a date would drop the satker's answer unanswered. Only meaningful
+            // when set from this screen; a verdict typed straight into the sheet leaves it standing.
+            keputusanBaru ? [`'Write Antrian'!${AJUAN_FLOWS.gup.perbaikanColumn}${rowIndex}`, ""] : null,
         ].filter(item => item !== null); //filter null to exclude it from the array
 
 
@@ -2699,10 +2830,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             const hasProblem = (pajak !== "" && pajak !== "OK") ||
                                (anggaran !== "" && anggaran !== "OK");
             // Only on change, else re-saving the form would send a duplicate
-            const changed = pajak !== String(antrianRow[12] || "").trim() ||
-                            anggaran !== String(antrianRow[13] || "").trim();
-
-            if (hasProblem && changed && satker) {
+            if (hasProblem && verdictChanged && satker) {
                 // Keterangan line is dropped entirely when catatan is empty
                 const keterangan = String(catatan || "").trim();
                 const deskripsi = `No. Antri ${no_antri} - ${getFormattedDate().fullDateTimeVerifFormat.split(' ')[0]}` +
@@ -3855,9 +3983,10 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                // Through R, not antrianLastColumn: Dok. Verifikasi and the SPM columns
-                // all sit past the columns the antrian write path knows about
-                `'${verifFlow.antrianSheet}'!A3:${verifFlow.pjk.tanggalSp2d}`,
+                // Through Tanggal Perbaikan, not antrianLastColumn: Dok. Verifikasi, the SPM
+                // columns and the repair stamp all sit past the columns the antrian write path
+                // knows about
+                `'${verifFlow.antrianSheet}'!A3:${verifFlow.perbaikanColumn}`,
                 `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
             ],
         );
@@ -3872,12 +4001,16 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             ? sourceIdByKey.get(mirrorRowKey(row[1], row[2])) || ""
             : "";
 
-        // Appended past the sheet's own columns (A..R)
+        // Appended past the sheet's own columns (A..R). Tanggal Perbaikan is read but appended
+        // after sourceId rather than at its own S, so no index the screen already uses shifts.
         const width = PJK_COLUMN.tanggalSp2d + 1;
+        const perbaikanAt = perbaikanIndex(verifFlow);
         const rows = (response.data.valueRanges[0].values || [])
             .filter(row => String(row?.[0] ?? "").trim() !== "")
-            .map(row => Array.from({ length: width }, (_, i) => row[i] ?? ""))
-            .map(row => [...row, sourceId(row)])
+            .map(row => {
+                const padded = Array.from({ length: width }, (_, i) => row[i] ?? "");
+                return [...padded, sourceId(padded), row[perbaikanAt] ?? ""];
+            })
             .reverse();
 
         const isVerified = value => PJK_VERIFIED_VALUES.includes(trimmed(value));
@@ -4080,6 +4213,14 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         const majuValue = bolehMajuSpm && maju_spm ? "yes" : "";
         const sp2dValue = majuValue ? trimmed(tgl_sp2d) : "";
 
+        // Only a changed verdict or note is a new decision - opening a row and saving it untouched
+        // must not mint another PDF revision, nor drop the satker's Tanggal Perbaikan
+        const documentFieldChanged = [
+            [previousRow[PJK_COLUMN.substansi], substansi],
+            [previousRow[PJK_COLUMN.kelengkapan], kelengkapan],
+            [previousRow[PJK_COLUMN.catatan], catatan],
+        ].some(([before, after]) => trimmed(before) !== trimmed(after));
+
         const updates = [
             [`${pjk.selesaiVerif}${rowIndex}`, selesaiValue],
             [`${pjk.substansi}${rowIndex}`, substansi],
@@ -4090,6 +4231,10 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             // A date here would be coerced to a serial by USER_ENTERED, so only the
             // clearing case rides this batch; the date itself goes below as RAW
             bolehMajuSpm && sp2dValue === "" ? [`${pjk.tanggalSp2d}${rowIndex}`, ""] : null,
+            // Same rule as aksi-ajuan: this desk has just decided, so any earlier repair no longer
+            // answers it - but a save that only ticks Maju SPM decides nothing. Only this sheet's
+            // stamp; the bendahara's verdict on 'Write Antrian' is a separate complaint.
+            documentFieldChanged ? [`${verifFlow.perbaikanColumn}${rowIndex}`, ""] : null,
         ].filter(Boolean);
 
         const toWrite = ([cell, value]) => ({
@@ -4102,14 +4247,6 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             await writeRanges(sheets, spreadsheetId,
                 [toWrite([`${pjk.tanggalSp2d}${rowIndex}`, sp2dValue])], "RAW");
         }
-
-        // Only a changed verdict or note is worth a document - opening a row and saving
-        // it untouched must not mint another revision
-        const documentFieldChanged = [
-            [previousRow[PJK_COLUMN.substansi], substansi],
-            [previousRow[PJK_COLUMN.kelengkapan], kelengkapan],
-            [previousRow[PJK_COLUMN.catatan], catatan],
-        ].some(([before, after]) => String(before ?? "").trim() !== String(after ?? "").trim());
 
         if (documentFieldChanged) {
             const savedRow = [...previousRow];

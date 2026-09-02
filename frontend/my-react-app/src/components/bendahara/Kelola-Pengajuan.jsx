@@ -3,7 +3,7 @@ import apiClient from '../../lib/apiClient';
 //Import components
 import { WideTableCard } from '../../ui/cards.jsx';
 import BatasGup from './Batas-Gup.jsx';
-import { headData1, headData2, headData3, headData4, headDataPjk } from './head-data.js';
+import { headData1, headData2, headData3, headData4, headDataPjk, STATUS_DIPERBAIKI } from './head-data.js';
 import PropTypes from "prop-types";
 
 // Pajak (12) or Anggaran (13) answered with anything but OK - the bendahara flagged
@@ -11,6 +11,12 @@ import PropTypes from "prop-types";
 const bermasalah = row => [row[12], row[13]]
     .map(value => String(value ?? "").trim())
     .some(value => value !== "" && value !== "OK");
+
+// Tanggal Perbaikan, appended past the 20 'Write Antrian' columns. Filled means the satker has
+// saved a change since the bendahara's last verdict, so the row is waiting on a second look
+// rather than on the satker.
+const PERBAIKAN = 20;
+const diperbaiki = row => bermasalah(row) && String(row[PERBAIKAN] ?? "").trim() !== "";
 
 // Each tab groups the original per-status tables it used to show as its own always-visible
 // card; source/columns index into the 'Write Antrian' row exactly as before the tab UI
@@ -25,10 +31,14 @@ const SECTIONS = [
             source: data => (data[1] || []).filter(row => !bermasalah(row)), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
             empty: "Tidak ada pengajuan yang sedang diverifikasi."},
         {title: "Pengajuan Bermasalah", head: headData2, badge: "alert",
-            source: data => (data[1] || []).filter(bermasalah), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
+            source: data => (data[1] || []).filter(row => bermasalah(row) && !diperbaiki(row)),
+            columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
             empty: "Tidak ada pengajuan bermasalah."},
+        {title: STATUS_DIPERBAIKI, head: headData2, badge: "warn",
+            source: data => (data[1] || []).filter(diperbaiki), columns: [0, 1, 2, 3, 4, 14, 6, 12, 13, 11, 7],
+            empty: "Tidak ada pengajuan yang telah diperbaiki."},
         {title: "Menunggu Diuji Verifikator PJK", head: headDataPjk, badge: "warn",
-            source: data => data[6], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 20, 21, 11],
+            source: data => data[6], columns: [0, 1, 2, 3, 4, 15, 6, 12, 13, 21, 22, 11],
             empty: "Tidak ada pengajuan yang menunggu verifikator PJK."},
     ]},
     {card: "Sudah Diverifikasi", tables: [

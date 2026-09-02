@@ -733,6 +733,34 @@
     color: #8A6100;
 }
 
+/* Layanan Gaji: the switch that decides what the public page serves. Above the filters and
+   visually apart from them - it changes what every visitor sees, not what this table shows. */
+.lg-sistem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 10px 14px;
+    border: 1px solid #E4E9F0;
+    border-radius: 10px;
+    background-color: #FBFCFE;
+}
+
+.lg-sistem div {
+    display: flex;
+    flex-direction: column;
+}
+
+.lg-sistem b {
+    font-size: 0.95rem;
+}
+
+.lg-sistem span {
+    font-size: 0.85rem;
+    color: #6B7A90;
+}
+
 /* Layanan Gaji: the per jenis upload dialog */
 .ulg {
     padding: 24px 26px;

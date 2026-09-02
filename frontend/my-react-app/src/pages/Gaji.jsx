@@ -17,6 +17,9 @@ import Pagination from "@mui/material/Pagination";
 import LoadingAnimate from "../ui/loading.jsx";
 
 
+// The Google Form staff used before the in-app form existed, restored when the switch is off
+const FORM_GAJI_LAMA = "https://bit.ly/PelayananGajiBakamlaRI";
+
 export default function Gaji() {
     //State
     const [gajiContentOpen, setGajiContentOpen] = useState(true);
@@ -27,18 +30,34 @@ export default function Gaji() {
     //Page State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPage, setTotalPage] = useState(0);
+    // Which system this page is running. null until known, so nothing is fetched and no button
+    // points anywhere until the answer arrives - guessing would flash the wrong destination.
+    const [sistemBaru, setSistemBaru] = useState(null);
     //Scroll State
     const [isHeaderHidden, setIsHeaderHidden] = useState(false);
 
     //Download link
 
 
+    // The admin switch on Layanan Gaji decides both the queue below and where the form button
+    // goes. Read once, before anything else: the two must never disagree with each other.
+    useEffect(() => {
+        apiClient.get('/layanan-gaji/pengaturan')
+            .then(response => setSistemBaru(response.data?.sistemBaru !== false))
+            .catch(error => {
+                console.log("Error reading layanan gaji setting.", error);
+                setSistemBaru(true);
+            });
+    }, []);
+
     //Get table data
-    async function getTableData(page) {
+    async function getTableData(page, baru) {
         const maxRow = 5;
         try {
             setIsLoading(true);
-            const response = await apiClient.get('/layanan-gaji/antrian-publik', { params: { page, limit: maxRow } });
+            const response = baru
+                ? await apiClient.get('/layanan-gaji/antrian-publik', { params: { page, limit: maxRow } })
+                : await apiClient.get('/bendahara/antrian-gaji', { params: { page, limit: maxRow } });
             // Defaulted rather than assigned straight through: this page is public, and a
             // payload without rows would take the whole of it down on the first .map
             setTableData(Array.isArray(response.data?.data) ? response.data.data : []);
@@ -52,8 +71,8 @@ export default function Gaji() {
     }
 
     useEffect(() => {
-        getTableData(currentPage);
-    }, [currentPage])
+        if (sistemBaru !== null) getTableData(currentPage, sistemBaru);
+    }, [currentPage, sistemBaru])
 
     // Enable scrolling for this page
     useEffect(() => {
@@ -89,8 +108,8 @@ export default function Gaji() {
         )
     }
 
-    // Positional, matching the two columns /layanan-gaji/antrian-publik projects
-    const headData = ["NOMOR URUT", "STATUS"];
+    // Positional. The old queue serves three columns from 'Sheet1', the new one projects two.
+    const headData = sistemBaru ? ["NOMOR URUT", "STATUS"] : ["NO URUT PELAYANAN", "STATUS", "KETERANGAN"];
 
     const tableContent = () => {
         return (
@@ -160,7 +179,11 @@ export default function Gaji() {
                     tableContent()
                 }
                 <div className='gaji-buttonList'>
-                    <NavLink to='/layanan-gaji/form' style={{textDecoration: 'none'}}><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></NavLink>
+                    {/* Kept alive behind the switch rather than deleted: turning the new system
+                        off has to restore what staff used before it, link and all */}
+                    {sistemBaru === false
+                        ? <a href={FORM_GAJI_LAMA} style={{textDecoration: 'none'}} target='_blank' rel='noreferrer'><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></a>
+                        : <NavLink to='/layanan-gaji/form' style={{textDecoration: 'none'}}><button className='page-button gaji-button'><EditNoteIcon fontSize='large'/><span className="padd-span-bend"/>Form Permintaan Dokumen</button></NavLink>}
                     <a href={`${import.meta.env.VITE_DOCS_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Surat Rekomendasi Atasan</button></a>
                     <a href={`${import.meta.env.VITE_DOCS_TWO_URL}`} style={{textDecoration: 'none'}} target='_blank'><button className='page-button gaji-button'><CloudDownloadIcon fontSize='large'/><span className="padd-span-bend"/>Surat Pernyataan</button></a>
                 </div>

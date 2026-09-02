@@ -5,6 +5,7 @@ import {TableLayananGaji} from "../../ui/tables.jsx";
 import {layananGajiStatus, monthNames, rowsPerPageOptions} from "./head-data.js";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import UnggahLampiranGaji from "./Unggah-Lampiran-Gaji.jsx";
+import Switch from "@mui/material/Switch";
 
 const ALERT_MS = 3000;
 const MAX_FILE_MB = 10;
@@ -32,6 +33,10 @@ export default function LayananGaji() {
     const [memeriksa, setMemeriksa] = useState(false);
     const [hapusTarget, setHapusTarget] = useState(null);
     const [unggahTarget, setUnggahTarget] = useState(null);
+    // Which system /layanan-gaji is serving. null until known, so the switch cannot flash the
+    // wrong position and be flipped from it by mistake.
+    const [sistemBaru, setSistemBaru] = useState(null);
+    const [gantiSistem, setGantiSistem] = useState(null);
     const [isAlert, setIsAlert] = useState(false);
     const [alertMessage, setAlertMessage] = useState({message: "", severity: ""});
     const alertTimer = useRef(null);
@@ -63,6 +68,27 @@ export default function LayananGaji() {
     }, [showAlert]);
 
     useEffect(() => { muatData(); }, [muatData]);
+
+    useEffect(() => {
+        apiClient.get("/layanan-gaji/pengaturan")
+            .then(({data}) => setSistemBaru(data?.sistemBaru !== false))
+            .catch(error => console.error("Error reading layanan gaji setting.", error));
+    }, []);
+
+    // Changes what every Bakamla staff member sees on a public page, so it is confirmed rather
+    // than toggled straight from the switch.
+    const simpanSistem = useCallback(async () => {
+        const tujuan = gantiSistem;
+        setGantiSistem(null);
+        try {
+            const {data} = await apiClient.patch("/layanan-gaji/pengaturan", {sistemBaru: tujuan});
+            setSistemBaru(data.sistemBaru);
+            showAlert(data.message, "success");
+        } catch (error) {
+            console.error("Failed to change layanan gaji setting.", error);
+            showAlert(error.response?.data?.message || "Pengaturan gagal diubah.", "error");
+        }
+    }, [gantiSistem, showAlert]);
 
     // Newest first: rows are only ever appended, so the sheet order reversed is chronological
     // without parsing a single timestamp
@@ -178,6 +204,16 @@ export default function LayananGaji() {
         <div className="pengajuan pengajuan-layanan bg-card">
             {isAlert && <PopupAlert isAlert={isAlert} severity={alertMessage.severity} message={alertMessage.message} />}
             <div className="pengajuan-filter">
+                <div className="lg-sistem">
+                    <div>
+                        <b>Halaman Pelayanan Gaji</b>
+                        <span>{sistemBaru === null ? "Memuat pengaturan…"
+                            : sistemBaru ? "Memakai formulir dan antrian baru"
+                                : "Memakai Google Form dan antrian lama"}</span>
+                    </div>
+                    <Switch checked={Boolean(sistemBaru)} disabled={sistemBaru === null}
+                            onChange={event => setGantiSistem(event.target.checked)} />
+                </div>
                 <form className="bar-cari lg-filter" onSubmit={event => event.preventDefault()}>
                     <div className="lg-filter-baris">
                         <label htmlFor="cari-layanan">Cari</label>
@@ -229,6 +265,12 @@ export default function LayananGaji() {
                 <UnggahLampiranGaji row={unggahTarget} maxMb={MAX_FILE_MB}
                                     onTutup={() => setUnggahTarget(null)}
                                     onKirim={kirimBerkas} onGagal={showAlert} />}
+            {gantiSistem !== null &&
+                <Popup type="delete" whenCancel={() => setGantiSistem(null)} whenDel={simpanSistem}
+                       message={gantiSistem
+                           ? "Alihkan halaman Pelayanan Gaji ke formulir dan antrian baru?"
+                           : "Kembalikan halaman Pelayanan Gaji ke Google Form dan antrian lama? "
+                             + "Permintaan baru tidak akan masuk ke menu ini."} />}
             {hapusTarget &&
                 <Popup type="delete" whenCancel={() => setHapusTarget(null)} whenDel={hapus}
                        message={`Hapus permintaan No. ${hapusTarget.no} atas nama `

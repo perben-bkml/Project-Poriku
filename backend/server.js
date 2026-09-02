@@ -212,6 +212,9 @@ const PUBLIC_ROUTES = new Set([
     "POST /layanan-gaji/form",
     // Gaji.jsx's Antrian Pelayanan table. Two projected columns, rate limited per IP.
     "GET /layanan-gaji/antrian-publik",
+    // Which of the two systems that page should show, and the old queue behind the switch
+    "GET /layanan-gaji/pengaturan",
+    "GET /bendahara/antrian-gaji",
     "GET /auth/google/callback",
     "GET /auth/google/verif/callback",
     "GET /auth/google/gaji/callback",
@@ -307,6 +310,7 @@ const ROUTE_ROLES = {
     "PATCH /layanan-gaji/email": GAJI,
     "POST /layanan-gaji/periksa-email": GAJI,
     "DELETE /layanan-gaji/antrian": GAJI,
+    "PATCH /layanan-gaji/pengaturan": GAJI,
 
     // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
     "GET /bendahara/pembayaran-bp": USER_ADMIN,
@@ -9261,6 +9265,124 @@ app.post("/layanan-gaji/periksa-email", async (req, res) => {
         return res.status(500).json({ message: "Gagal memeriksa status e-mail." });
     }
 });
+
+// --- Layanan Gaji: sakelar sistem ----------------------------------------------------
+// The public page can be sent back to the Google Form and the old 'Sheet1' queue without a
+// deploy. There is no staging server, so this is the rollback: the pre-existing path is kept
+// alive behind the switch rather than deleted, exactly as the pilot flags elsewhere are.
+
+const TABEL_HILANG = "42P01";  // migration 011 not applied yet
+
+// True when the table is missing, so a server that has not run the migration behaves as it
+// does today rather than falling back to a Google Form nobody is watching any more.
+async function pakaiSistemBaru() {
+    try {
+        const [row] = await sql`SELECT pakai_sistem_baru FROM layanan_gaji_pengaturan WHERE id = 1`;
+        return row ? row.pakai_sistem_baru : true;
+    } catch (error) {
+        if (error.code === TABEL_HILANG) return true;
+        throw error;
+    }
+}
+
+// Public: Gaji.jsx has to know which queue to read and where to point its button before a
+// visitor has done anything, and the answer is one boolean that reveals nothing.
+app.get("/layanan-gaji/pengaturan", async (req, res) => {
+    try {
+        return res.status(200).json({ sistemBaru: await pakaiSistemBaru() });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/pengaturan:", error);
+        // The page is useless without an answer, and the new system is the safe default
+        return res.status(200).json({ sistemBaru: true });
+    }
+});
+
+app.patch("/layanan-gaji/pengaturan", async (req, res) => {
+    try {
+        const sistemBaru = req.body?.sistemBaru === true || req.body?.sistemBaru === "true";
+        await sql`
+            INSERT INTO layanan_gaji_pengaturan (id, pakai_sistem_baru, diubah_oleh, updated_at)
+            VALUES (1, ${sistemBaru}, ${trimmed(req.viewer?.name)}, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                pakai_sistem_baru = EXCLUDED.pakai_sistem_baru,
+                diubah_oleh = EXCLUDED.diubah_oleh,
+                updated_at = NOW()`;
+        return res.status(200).json({
+            message: sistemBaru
+                ? "Halaman Pelayanan Gaji kini memakai formulir dan antrian baru."
+                : "Halaman Pelayanan Gaji dikembalikan ke Google Form dan antrian lama.",
+            sistemBaru,
+        });
+    } catch (error) {
+        if (error.code === TABEL_HILANG) {
+            console.error("layanan_gaji_pengaturan missing - apply migration 011.");
+            return res.status(503).json({ message: "Pengaturan belum tersedia. Terapkan migrasi 011 terlebih dahulu." });
+        }
+        console.error("Error in PATCH /layanan-gaji/pengaturan:", error);
+        return res.status(500).json({ message: "Gagal mengubah pengaturan." });
+    }
+});
+
+// The pre-switch queue, read from 'Sheet1' of the old GAJI spreadsheet with its hidden rows
+// honoured. Untouched from before Layanan Gaji existed - restoring the old behaviour means
+// restoring it exactly, not an approximation of it.
+// Layanan Gaji antrian
+app.get("/bendahara/antrian-gaji", async (req, res) => {
+    try {
+        const spreadsheetIdGaji = getSpreadsheetId(req, 'GAJI');
+        const { page = 1, limit = 5 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        //Get hidden rows metadata
+        const metaResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.get({
+                spreadsheetId: spreadsheetIdGaji,
+                includeGridData: false,
+                ranges: ["'Sheet1'!A:C"],
+                fields: 'sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))'
+            })
+        })
+
+        const hiddenRowIdx = new Set();
+
+        metaResponse.data.sheets[0].data.forEach(grid => {
+            grid.rowMetadata.forEach((rowMeta, idx) => {
+                if (rowMeta.hiddenByUser || rowMeta.hiddenByFilter) {
+                    hiddenRowIdx.add(idx);      // row index is zero–based
+                }
+            });
+        });
+
+        //Get filtered values
+        const valueResponse = await readRange(sheets, spreadsheetIdGaji, `'Sheet1'!A:C`);
+
+        const visibleRows = valueResponse.data.values.filter(
+            (_, idx) => !hiddenRowIdx.has(idx)
+        );
+
+        // Ensure each row has 3 columns
+        const normalizedRows = visibleRows.slice(1).reverse().map(row => {
+            while (row.length < 3) row.push("");
+            return row;
+        });
+
+        const allRows = normalizedRows.length;
+
+        // Apply pagination
+        const startIndex = (pageNum - 1) * limitNum;
+        const endIndex = startIndex + limitNum;
+        const paginatedRows = normalizedRows.slice(startIndex, endIndex);
+
+        res.json({ data: paginatedRows, rowLength: allRows });
+
+
+    } catch (error) {
+        console.error("Error in fetching gaji antrian data:", error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+
+})
 
 // --- Layanan Gaji: antrian publik ----------------------------------------------------
 // The queue as an anonymous visitor sees it on /layanan-gaji: a number and a status, nothing

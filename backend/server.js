@@ -207,11 +207,10 @@ const PUBLIC_ROUTES = new Set([
     "POST /login-auth",
     "POST /logout",
     "GET /check-auth",
-    "GET /bendahara/antrian-gaji",
     // Input-Form-Gaji.jsx: Bakamla staff hold no account, so the form has to be reachable
     // signed out. Guarded by a per IP rate limit and a repeat check instead of by a role.
     "POST /layanan-gaji/form",
-    // Gaji.jsx's Antrian Pelayanan table. Three projected columns, rate limited per IP.
+    // Gaji.jsx's Antrian Pelayanan table. Two projected columns, rate limited per IP.
     "GET /layanan-gaji/antrian-publik",
     "GET /auth/google/callback",
     "GET /auth/google/verif/callback",
@@ -884,89 +883,6 @@ app.get("/check-auth", (req, res) => {
         res.status(400).json({ message: "Invalid token" });
     }
 });
-
-// Layanan Gaji antrian
-app.get("/bendahara/antrian-gaji", async (req, res) => {
-    try {
-        const spreadsheetIdGaji = getSpreadsheetId(req, 'GAJI');
-        const { page = 1, limit = 5 } = req.query;
-        const pageNum = parseInt(page);
-        const limitNum = parseInt(limit);
-
-        //Get hidden rows metadata
-        const metaResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.get({
-                spreadsheetId: spreadsheetIdGaji,
-                includeGridData: false,
-                ranges: ["'Sheet1'!A:C"],
-                fields: 'sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))'
-            })
-        })
-
-        const hiddenRowIdx = new Set();
-
-        metaResponse.data.sheets[0].data.forEach(grid => {
-            grid.rowMetadata.forEach((rowMeta, idx) => {
-                if (rowMeta.hiddenByUser || rowMeta.hiddenByFilter) {
-                    hiddenRowIdx.add(idx);      // row index is zero–based
-                }
-            });
-        });
-
-        //Get filtered values
-        const valueResponse = await readRange(sheets, spreadsheetIdGaji, `'Sheet1'!A:C`);
-
-        const visibleRows = valueResponse.data.values.filter(
-            (_, idx) => !hiddenRowIdx.has(idx)
-        );
-
-        // Ensure each row has 3 columns
-        const normalizedRows = visibleRows.slice(1).reverse().map(row => {
-            while (row.length < 3) row.push("");
-            return row;
-        });
-
-        const allRows = normalizedRows.length;
-
-        // Apply pagination
-        const startIndex = (pageNum - 1) * limitNum;
-        const endIndex = startIndex + limitNum;
-        const paginatedRows = normalizedRows.slice(startIndex, endIndex);
-
-        res.json({ data: paginatedRows, rowLength: allRows });
-
-
-    } catch (error) {
-        console.error("Error in fetching gaji antrian data:", error);
-        res.status(500).json({ error: "Failed to fetch data." });
-    }
-
-})
-
-
-// Whose rows a request may see. The name comes off the token, never the query: a "user"
-// is scoped to its own satker, an admin sees every satker, and Lihat-Antrian sends no
-// username at all and gets the whole queue.
-const antrianOwner = (req) =>
-    req.query.username && req.viewer?.role === "user" ? req.viewer.name : null;
-
-// Render data antrian
-// GUP/PTUP are tracked by Nomor SPM, everything else by Nomor SPP, so one box searches
-// whichever number the row's own kategori makes meaningful. Digits only on both sides, so
-// "00041" and "41" agree and a stray prefix cannot miss.
-const nomorAntrianKolom = (row) => antrianKategori(row) === "gup" ? 10 : 9;
-
-function cariNomorAntrian(rows, cari) {
-    const teks = String(cari ?? "");
-    // No digits at all means no search; digits that normalise away (a bare "0") are still a
-    // search, and one nothing matches - returning the full list there reads as a broken filter
-    if (!/\d/.test(teks)) return rows;
-    const dicari = teks.replace(/\D/g, "").replace(/^0+/, "");
-    return rows.filter(row => {
-        const nilai = String(row[nomorAntrianKolom(row)] ?? "").replace(/\D/g, "").replace(/^0+/, "");
-        return nilai !== "" && nilai === dicari;
-    });
-}
 
 app.get("/bendahara/antrian", async (req, res) => {
     try {

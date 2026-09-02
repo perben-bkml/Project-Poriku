@@ -1554,7 +1554,7 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                                         autoFocus onChange={event => setEmailBaru(event.target.value)} />
                                                     <Button size="small" sx={{ textTransform: "none" }}
                                                         disabled={sibuk || !emailBaru.trim() || emailBaru === row.email}
-                                                        onClick={() => onUbahEmail(row, emailBaru.trim())}>Simpan</Button>
+                                                        onClick={() => { onUbahEmail(row, emailBaru.trim()); setEmailBaru(null); }}>Simpan</Button>
                                                     <Button size="small" color="inherit" sx={{ textTransform: "none" }}
                                                         onClick={() => setEmailBaru(null)}>Batal</Button>
                                                 </dd>}
@@ -1616,8 +1616,11 @@ export function TableLayananGaji({ rows, loading, page, totalPages, rowsPerPage,
                             ? <tr><td colSpan={LAYANAN_GAJI_COLUMN_COUNT} className="dp-placeholder"><LoadingAnimate size="46px" /></td></tr>
                             : rows.length === 0
                                 ? <tr><td colSpan={LAYANAN_GAJI_COLUMN_COUNT} className="dp-placeholder dp-empty">Belum ada permintaan dokumen.</td></tr>
+                                // Keyed on timestamp, not rowNumber: deleting a row shifts every
+                                // number below it, and React would then hand one row's open
+                                // detail panel or half typed e-mail box to a different permintaan
                                 : rows.map(row => (
-                                    <LayananGajiRow key={row.rowNumber} row={row} onUnggah={onUnggah}
+                                    <LayananGajiRow key={row.timestamp || row.rowNumber} row={row} onUnggah={onUnggah}
                                         onKirimUlang={onKirimUlang} onUbahEmail={onUbahEmail}
                                         onHapus={onHapus} sibuk={barisSibuk === row.rowNumber} />
                                 ))}

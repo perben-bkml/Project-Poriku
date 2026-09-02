@@ -110,12 +110,14 @@ export default function LayananGaji() {
         try {
             const {data} = await apiClient.post("/layanan-gaji/lampiran", formData);
             showAlert(data.message || "Lampiran berhasil diunggah.", "success");
-            await muatData({quiet: true});
         } catch (error) {
             console.error("Failed to upload lampiran.", error);
             showAlert(error.response?.data?.message || "Lampiran gagal diunggah.", "error");
         } finally {
             setBarisSibuk(null);
+            // Resynced even on failure: a rejected write usually means the table is out of
+            // date, which is exactly when leaving the old rows on screen helps least
+            await muatData({quiet: true});
         }
     }
 
@@ -144,12 +146,12 @@ export default function LayananGaji() {
             const {data} = await apiClient.patch("/layanan-gaji/email",
                 {rowNumber: row.rowNumber, timestamp: row.timestamp, email});
             showAlert(data.message, "success");
-            await muatData({quiet: true});
         } catch (error) {
             console.error("Failed to update e-mail.", error);
             showAlert(error.response?.data?.message || "Alamat e-mail gagal diubah.", "error");
         } finally {
             setBarisSibuk(null);
+            await muatData({quiet: true});
         }
     }, [muatData, showAlert]);
 

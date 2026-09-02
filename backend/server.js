@@ -884,6 +884,30 @@ app.get("/check-auth", (req, res) => {
     }
 });
 
+// Whose rows a request may see. The name comes off the token, never the query: a "user"
+// is scoped to its own satker, an admin sees every satker, and Lihat-Antrian sends no
+// username at all and gets the whole queue.
+const antrianOwner = (req) =>
+    req.query.username && req.viewer?.role === "user" ? req.viewer.name : null;
+
+// Render data antrian
+// GUP/PTUP are tracked by Nomor SPM, everything else by Nomor SPP, so one box searches
+// whichever number the row's own kategori makes meaningful. Digits only on both sides, so
+// "00041" and "41" agree and a stray prefix cannot miss.
+const nomorAntrianKolom = (row) => antrianKategori(row) === "gup" ? 10 : 9;
+
+function cariNomorAntrian(rows, cari) {
+    const teks = String(cari ?? "");
+    // No digits at all means no search; digits that normalise away (a bare "0") are still a
+    // search, and one nothing matches - returning the full list there reads as a broken filter
+    if (!/\d/.test(teks)) return rows;
+    const dicari = teks.replace(/\D/g, "").replace(/^0+/, "");
+    return rows.filter(row => {
+        const nilai = String(row[nomorAntrianKolom(row)] ?? "").replace(/\D/g, "").replace(/^0+/, "");
+        return nilai !== "" && nilai === dicari;
+    });
+}
+
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
@@ -4166,8 +4190,15 @@ app.get('/notification', async (req, res) => {
         // anyone could read another user's notifications by editing the URL
         const { name, role } = req.viewer;
 
+        // Which admin reads the Bendahara block rather than the Verifikasi one. A list, because
+        // `name.includes('Annisa' || 'Ardi' || 'Anggun')` tested only the first: the || collapses
+        // to 'Annisa' before includes() ever sees it, so the other two silently read Verifikasi.
+        const ADMIN_BENDAHARA = ['Annisa', 'Ardi', 'Anggun'];
+
         // Filter by user role and admin division
-        let findByWhat = role === 'user' ? name : (name.includes('Annisa' || 'Ardi' || 'Anggun') ? 'Bendahara' : 'Verifikasi' )
+        let findByWhat = role === 'user'
+            ? name
+            : (ADMIN_BENDAHARA.some(admin => name.includes(admin)) ? 'Bendahara' : 'Verifikasi');
         if (role === 'master admin') { findByWhat = 'Bendahara'; }
 
         // Find the correct notification column index first
@@ -4180,16 +4211,8 @@ app.get('/notification', async (req, res) => {
             throw new Error(`Could not find column for: ${findByWhat}`);
         }
 
-        // Convert index to google sheet column letter
-        function getColumnLetter(index) {
-            let letter = '';
-            let tempIndex = index;
-            while (tempIndex >= 0) {
-                letter = String.fromCharCode((tempIndex % 26) + 65) + letter;
-                tempIndex = Math.floor(tempIndex / 26) - 1;
-            }
-            return letter;
-        }
+        // getColumnLetter is the module level one above the Notifikasi writer - this route used
+        // to carry a byte for byte copy of it
         const columnLetter = getColumnLetter(columnIndex);
 
         // Get n column letter after columnIndex

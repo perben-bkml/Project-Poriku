@@ -4,6 +4,7 @@ import Popup, {PopupAlert} from "../../ui/Popup.jsx";
 import {TableLayananGaji} from "../../ui/tables.jsx";
 import {layananGajiStatus, monthNames, rowsPerPageOptions} from "./head-data.js";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
+import UnggahLampiranGaji from "./Unggah-Lampiran-Gaji.jsx";
 
 const ALERT_MS = 3000;
 const MAX_FILE_MB = 10;
@@ -30,12 +31,10 @@ export default function LayananGaji() {
     const [barisSibuk, setBarisSibuk] = useState(null);
     const [memeriksa, setMemeriksa] = useState(false);
     const [hapusTarget, setHapusTarget] = useState(null);
+    const [unggahTarget, setUnggahTarget] = useState(null);
     const [isAlert, setIsAlert] = useState(false);
     const [alertMessage, setAlertMessage] = useState({message: "", severity: ""});
     const alertTimer = useRef(null);
-    // A file input is uncontrolled, so the picked row has to be remembered beside it
-    const berkasRef = useRef(null);
-    const tujuanRef = useRef(null);
 
     const showAlert = useCallback((message, severity) => {
         setAlertMessage({message, severity});
@@ -83,30 +82,17 @@ export default function LayananGaji() {
         return tersaring.slice(mulai, mulai + barisPerHalaman);
     }, [tersaring, halaman, barisPerHalaman]);
 
-    const mintaBerkas = useCallback((row) => {
-        tujuanRef.current = row;
-        if (berkasRef.current) berkasRef.current.click();
-    }, []);
-
-    async function kirimBerkas(event) {
-        const berkas = event.target.files?.[0];
-        const row = tujuanRef.current;
-        // Clear at once: picking the same file twice in a row fires no change event otherwise
-        event.target.value = "";
-        if (!berkas || !row) return;
-
-        if (berkas.type !== "application/pdf") return showAlert("Berkas harus berformat PDF.", "error");
-        if (berkas.size > MAX_FILE_MB * 1024 * 1024) {
-            return showAlert(`Ukuran berkas melebihi ${MAX_FILE_MB} MB.`, "error");
-        }
-
+    // berkas is a Map of jenis index -> File, so each document goes up under the field name the
+    // backend pairs by. Files picked but never submitted are dropped with the dialog.
+    const kirimBerkas = useCallback(async (row, berkas) => {
+        setUnggahTarget(null);
         setBarisSibuk(row.rowNumber);
         const formData = new FormData();
         formData.append("rowNumber", row.rowNumber);
         // The backend refuses the write if this no longer matches the row - a table left open
         // while someone else deleted an entry would otherwise address the wrong permintaan
         formData.append("timestamp", row.timestamp);
-        formData.append("lampiran", berkas);
+        for (const [posisi, file] of berkas) formData.append(`lampiran-${posisi}`, file);
         try {
             const {data} = await apiClient.post("/layanan-gaji/lampiran", formData);
             showAlert(data.message || "Lampiran berhasil diunggah.", "success");
@@ -119,7 +105,7 @@ export default function LayananGaji() {
             // date, which is exactly when leaving the old rows on screen helps least
             await muatData({quiet: true});
         }
-    }
+    }, [muatData, showAlert]);
 
     // Re-sends the document already on Drive, so it costs no upload and cannot leave a second
     // copy in the folder. The row is resynced either way: a failed retry rewrites Keterangan.
@@ -224,7 +210,6 @@ export default function LayananGaji() {
                     </div>
                 </form>
             </div>
-            <input ref={berkasRef} type="file" accept="application/pdf" hidden onChange={kirimBerkas} />
             <TableLayananGaji
                 rows={tampil}
                 loading={isLoading}
@@ -234,12 +219,16 @@ export default function LayananGaji() {
                 rowsPerPageOptions={rowsPerPageOptions}
                 onPageChange={(event, value) => setHalaman(value)}
                 onRowsPerPageChange={setBarisPerHalaman}
-                onUnggah={mintaBerkas}
+                onUnggah={setUnggahTarget}
                 onKirimUlang={kirimUlang}
                 onUbahEmail={ubahEmail}
                 onHapus={setHapusTarget}
                 barisSibuk={barisSibuk}
             />
+            {unggahTarget &&
+                <UnggahLampiranGaji row={unggahTarget} maxMb={MAX_FILE_MB}
+                                    onTutup={() => setUnggahTarget(null)}
+                                    onKirim={kirimBerkas} onGagal={showAlert} />}
             {hapusTarget &&
                 <Popup type="delete" whenCancel={() => setHapusTarget(null)} whenDel={hapus}
                        message={`Hapus permintaan No. ${hapusTarget.no} atas nama `

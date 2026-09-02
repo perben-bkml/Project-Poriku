@@ -1472,7 +1472,8 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                 </td>
                 <td><span className="dp-id">{dash(row.no)}</span></td>
                 <td>{dash(row.namaLengkap)}</td>
-                <td>{dash(row.jenisPermintaan)}</td>
+                <td>{row.daftarJenis.length === 0 ? dash("")
+                    : row.daftarJenis.map(jenis => <div key={jenis}>{jenis}</div>)}</td>
                 <td>
                     <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>
                         {dash(row.status)}
@@ -1496,7 +1497,7 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                 {/* Offered whenever a document exists: the retry re-sends the
                                     file already on Drive, so re-uploading is only for a
                                     document that was itself wrong */}
-                                {row.lampiran.url &&
+                                {row.lampiran.length > 0 &&
                                     <Tooltip arrow title={alamatGagal
                                         ? "Perbaiki alamat e-mail dahulu — alamat ini tidak aktif"
                                         : "Kirim ulang e-mail lampiran"}>
@@ -1509,9 +1510,8 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                             </IconButton>
                                         </span>
                                     </Tooltip>}
-                                <Tooltip title={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"} arrow>
-                                    <IconButton size="small"
-                                        aria-label={row.lampiran.nama ? "Ganti lampiran" : "Unggah lampiran"}
+                                <Tooltip arrow title={`Unggah lampiran (${row.lampiran.length}/${row.daftarJenis.length})`}>
+                                    <IconButton size="small" aria-label="Unggah lampiran"
                                         onClick={() => onUnggah(row)}>
                                         <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
                                     </IconButton>
@@ -1562,7 +1562,10 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                 ))}
                             </dl>
                             <div className="dp-detail-files">
-                                <DaftarBerkas label={row.lampiran.nama || "Lampiran File"} url={row.lampiran.url} />
+                                {row.lampiran.length === 0
+                                    ? <DaftarBerkas label="Lampiran File" url="" />
+                                    : row.lampiran.map(berkas =>
+                                        <DaftarBerkas key={berkas.nama} label={berkas.nama} url={berkas.url} />)}
                             </div>
                         </div>
                     </Collapse>

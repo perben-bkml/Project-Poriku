@@ -1096,6 +1096,44 @@ textarea.fg-input {
     resize: vertical;
 }
 
+/* Jenis Permintaan: a real tap target per option, one per line so a long label never has to
+   share a row with the next checkbox */
+.fg-pilihan {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    outline: none;
+}
+
+.fg-pilihan-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #00204A;
+    background-color: #fcfcfc;
+    border: 1px solid #C9D2E0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.fg-pilihan-item:has(input:checked) {
+    border-color: #00449C;
+    background-color: #EEF4FD;
+}
+
+.fg-pilihan-item input {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0 0;
+    accent-color: #00449C;
+}
+
 .fg-pesan {
     font-size: 0.85rem;
     color: #6B7A90;

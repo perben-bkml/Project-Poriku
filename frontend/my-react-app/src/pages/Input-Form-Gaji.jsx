@@ -7,9 +7,8 @@ import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import apiClient from "../lib/apiClient";
 import {layananGajiFormFields} from "../components/bendahara/head-data.js";
 
-const KOSONG = Object.fromEntries(layananGajiFormFields.map(field => [field.key, ""]));
+const KOSONG = Object.fromEntries(layananGajiFormFields.map(field => [field.key, field.banyak ? [] : ""]));
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const NIP = /^[0-9]{6,25}$/;
 const LAINNYA = "Lainnya";
 
 // The MUI input restyled as one of the plain fields around it, so the searchable Unit Kerja
@@ -40,10 +39,13 @@ function bawaKeSalah(salah) {
 function periksa(nilai) {
     const salah = {};
     for (const field of layananGajiFormFields) {
-        if (field.wajib && !nilai[field.key].trim()) salah[field.key] = "Wajib diisi";
+        const isi = nilai[field.key];
+        const kosong = field.banyak ? isi.length === 0 : !isi.trim();
+        if (field.wajib && kosong) salah[field.key] = field.banyak ? "Pilih minimal satu" : "Wajib diisi";
     }
     if (!salah.email && !EMAIL.test(nilai.email.trim())) salah.email = "Alamat e-mail tidak valid";
-    if (!salah.nip && !NIP.test(nilai.nip.trim())) salah.nip = "NIP/NRP harus berupa angka";
+    // No shape check on NIP/NRP: the two are numbered differently and some carry letters, so
+    // refusing a real one is worse than accepting an odd one
     return salah;
 }
 
@@ -108,7 +110,30 @@ export default function InputFormGaji() {
         ubah(key, opsi === LAINNYA ? "" : opsi);
     };
 
+    const ubahBanyak = (key, item, dipilih) => {
+        setNilai(lama => ({
+            ...lama,
+            [key]: dipilih ? [...lama[key], item] : lama[key].filter(isi => isi !== item),
+        }));
+        setSalah(lama => lama[key] ? {...lama, [key]: ""} : lama);
+    };
+
     const isian = (field) => {
+        // Checkboxes rather than a multi-select: a phone renders the latter as a scrolling
+        // list where ticking a second item silently unpicks the first
+        if (field.banyak) {
+            return (
+                <div className="fg-pilihan" id={`fg-${field.key}`} tabIndex={-1}>
+                    {field.pilihan.map(item => (
+                        <label className="fg-pilihan-item" key={item}>
+                            <input type="checkbox" checked={nilai[field.key].includes(item)}
+                                   onChange={event => ubahBanyak(field.key, item, event.target.checked)} />
+                            <span>{item}</span>
+                        </label>
+                    ))}
+                </div>
+            );
+        }
         const umum = {
             id: `fg-${field.key}`,
             className: `fg-input${salah[field.key] ? " fg-input-salah" : ""}`,
@@ -162,7 +187,7 @@ export default function InputFormGaji() {
                         <p className="fg-antrian">No. Antrian <b>{hasil.no}</b></p>
                         <dl className="fg-ringkas">
                             <div><dt>Nama</dt><dd>{hasil.namaLengkap}</dd></div>
-                            <div><dt>Jenis Permintaan</dt><dd>{hasil.jenisPermintaan}</dd></div>
+                            <div><dt>Jenis Permintaan</dt><dd>{hasil.jenisPermintaan.join(", ")}</dd></div>
                             <div><dt>Status</dt><dd>{hasil.status}</dd></div>
                             <div><dt>Dikirim ke</dt><dd>{hasil.email}</dd></div>
                         </dl>

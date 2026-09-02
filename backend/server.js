@@ -511,16 +511,15 @@ const driveFolderIdVerif = process.env.DRIVE_FOLDER_ID_VERIF;
 // OAuth Token Management Functions
 async function saveOAuthTokens(tokens) {
     try {
-        // Delete existing tokens first
-        await sql`DELETE FROM oauth_tokens WHERE id = 1`;
-        
-        // Insert new tokens
         await sql`
             INSERT INTO oauth_tokens (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -529,6 +528,12 @@ async function saveOAuthTokens(tokens) {
         console.error('Failed to save OAuth tokens:', error);
     }
 }
+
+// google-auth-library refreshes on its own when a request finds the access token expired, and
+// announces it here rather than through the call that triggered it. Without this the new token
+// lives only in memory: every restart refreshes again, and a refresh token Google chose to
+// rotate is lost - which surfaces later as a browser consent nobody expected to need.
+oauth2Client.on('tokens', () => saveOAuthTokens(oauth2Client.credentials));
 
 async function loadOAuthTokens() {
     try {
@@ -556,16 +561,15 @@ async function loadOAuthTokens() {
 // OAuth Token Management Functions for Verification
 async function saveVerifOAuthTokens(tokens) {
     try {
-        // Delete existing verification tokens first
-        await sql`DELETE FROM oauth_tokens_verif WHERE id = 1`;
-        
-        // Insert new verification tokens
         await sql`
             INSERT INTO oauth_tokens_verif (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens_verif.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -574,6 +578,8 @@ async function saveVerifOAuthTokens(tokens) {
         console.error('Failed to save verification OAuth tokens:', error);
     }
 }
+
+oauth2ClientVerif.on('tokens', () => saveVerifOAuthTokens(oauth2ClientVerif.credentials));
 
 async function loadVerifOAuthTokens() {
     try {
@@ -4325,15 +4331,19 @@ const bangunKlienGaji = () => {
     gmailGaji = google.gmail({ version: "v1", auth: oauth2ClientGaji });
 };
 
+oauth2ClientGaji.on('tokens', () => saveGajiOAuthTokens(oauth2ClientGaji.credentials));
+
 async function saveGajiOAuthTokens(tokens) {
     try {
-        await sql`DELETE FROM oauth_tokens_gaji WHERE id = 1`;
         await sql`
             INSERT INTO oauth_tokens_gaji (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens_gaji.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -4400,21 +4410,23 @@ async function requireGajiDriveReady(res, tokenName = "Token uploader") {
 
 // Authorise once, signed in as the intended account. Needs full `drive` scope:
 // `drive.file` only ever sees files this app itself created, not existing folders.
+// Asked for and checked against the same list, so the two cannot drift. Adding a scope does
+// not widen a token already issued, so any change here needs one fresh consent to take effect.
+const GAJI_SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    // Layanan Gaji mails the pemohon from this same account
+    'https://www.googleapis.com/auth/gmail.send',
+    // Read is what makes "Aktif" mean delivered: a send only reports that Gmail accepted the
+    // message, and a dead mailbox answers minutes later as a bounce sitting in this inbox
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.profile',
+];
+
 app.get("/auth/google/gaji", (req, res) => {
     const authUrl = oauth2ClientGaji.generateAuthUrl({
         access_type: 'offline',
-        scope: [
-            'https://www.googleapis.com/auth/drive',
-            // Layanan Gaji mails the pemohon from this same account. Adding a scope does not
-            // widen a token already issued, so this needs one fresh consent to take effect.
-            'https://www.googleapis.com/auth/gmail.send',
-            // Read is what makes "Berhasil" mean delivered: a send only reports that Gmail
-            // accepted the message, and a dead mailbox answers minutes later as a bounce
-            // sitting in this account's own inbox.
-            'https://www.googleapis.com/auth/gmail.readonly',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        prompt: 'consent'
+        scope: GAJI_SCOPES,
+        prompt: 'consent',
     });
     res.redirect(authUrl);
 });
@@ -4423,6 +4435,23 @@ app.get("/auth/google/gaji/callback", async (req, res) => {
     const { code } = req.query;
     try {
         const { tokens } = await oauth2ClientGaji.getToken(code);
+
+        // Google's consent screen offers each scope as its own checkbox, and one left unticked
+        // comes back as a narrower grant. Storing it would replace a working token with one
+        // that cannot send, and the damage only shows up hours later as "Insufficient
+        // Permission" - nowhere near the screen that caused it. So a partial grant is refused
+        // outright rather than saved with a warning: whatever is already stored can only be
+        // better, and the fix is one more trip through this same screen with every box ticked.
+        const diberikan = new Set(String(tokens.scope || "").split(" "));
+        const kurang = GAJI_SCOPES.filter(scope => !diberikan.has(scope));
+        if (kurang.length > 0) {
+            console.error("Izin Google kurang untuk akun Gaji, token lama dipertahankan:", kurang.join(", "));
+            return res.send("Izin berikut tidak dicentang: "
+                + kurang.map(scope => scope.split("/").pop()).join(", ")
+                + ". Token lama tetap dipakai dan tidak ada yang berubah. "
+                + "Buka /auth/google/gaji lagi, lalu centang SEMUA kotak izin.");
+        }
+
         oauth2ClientGaji.setCredentials(tokens);
         bangunKlienGaji();
         await saveGajiOAuthTokens(tokens);
@@ -8814,7 +8843,8 @@ function susunSurat({ dari, ke, subjek, teks, lampiran }) {
         "",
         potongBase64(Buffer.from(teks, "utf8")),
     ];
-    if (!lampiran) return [...kepala, ...badan].join("\r\n");
+    const berkas = lampiran || [];
+    if (berkas.length === 0) return [...kepala, ...badan].join("\r\n");
 
     const batas = `poriku-${Date.now().toString(36)}`;
     return [
@@ -8824,16 +8854,18 @@ function susunSurat({ dari, ke, subjek, teks, lampiran }) {
         `--${batas}`,
         ...badan,
         "",
-        `--${batas}`,
-        `Content-Type: application/pdf; name="${kepalaUtf8(lampiran.nama)}"`,
-        // filename* carries the real name; the quoted filename is the ASCII fallback for
-        // clients that do not read the extended form
-        `Content-Disposition: attachment; filename="${kepalaUtf8(lampiran.nama)}"; `
-            + `filename*=UTF-8''${encodeURIComponent(lampiran.nama)}`,
-        "Content-Transfer-Encoding: base64",
-        "",
-        potongBase64(lampiran.isi),
-        "",
+        ...berkas.flatMap(item => [
+            `--${batas}`,
+            `Content-Type: application/pdf; name="${kepalaUtf8(item.nama)}"`,
+            // filename* carries the real name; the quoted filename is the ASCII fallback for
+            // clients that do not read the extended form
+            `Content-Disposition: attachment; filename="${kepalaUtf8(item.nama)}"; `
+                + `filename*=UTF-8''${encodeURIComponent(item.nama)}`,
+            "Content-Transfer-Encoding: base64",
+            "",
+            potongBase64(item.isi),
+            "",
+        ]),
         `--${batas}--`,
     ].join("\r\n");
 }
@@ -8858,8 +8890,17 @@ async function domainMenerimaSurat(email) {
     }
 }
 
+// Gmail refuses a message past ~25 MB and answers with something unreadable, so the total is
+// checked here where the reason can be said plainly. Per file, multer already caps at 10 MB.
+const EMAIL_BATAS_TOTAL = 20 * 1024 * 1024;
+
 async function kirimSurat({ ke, subjek, teks, lampiran }) {
     if (!await ensureGajiDriveReady()) throw new Error("Akun pengirim e-mail belum terhubung.");
+    const total = (lampiran || []).reduce((jumlah, item) => jumlah + item.isi.length, 0);
+    if (total > EMAIL_BATAS_TOTAL) {
+        throw new Error(`Total lampiran ${Math.round(total / 1048576)} MB melebihi batas `
+            + `${EMAIL_BATAS_TOTAL / 1048576} MB untuk satu e-mail. Kirim sebagian dahulu.`);
+    }
     // Checked here rather than only on the public form, so an address corrected by hand or a
     // domain that has since lapsed is caught before a send that could only bounce
     if (!await domainMenerimaSurat(ke)) throw new Error(`Domain alamat "${ke}" tidak menerima e-mail.`);
@@ -8908,14 +8949,15 @@ const suratAntrian = (baris) => ({
         + TANDA_TANGAN,
 });
 
+// lampiran is what this message carries, which after a partial upload is not everything the
+// permintaan asked for - so the list names the documents actually attached, not the jenis.
 const suratDokumen = (record, petugas, lampiran) => ({
     ke: record.email,
-    subjek: `[Pelayanan Gaji] ${record.jenisPermintaan} - Nomor Antrian ${record.no}`,
+    subjek: `[Pelayanan Gaji] Dokumen Gaji - Nomor Antrian ${record.no}`,
     teks: `Yth. ${record.namaLengkap},\n\n`
         + "Dokumen yang Anda minta telah selesai diproses dan terlampir pada surat elektronik ini.\n\n"
         + `Nomor Antrian    : ${record.no}\n`
-        + `Jenis Permintaan : ${record.jenisPermintaan}\n`
-        + `Berkas           : ${lampiran.nama}\n`
+        + `Berkas           : ${lampiran.map(item => item.nama).join("\n                   ")}\n`
         + `Petugas          : ${petugas || "-"}\n\n`
         + "Apabila terdapat kekeliruan pada dokumen tersebut, silakan hubungi Bagian Keuangan "
         + "pada hari dan jam kerja dengan menyebutkan nomor antrian di atas.\n\n"
@@ -8987,7 +9029,7 @@ const LAYANAN_GAJI_COLUMNS = [
     { index: 14, key: "tujuanDokumen" },             // O
     { index: 15, key: "status" },                    // P
     { index: 16, key: "petugas" },                   // Q
-    { index: 17, key: "lampiran", link: true },      // R
+    { index: 17, key: "lampiran", berkas: true },     // R
     { index: 18, key: "statusEmail" },               // S
     { index: 19, key: "keterangan" },                // T
 ];
@@ -9025,13 +9067,49 @@ const layananGajiSheetId = (spreadsheetId) =>
         return match.properties.sheetId;
     });
 
+// One permintaan may ask for several documents, so M holds one jenis per line and R one file
+// name per line beside it. Newline rather than a comma: a jenis label may contain one, and
+// Sheets stacks the lines in the cell without any parsing of its own.
+const LAYANAN_GAJI_PEMISAH = "\n";
+const pecahBaris = (teks) => trimmed(teks).split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+
+// A cell holding several attachments carries one textFormatRun per file rather than the single
+// cell level hyperlink a one file cell has, and values.get returns neither - hence the grid
+// read. The hyperlink fallback is what keeps rows written before this change readable.
+function berkasDariSel(cell) {
+    const teks = String(cell?.formattedValue ?? "");
+    if (!teks.trim()) return [];
+    const runs = cell?.textFormatRuns || [];
+    let posisi = 0;
+    return teks.split(/\r?\n/).map(nama => {
+        const jalan = runs.filter(run => (run.startIndex || 0) <= posisi).pop();
+        posisi += nama.length + 1;
+        return { nama: nama.trim(), url: jalan?.format?.link?.uri || cell?.hyperlink || "" };
+    }).filter(item => item.nama);
+}
+
+// The reverse: names stacked in the cell, each carrying its own link run
+const selBerkasGaji = (daftar) => {
+    if (daftar.length === 0) return {};
+    const runs = [];
+    let posisi = 0;
+    for (const berkas of daftar) {
+        if (berkas.url) runs.push({ startIndex: posisi, format: { link: { uri: berkas.url } } });
+        posisi += berkas.nama.length + 1;
+    }
+    return {
+        userEnteredValue: { stringValue: daftar.map(berkas => berkas.nama).join(LAYANAN_GAJI_PEMISAH) },
+        ...(runs.length > 0 ? { textFormatRuns: runs } : {}),
+    };
+};
+
 function layananGajiToRecord(cells, rowNumber) {
     const record = { rowNumber };
     for (const column of LAYANAN_GAJI_COLUMNS) {
         const cell = cells?.[column.index];
-        // Column R holds a file drop attachment, read back the way Pembayaran BP reads M and S
-        record[column.key] = column.link ? pembayaranBpLink(cell) : trimmed(cell?.formattedValue);
+        record[column.key] = column.berkas ? berkasDariSel(cell) : trimmed(cell?.formattedValue);
     }
+    record.daftarJenis = pecahBaris(record.jenisPermintaan);
     if (!record.status) record.status = LAYANAN_GAJI_PROSES;
     record.statusEmail = LAYANAN_GAJI_EMAIL_LAMA[record.statusEmail] || record.statusEmail;
     return record;
@@ -9043,7 +9121,7 @@ async function readLayananGajiRecords(spreadsheetId) {
         spreadsheetId,
         includeGridData: true,
         ranges: [LAYANAN_GAJI_RANGE],
-        fields: "sheets(data(rowData(values(formattedValue,hyperlink))))",
+        fields: "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns))))",
     }));
     return (response.data.sheets?.[0]?.data?.[0]?.rowData || [])
         .map((row, index) => layananGajiToRecord(row.values, LAYANAN_GAJI_FIRST_ROW + index))
@@ -9247,10 +9325,26 @@ app.get("/layanan-gaji/antrian", async (req, res) => {
 
 const driveFolderIdSlipGaji = process.env.DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI;
 // Same multer as Pembayaran BP: PDF only, same 10 MB cap
-const handleSlipGajiUpload = runPembayaranBpUpload(uploadPembayaranBp.single("lampiran"));
+// .any(), not .single(): one permintaan may ask for several documents, and each file arrives
+// under the field name "lampiran-<n>" where n indexes the jenis it answers - the pairing has
+// to survive multer, which keeps files and text fields in separate bags.
+const handleSlipGajiUpload = runPembayaranBpUpload(uploadPembayaranBp.any());
 
 // The folder is on the perbendaharaan uploader account, not on the verifikasi one that
 // owns the spreadsheet - the two identities are unrelated and both are needed here.
+// The jenis is in the file name, which is also how an already stored file is matched back to
+// the jenis it answers - the sheet has one Lampiran column and no room for a second field.
+const namaBerkasGaji = (record, jenis) => {
+    // yyyy-mm-dd hh-mm-ss: the timestamp as the sheet spells it, with the colons swapped for
+    // dashes because Drive shows a colon but Windows refuses to save a file holding one
+    const waktu = getFormattedDate().fullDateTimeFormat.replace(/:/g, "-");
+    return `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(jenis) || "Dokumen"} ${waktu}.pdf`;
+};
+const berkasUntukJenis = (daftar, jenis) =>
+    daftar.find(berkas => berkas.nama.includes(` - ${safePart(jenis)} `));
+
+// Files arrive as lampiran-<n>, n indexing record.daftarJenis. Uploaded only once the row has
+// been found, so a rejected request leaves no orphan in the folder.
 async function unggahLampiranGaji(req, res, record) {
     if (!driveFolderIdSlipGaji) {
         console.error("DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI belum diatur - upload dibatalkan.");
@@ -9258,12 +9352,19 @@ async function unggahLampiranGaji(req, res, record) {
         return null;
     }
     if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return null;
-    // yyyy-mm-dd hh-mm-ss: the timestamp as the sheet spells it, with the colons swapped for
-    // dashes because Drive shows a colon but Windows refuses to save a file holding one
-    const waktu = getFormattedDate().fullDateTimeFormat.replace(/:/g, "-");
-    const nama = `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(record.jenisPermintaan) || "Dokumen"} `
-        + `${waktu}.pdf`;
-    return { nama, url: await uploadToDriveFolder(req.file, driveFolderIdSlipGaji, nama) };
+
+    const baru = [];
+    for (const file of req.files || []) {
+        const posisi = parseInt(String(file.fieldname).split("-")[1], 10);
+        const jenis = record.daftarJenis[posisi];
+        if (!jenis) {
+            res.status(400).json({ message: "Jenis permintaan untuk berkas ini tidak dikenal." });
+            return null;
+        }
+        const nama = namaBerkasGaji(record, jenis);
+        baru.push({ jenis, nama, isi: file.buffer, url: await uploadToDriveFolder(file, driveFolderIdSlipGaji, nama) });
+    }
+    return baru;
 }
 
 // Attaching the finished document is what completes the request, so Status and Petugas are
@@ -9274,7 +9375,7 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
     try {
         const spreadsheetId = layananGajiSpreadsheet(req, res);
         if (!spreadsheetId) return;
-        if (!req.file) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
+        if (!req.files?.length) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
 
         const rowNumber = Number(trimmed(req.body?.rowNumber));
         if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
@@ -9288,18 +9389,31 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
         if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
         if (barisTakCocok(record, req, res)) return;
 
-        // Uploaded only once the row has been found, so a rejected request leaves no orphan
-        const lampiran = await unggahLampiranGaji(req, res, record);
-        if (!lampiran) return;
+        const baru = await unggahLampiranGaji(req, res, record);
+        if (!baru) return;
+
+        // Documents are often ready at different times, so an upload adds to what is there
+        // rather than replacing it - only the file answering the same jenis is superseded.
+        const lampiran = [
+            ...record.lampiran.filter(lama =>
+                !baru.some(berkas => lama.nama.includes(` - ${safePart(berkas.jenis)} `))),
+            ...baru.map(berkas => ({ nama: berkas.nama, url: berkas.url })),
+        ];
 
         const petugas = trimmed(req.viewer?.name);
         // The document is already safe on Drive, so a bounced mail is a state to record and
         // retry rather than a failed upload: the desk keeps the file and the pemohon does not
-        // have to send the permintaan again.
+        // have to send the permintaan again. Only what was just uploaded is attached - the rest
+        // has already been sent.
         const surat = record.statusEmail === LAYANAN_GAJI_EMAIL_MATI
             ? { berhasil: false, pesan: LAYANAN_GAJI_ALAMAT_GAGAL }
-            : await cobaKirimSurat(suratDokumen(record, petugas, { ...lampiran, isi: req.file.buffer }));
-        const status = surat.berhasil ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_GAGAL_EMAIL;
+            : await cobaKirimSurat(suratDokumen(record, petugas, baru));
+
+        // Selesai only once every jenis the pemohon asked for has a file against it: with
+        // several documents in one permintaan, one upload is rarely the whole job.
+        const lengkap = record.daftarJenis.every(jenis => berkasUntukJenis(lampiran, jenis));
+        const status = !surat.berhasil ? LAYANAN_GAJI_GAGAL_EMAIL
+            : lengkap ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_PROSES;
 
         await tulisSelesaiLayananGaji(spreadsheetId, rowNumber, {
             status, petugas, lampiran, keterangan: surat.pesan,
@@ -9308,7 +9422,7 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
 
         return res.status(200).json({
             message: surat.berhasil
-                ? `Lampiran untuk ${record.namaLengkap || "permintaan ini"} terkirim ke ${record.email}.`
+                ? `${baru.length} lampiran untuk ${record.namaLengkap || "permintaan ini"} terkirim ke ${record.email}.`
                 : `Lampiran tersimpan, tetapi e-mail gagal dikirim: ${surat.pesan}`,
             status, petugas, lampiran, keterangan: surat.pesan, emailTerkirim: surat.berhasil,
         });
@@ -9332,7 +9446,7 @@ async function tulisSelesaiLayananGaji(spreadsheetId, rowNumber, { status, petug
                 endColumnIndex: LAYANAN_GAJI_KETERANGAN_COLUMN + 1,
             },
             rows: [{ values: [
-                selTeksKkp(status), selTeksKkp(petugas), selTautanKkp(lampiran),
+                selTeksKkp(status), selTeksKkp(petugas), selBerkasGaji(lampiran),
                 selTeksKkp(statusEmail), selTeksKkp(keterangan),
             ] }],
             fields: "userEnteredValue,textFormatRuns",
@@ -9454,7 +9568,7 @@ app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
         const record = baris.find(row => row.rowNumber === rowNumber);
         if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
         if (barisTakCocok(record, req, res)) return;
-        if (!record.lampiran.url) {
+        if (record.lampiran.length === 0) {
             return res.status(400).json({ message: "Belum ada lampiran untuk dikirim." });
         }
         // Refused rather than attempted: a retry to the same dead address is one more bounce
@@ -9463,15 +9577,22 @@ app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
         }
         if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return;
 
-        const fileId = driveFileIdFromLink(record.lampiran.url);
-        if (!fileId) return res.status(400).json({ message: "Tautan lampiran tidak dikenal." });
-        const berkas = await driveGaji.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+        // Everything on the row, not just whatever failed last time: which files a given send
+        // carried is not recorded anywhere, and re-sending one the pemohon already has costs
+        // nothing next to leaving one out.
+        const lampiran = [];
+        for (const berkas of record.lampiran) {
+            const fileId = driveFileIdFromLink(berkas.url);
+            if (!fileId) return res.status(400).json({ message: `Tautan lampiran "${berkas.nama}" tidak dikenal.` });
+            const isi = await driveGaji.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+            lampiran.push({ nama: berkas.nama, isi: Buffer.from(isi.data) });
+        }
 
         const petugas = trimmed(record.petugas) || trimmed(req.viewer?.name);
-        const surat = await cobaKirimSurat(suratDokumen(record, petugas, {
-            nama: record.lampiran.nama, isi: Buffer.from(berkas.data),
-        }));
-        const status = surat.berhasil ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_GAGAL_EMAIL;
+        const surat = await cobaKirimSurat(suratDokumen(record, petugas, lampiran));
+        const lengkap = record.daftarJenis.every(jenis => berkasUntukJenis(record.lampiran, jenis));
+        const status = !surat.berhasil ? LAYANAN_GAJI_GAGAL_EMAIL
+            : lengkap ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_PROSES;
 
         // Q and R already hold the right values, but the range has to start at P, so both are
         // rewritten as they stand rather than read back and diffed
@@ -9501,7 +9622,8 @@ app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
 // Kelas Jabatan and Eselon are absent on purpose: neither applies to every pegawai.
 const LAYANAN_GAJI_WAJIB = ["namaLengkap", "nip", "email", "jenisPegawai", "pangkat", "golongan",
     "jabatan", "unitKerja", "jenisPermintaan", "detailDokumen", "tujuanDokumen"];
-const LAYANAN_GAJI_BATAS_PANJANG = 300;
+// Roomy enough for several Jenis Permintaan stacked in one cell
+const LAYANAN_GAJI_BATAS_PANJANG = 500;
 
 const LAYANAN_GAJI_IP_JENDELA_MS = 60 * 60 * 1000;
 const LAYANAN_GAJI_IP_BATAS = 5;
@@ -9534,7 +9656,14 @@ const LAYANAN_GAJI_ISIAN = LAYANAN_GAJI_COLUMNS.slice(2, LAYANAN_GAJI_SELESAI_CO
 
 function periksaFormGaji(body) {
     const nilai = {};
-    for (const column of LAYANAN_GAJI_ISIAN) nilai[column.key] = trimmed(body?.[column.key]);
+    for (const column of LAYANAN_GAJI_ISIAN) {
+        const isi = body?.[column.key];
+        // Jenis Permintaan arrives as an array when the pemohon ticks more than one, and goes
+        // into the cell one per line - the same shape the sheet is read back in
+        nilai[column.key] = Array.isArray(isi)
+            ? isi.map(item => trimmed(item)).filter(Boolean).join(LAYANAN_GAJI_PEMISAH)
+            : trimmed(isi);
+    }
 
     for (const key of LAYANAN_GAJI_WAJIB) {
         if (!nilai[key]) return { pesan: "Semua isian wajib harus diisi." };
@@ -9543,8 +9672,9 @@ function periksaFormGaji(body) {
         return { pesan: `Isian melebihi ${LAYANAN_GAJI_BATAS_PANJANG} karakter.` };
     }
     if (!EMAIL_POLA.test(nilai.email)) return { pesan: "Alamat e-mail tidak valid." };
-    // NIP is 18 digits and an NRP is shorter, so the check is a shape rather than a length
-    if (!/^[0-9]{6,25}$/.test(nilai.nip)) return { pesan: "NIP/NRP harus berupa angka." };
+    // No shape check on NIP/NRP: the two are numbered differently, some carry letters or
+    // punctuation, and refusing a real one is worse than accepting an odd one. Required and
+    // length capped like every other field, nothing more.
     return { nilai };
 }
 

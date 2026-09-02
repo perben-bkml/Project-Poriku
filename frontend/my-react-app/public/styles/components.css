@@ -733,6 +733,87 @@
     color: #8A6100;
 }
 
+/* Layanan Gaji: the per jenis upload dialog */
+.ulg {
+    padding: 24px 26px;
+    color: #00204A;
+}
+
+.ulg h2 {
+    margin: 0 0 6px 0;
+    font-size: 1.25rem;
+}
+
+.ulg-sub {
+    margin: 0 0 18px 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #41506B;
+}
+
+.ulg-daftar {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ulg-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #E4E9F0;
+    border-radius: 10px;
+}
+
+.ulg-jenis {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-size: 0.95rem;
+}
+
+.ulg-jenis em {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    font-style: normal;
+    overflow-wrap: anywhere;
+}
+
+.ulg-ada {
+    color: #0F7A3D;
+}
+
+.ulg-baru {
+    color: #00449C;
+    font-weight: 600;
+}
+
+.ulg-kosong {
+    color: #8A6100;
+}
+
+.ulg-catatan {
+    margin: 16px 0 0 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #6B7A90;
+}
+
+.ulg-aksi {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
 /* Layanan Gaji: the editable e-mail inside a row's detail panel */
 .lg-email {
     display: flex;

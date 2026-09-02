@@ -571,7 +571,9 @@ const layananGajiPermintaan = [
 // because neither applies to every pegawai; the backend refuses the rest when blank.
 const layananGajiFormFields = [
     {key: "namaLengkap", label: "Nama Lengkap (dengan gelar)", wajib: true, autoComplete: "name"},
-    {key: "nip", label: "NIP/NRP", wajib: true, inputMode: "numeric", petunjuk: "Angka tanpa spasi"},
+    // No inputMode and no shape check: NIP and NRP are numbered differently and some carry
+    // letters, so the form takes what the pemohon has rather than refusing a real one
+    {key: "nip", label: "NIP/NRP", wajib: true},
     {key: "email", label: "E-mail", wajib: true, type: "email", autoComplete: "email",
         petunjuk: "Dokumen dikirim ke alamat ini"},
     {key: "jenisPegawai", label: "Jenis Pegawai", wajib: true, pilihan: layananGajiPegawai},
@@ -583,7 +585,10 @@ const layananGajiFormFields = [
         petunjuk: "Kosongkan bila tidak menjabat struktural"},
     // cari: the list runs past sixty entries, so it is typed into rather than scrolled
     {key: "unitKerja", label: "Unit Kerja", wajib: true, pilihan: layananGajiUnitKerja, cari: true},
-    {key: "jenisPermintaan", label: "Jenis Permintaan Dokumen", wajib: true, pilihan: layananGajiPermintaan},
+    // banyak: one permintaan may ask for several documents at once, and the desk answers each
+    // with its own file. Checkboxes rather than a multi-select, which is unusable on a phone.
+    {key: "jenisPermintaan", label: "Jenis Permintaan Dokumen", wajib: true, lebar: true,
+        banyak: true, pilihan: layananGajiPermintaan, petunjuk: "Boleh pilih lebih dari satu"},
     {key: "detailDokumen", label: "Detail Dokumen", wajib: true, baris: 3, lebar: true,
         petunjuk: "Contoh: Slip Gaji bulan Januari sampai Maret 2026"},
     {key: "tujuanDokumen", label: "Tujuan Dokumen", wajib: true, baris: 2, lebar: true,

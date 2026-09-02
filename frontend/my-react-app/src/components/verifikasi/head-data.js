@@ -28,6 +28,7 @@ const tableHead = [
 const userSatkerNames = [
     {title: "Master", value: ""},
     {title: "Biro Umum", value: "Biro Umum"},
+    {title: "Biro Umum TU Rumga", value: "Biro Umum TU Rumga"},
     {title: "Biro Sarana dan Prasarana", value: "Biro Sarpras"},
     {title: "Biro Perencanaan", value: "Biro Rencana"},
     {title: "Dit Data dan Informasi", value: "Dit Datin"},

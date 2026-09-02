@@ -175,7 +175,7 @@ const ANY_ROLE = ["user", "admin", "admin_gaji"];
 // The satker taking part in the pilot, matched on the account name the JWT carries.
 // Comparison goes through normalizeSatker, so case and stray whitespace in poriku_users
 // cannot drop an account out of the pilot. Kept in sync with PILOT_SATKER in src/lib/pilot.js.
-const PILOT_SATKER = ["Biro Umum", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
+const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
 const isPilotSatker = (name) => PILOT_SATKER.some(satker => normalizeSatker(satker) === normalizeSatker(name));
 // The accounts the holds are lifted for: the pilot satker, plus "master admin", which has
 // passed every hold since the pilot started.
@@ -470,7 +470,7 @@ async function writeNotifications(spreadsheetId, entries) {
         return wanted.map(() => ({ ok: false, reason: "missing-args" }));
     }
 
-    const headerResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A1:CB1");
+    const headerResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A1:CF1");
     const headerRow = headerResponse.data.values?.[0] || [];
 
     const targets = wanted.map(entry => {
@@ -3643,7 +3643,10 @@ app.get("/verifikasi/data-pjk", async (req, res) => {
 
         //Filter if keyword exist
         if (satkerPrefix !== "") {
-            allRows = allRows.filter(row => row.satker.startsWith(satkerPrefix));
+            // Exact match, not startsWith: 'Daftar SPM' carries both "Biro Umum" and
+            // "Biro Umum TU Rumga", and a prefix test hands the first account the second's rows.
+            const satkerDicari = normalizeSatker(satkerPrefix);
+            allRows = allRows.filter(row => normalizeSatker(row.satker) === satkerDicari);
         }
         if (filterKeyword !== "") {
         allRows = allRows.filter(row => row.status.includes(filterKeyword));
@@ -4349,7 +4352,7 @@ app.get('/notification', async (req, res) => {
         if (role === 'master admin') { findByWhat = 'Bendahara'; }
 
         // Find the correct notification column index first
-        const getTypeRowsResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A:CB");
+        const getTypeRowsResponse = await readRange(sheets, spreadsheetId, "'Notifikasi'!A:CF");
         let typeRow = await getTypeRowsResponse.data.values || [];
         const headerRow = typeRow.length > 0 ? typeRow[0] : [];
         const columnIndex = headerRow.findIndex(columnName => columnName.includes(findByWhat));
@@ -7881,6 +7884,7 @@ async function loadPembayaranBpRow(req, res, spreadsheetId, sheetName, rowNumber
 // cannot be reused: it maps the 'Database SPM' short forms, which differ.
 const SATKER_UNIT_KERJA = {
     "BIRO UMUM": "BIRO UMUM",
+    "BIRO UMUM TU RUMGA": "DOM",
     "BIRO SARANA DAN PRASARANA": "SARPRAS",
     "BIRO PERENCANAAN": "PERENCANAAN",
     "DIT DATA DAN INFORMASI": "DATIN",
@@ -7904,9 +7908,17 @@ const SATKER_UNIT_KERJA = {
 // unmapped account matches nothing rather than everything - the safe direction. The
 // matcher differs per tab: Pembayaran BP holds the Unit Kerja on its own, REK KORAN
 // mixes it into a longer label ("BPG 049 ZONA TENGAH").
-function scopeToSatker(rows, viewer, matches) {
+// REK KORAN labels this unit's rekening "RUMGA" where the Pembayaran BP tab writes
+// "DOM", so one account needs a different needle per tab. It sits beside the map rather
+// than replacing the value: Pembayaran BP still has to match on "DOM".
+const REK_KORAN_UNIT_KERJA = {
+    "BIRO UMUM TU RUMGA": "RUMGA",
+};
+
+function scopeToSatker(rows, viewer, matches, ejaanTab = {}) {
     if (viewer.role !== "user") return rows;
-    const unitKerja = SATKER_UNIT_KERJA[normalizeSatker(viewer.name)];
+    const kunci = normalizeSatker(viewer.name);
+    const unitKerja = ejaanTab[kunci] ?? SATKER_UNIT_KERJA[kunci];
     if (!unitKerja) {
         console.error(`Satker "${viewer.name}" tidak dikenal - data Pembayaran BP dikosongkan.`);
         return [];
@@ -8125,7 +8137,8 @@ app.get("/bendahara/pembayaran-bp/rek-koran", async (req, res) => {
 
         return res.status(200).json({
             data: scopeToSatker(rows, req.viewer,
-                (row, satker) => normalizeSatker(row.satker).includes(satker)),
+                (row, satker) => normalizeSatker(row.satker).includes(satker),
+                REK_KORAN_UNIT_KERJA),
         });
     } catch (error) {
         console.error("Error in GET /bendahara/pembayaran-bp/rek-koran:", error);

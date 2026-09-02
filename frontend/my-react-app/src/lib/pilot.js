@@ -11,7 +11,7 @@
 // The satker taking part in the pilot, matched on user.name. Comparison is case and
 // whitespace insensitive so a stray double space in poriku_users cannot drop an account
 // out of the pilot. Kept in sync with PILOT_SATKER in server.js.
-export const PILOT_SATKER = ["Biro Umum", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
+export const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
 
 const satkerKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 const isPilotSatker = (name) => PILOT_SATKER.some(satker => satkerKey(satker) === satkerKey(name));

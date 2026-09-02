@@ -174,7 +174,7 @@ const ANY_ROLE = ["user", "admin", "admin_gaji"];
 // The satker taking part in the pilot, matched on the account name the JWT carries.
 // Comparison goes through normalizeSatker, so case and stray whitespace in poriku_users
 // cannot drop an account out of the pilot. Kept in sync with PILOT_SATKER in src/lib/pilot.js.
-const PILOT_SATKER = ["Biro Umum", "Biro Sarana dan Prasarana"];
+const PILOT_SATKER = ["Biro Umum", "Biro Sarana dan Prasarana", "Dit Operasi Laut"];
 const isPilotSatker = (name) => PILOT_SATKER.some(satker => normalizeSatker(satker) === normalizeSatker(name));
 // The accounts the holds are lifted for: the pilot satker, plus "master admin", which has
 // passed every hold since the pilot started.

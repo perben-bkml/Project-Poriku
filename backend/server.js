@@ -12,6 +12,7 @@ import dateFormat from "dateformat";
 import multer from 'multer';
 import stream from 'stream';
 import readXlsxFile from 'read-excel-file/node';
+import dns from 'node:dns/promises';
 
 
 // Initialize tools
@@ -206,6 +207,13 @@ const PUBLIC_ROUTES = new Set([
     "POST /login-auth",
     "POST /logout",
     "GET /check-auth",
+    // Input-Form-Gaji.jsx: Bakamla staff hold no account, so the form has to be reachable
+    // signed out. Guarded by a per IP rate limit and a repeat check instead of by a role.
+    "POST /layanan-gaji/form",
+    // Gaji.jsx's Antrian Pelayanan table. Two projected columns, rate limited per IP.
+    "GET /layanan-gaji/antrian-publik",
+    // Which of the two systems that page should show, and the old queue behind the switch
+    "GET /layanan-gaji/pengaturan",
     "GET /bendahara/antrian-gaji",
     "GET /auth/google/callback",
     "GET /auth/google/verif/callback",
@@ -293,6 +301,16 @@ const ROUTE_ROLES = {
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
+
+    // Layanan Gaji: the permintaan dokumen queue. Closed to plain admin - the rows carry
+    // NIP, pangkat and jabatan for named staff, which only the gaji desk handles.
+    "GET /layanan-gaji/antrian": GAJI,
+    "POST /layanan-gaji/lampiran": GAJI,
+    "POST /layanan-gaji/kirim-ulang": GAJI,
+    "PATCH /layanan-gaji/email": GAJI,
+    "POST /layanan-gaji/periksa-email": GAJI,
+    "DELETE /layanan-gaji/antrian": GAJI,
+    "PATCH /layanan-gaji/pengaturan": GAJI,
 
     // Also feeds SPM Bendahara, which users open; their rows are scoped to their satker
     "GET /bendahara/pembayaran-bp": USER_ADMIN,
@@ -497,16 +515,15 @@ const driveFolderIdVerif = process.env.DRIVE_FOLDER_ID_VERIF;
 // OAuth Token Management Functions
 async function saveOAuthTokens(tokens) {
     try {
-        // Delete existing tokens first
-        await sql`DELETE FROM oauth_tokens WHERE id = 1`;
-        
-        // Insert new tokens
         await sql`
             INSERT INTO oauth_tokens (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -515,6 +532,12 @@ async function saveOAuthTokens(tokens) {
         console.error('Failed to save OAuth tokens:', error);
     }
 }
+
+// google-auth-library refreshes on its own when a request finds the access token expired, and
+// announces it here rather than through the call that triggered it. Without this the new token
+// lives only in memory: every restart refreshes again, and a refresh token Google chose to
+// rotate is lost - which surfaces later as a browser consent nobody expected to need.
+oauth2Client.on('tokens', () => saveOAuthTokens(oauth2Client.credentials));
 
 async function loadOAuthTokens() {
     try {
@@ -542,16 +565,15 @@ async function loadOAuthTokens() {
 // OAuth Token Management Functions for Verification
 async function saveVerifOAuthTokens(tokens) {
     try {
-        // Delete existing verification tokens first
-        await sql`DELETE FROM oauth_tokens_verif WHERE id = 1`;
-        
-        // Insert new verification tokens
         await sql`
             INSERT INTO oauth_tokens_verif (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens_verif.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -560,6 +582,8 @@ async function saveVerifOAuthTokens(tokens) {
         console.error('Failed to save verification OAuth tokens:', error);
     }
 }
+
+oauth2ClientVerif.on('tokens', () => saveVerifOAuthTokens(oauth2ClientVerif.credentials));
 
 async function loadVerifOAuthTokens() {
     try {
@@ -869,65 +893,6 @@ app.get("/check-auth", (req, res) => {
         res.status(400).json({ message: "Invalid token" });
     }
 });
-
-// Layanan Gaji antrian
-app.get("/bendahara/antrian-gaji", async (req, res) => {
-    try {
-        const spreadsheetIdGaji = getSpreadsheetId(req, 'GAJI');
-        const { page = 1, limit = 5 } = req.query;
-        const pageNum = parseInt(page);
-        const limitNum = parseInt(limit);
-
-        //Get hidden rows metadata
-        const metaResponse = await withBackoff(async () => {
-            return await sheets.spreadsheets.get({
-                spreadsheetId: spreadsheetIdGaji,
-                includeGridData: false,
-                ranges: ["'Sheet1'!A:C"],
-                fields: 'sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))'
-            })
-        })
-
-        const hiddenRowIdx = new Set();
-
-        metaResponse.data.sheets[0].data.forEach(grid => {
-            grid.rowMetadata.forEach((rowMeta, idx) => {
-                if (rowMeta.hiddenByUser || rowMeta.hiddenByFilter) {
-                    hiddenRowIdx.add(idx);      // row index is zero–based
-                }
-            });
-        });
-
-        //Get filtered values
-        const valueResponse = await readRange(sheets, spreadsheetIdGaji, `'Sheet1'!A:C`);
-
-        const visibleRows = valueResponse.data.values.filter(
-            (_, idx) => !hiddenRowIdx.has(idx)
-        );
-
-        // Ensure each row has 3 columns
-        const normalizedRows = visibleRows.slice(1).reverse().map(row => {
-            while (row.length < 3) row.push("");
-            return row;
-        });
-
-        const allRows = normalizedRows.length;
-
-        // Apply pagination
-        const startIndex = (pageNum - 1) * limitNum;
-        const endIndex = startIndex + limitNum;
-        const paginatedRows = normalizedRows.slice(startIndex, endIndex);
-
-        res.json({ data: paginatedRows, rowLength: allRows });
-
-
-    } catch (error) {
-        console.error("Error in fetching gaji antrian data:", error);
-        res.status(500).json({ error: "Failed to fetch data." });
-    }
-
-})
-
 
 // Whose rows a request may see. The name comes off the token, never the query: a "user"
 // is scoped to its own satker, an admin sees every satker, and Lihat-Antrian sends no
@@ -4235,8 +4200,15 @@ app.get('/notification', async (req, res) => {
         // anyone could read another user's notifications by editing the URL
         const { name, role } = req.viewer;
 
+        // Which admin reads the Bendahara block rather than the Verifikasi one. A list, because
+        // `name.includes('Annisa' || 'Ardi' || 'Anggun')` tested only the first: the || collapses
+        // to 'Annisa' before includes() ever sees it, so the other two silently read Verifikasi.
+        const ADMIN_BENDAHARA = ['Annisa', 'Ardi', 'Anggun'];
+
         // Filter by user role and admin division
-        let findByWhat = role === 'user' ? name : (name.includes('Annisa' || 'Ardi' || 'Anggun') ? 'Bendahara' : 'Verifikasi' )
+        let findByWhat = role === 'user'
+            ? name
+            : (ADMIN_BENDAHARA.some(admin => name.includes(admin)) ? 'Bendahara' : 'Verifikasi');
         if (role === 'master admin') { findByWhat = 'Bendahara'; }
 
         // Find the correct notification column index first
@@ -4249,16 +4221,8 @@ app.get('/notification', async (req, res) => {
             throw new Error(`Could not find column for: ${findByWhat}`);
         }
 
-        // Convert index to google sheet column letter
-        function getColumnLetter(index) {
-            let letter = '';
-            let tempIndex = index;
-            while (tempIndex >= 0) {
-                letter = String.fromCharCode((tempIndex % 26) + 65) + letter;
-                tempIndex = Math.floor(tempIndex / 26) - 1;
-            }
-            return letter;
-        }
+        // getColumnLetter is the module level one above the Notifikasi writer - this route used
+        // to carry a byte for byte copy of it
         const columnLetter = getColumnLetter(columnIndex);
 
         // Get n column letter after columnIndex
@@ -4362,16 +4326,28 @@ const oauth2ClientGaji = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI_GAJI
 );
 let driveGaji = null;
+let gmailGaji = null;
+
+// Both clients ride the one token: the Drive folder that stores the document and the mailbox
+// that sends it are the same account, which is what lets a pemohon reply to a real address.
+const bangunKlienGaji = () => {
+    driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+    gmailGaji = google.gmail({ version: "v1", auth: oauth2ClientGaji });
+};
+
+oauth2ClientGaji.on('tokens', () => saveGajiOAuthTokens(oauth2ClientGaji.credentials));
 
 async function saveGajiOAuthTokens(tokens) {
     try {
-        await sql`DELETE FROM oauth_tokens_gaji WHERE id = 1`;
         await sql`
             INSERT INTO oauth_tokens_gaji (id, access_token, refresh_token, expiry_date, created_at)
             VALUES (1, ${tokens.access_token}, ${tokens.refresh_token || null}, ${tokens.expiry_date || null}, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 access_token = EXCLUDED.access_token,
-                refresh_token = EXCLUDED.refresh_token,
+                -- COALESCE, never EXCLUDED alone: a refresh response carries a new access
+                -- token and no refresh token, and writing that null over the stored one is
+                -- what leaves the next restart unable to refresh and demanding a fresh consent
+                refresh_token = COALESCE(EXCLUDED.refresh_token, oauth_tokens_gaji.refresh_token),
                 expiry_date = EXCLUDED.expiry_date,
                 updated_at = NOW()
         `;
@@ -4390,7 +4366,7 @@ async function loadGajiOAuthTokens() {
                 refresh_token: result[0].refresh_token,
                 expiry_date: result[0].expiry_date ? Number(result[0].expiry_date) : undefined,
             });
-            driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+            bangunKlienGaji();
             console.log('Dokumen Gaji OAuth tokens loaded from database');
             return true;
         }
@@ -4408,7 +4384,7 @@ async function ensureGajiDriveReady() {
     }
     if (oauth2ClientGaji.credentials.expiry_date && oauth2ClientGaji.credentials.expiry_date < Date.now()) {
         await oauth2ClientGaji.refreshAccessToken();
-        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        bangunKlienGaji();
         await saveGajiOAuthTokens(oauth2ClientGaji.credentials);
     }
     return true;
@@ -4438,14 +4414,23 @@ async function requireGajiDriveReady(res, tokenName = "Token uploader") {
 
 // Authorise once, signed in as the intended account. Needs full `drive` scope:
 // `drive.file` only ever sees files this app itself created, not existing folders.
+// Asked for and checked against the same list, so the two cannot drift. Adding a scope does
+// not widen a token already issued, so any change here needs one fresh consent to take effect.
+const GAJI_SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    // Layanan Gaji mails the pemohon from this same account
+    'https://www.googleapis.com/auth/gmail.send',
+    // Read is what makes "Aktif" mean delivered: a send only reports that Gmail accepted the
+    // message, and a dead mailbox answers minutes later as a bounce sitting in this inbox
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.profile',
+];
+
 app.get("/auth/google/gaji", (req, res) => {
     const authUrl = oauth2ClientGaji.generateAuthUrl({
         access_type: 'offline',
-        scope: [
-            'https://www.googleapis.com/auth/drive',
-            'https://www.googleapis.com/auth/userinfo.profile'
-        ],
-        prompt: 'consent'
+        scope: GAJI_SCOPES,
+        prompt: 'consent',
     });
     res.redirect(authUrl);
 });
@@ -4454,8 +4439,25 @@ app.get("/auth/google/gaji/callback", async (req, res) => {
     const { code } = req.query;
     try {
         const { tokens } = await oauth2ClientGaji.getToken(code);
+
+        // Google's consent screen offers each scope as its own checkbox, and one left unticked
+        // comes back as a narrower grant. Storing it would replace a working token with one
+        // that cannot send, and the damage only shows up hours later as "Insufficient
+        // Permission" - nowhere near the screen that caused it. So a partial grant is refused
+        // outright rather than saved with a warning: whatever is already stored can only be
+        // better, and the fix is one more trip through this same screen with every box ticked.
+        const diberikan = new Set(String(tokens.scope || "").split(" "));
+        const kurang = GAJI_SCOPES.filter(scope => !diberikan.has(scope));
+        if (kurang.length > 0) {
+            console.error("Izin Google kurang untuk akun Gaji, token lama dipertahankan:", kurang.join(", "));
+            return res.send("Izin berikut tidak dicentang: "
+                + kurang.map(scope => scope.split("/").pop()).join(", ")
+                + ". Token lama tetap dipakai dan tidak ada yang berubah. "
+                + "Buka /auth/google/gaji lagi, lalu centang SEMUA kotak izin.");
+        }
+
         oauth2ClientGaji.setCredentials(tokens);
-        driveGaji = google.drive({ version: "v3", auth: oauth2ClientGaji });
+        bangunKlienGaji();
         await saveGajiOAuthTokens(tokens);
         res.send("Akun Google untuk Dokumen Gaji berhasil terhubung. Halaman ini boleh ditutup.");
     } catch (error) {
@@ -8809,6 +8811,1061 @@ app.post("/kkp/transaksi/spm", async (req, res) => {
     } catch (error) {
         console.error("Error in POST /kkp/transaksi/spm:", error);
         return res.status(500).json({ message: "Gagal menyimpan Nomor SPM." });
+    }
+});
+
+// --- Layanan Gaji: surat elektronik --------------------------------------------------
+// Sent through the Gaji OAuth account, the same identity that owns the Drive folder, so the
+// document and the mail carrying it come from one mailbox.
+//
+// The address is configured, never asked for: gmail.send is write only, and every call that
+// would report the account back - users.getProfile included - needs a Gmail read scope this
+// app has no business holding. Gmail stamps From with the authenticated account anyway, so
+// the env var only decides the display name; left unset, the header is omitted and Gmail
+// fills the whole thing in.
+const EMAIL_POLA = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_NAMA_PENGIRIM = "Perbendaharaan Bakamla RI";
+const EMAIL_ALAMAT_PENGIRIM = process.env.EMAIL_LAYANAN_GAJI || "";
+const EMAIL_BATAS_MS = 20_000;
+
+// RFC 2047. A header carrying a non ASCII character is illegal raw, and Indonesian names
+// reach these two through Nama Lengkap and the file name built from it.
+const kepalaUtf8 = (teks) => /^[\x20-\x7E]*$/.test(teks) ? teks
+    : `=?UTF-8?B?${Buffer.from(teks, "utf8").toString("base64")}?=`;
+const potongBase64 = (data) => data.toString("base64").replace(/(.{76})/g, "$1\r\n");
+
+function susunSurat({ dari, ke, subjek, teks, lampiran }) {
+    const kepala = [
+        ...(dari ? [`From: ${kepalaUtf8(EMAIL_NAMA_PENGIRIM)} <${dari}>`] : []),
+        `To: ${ke}`,
+        `Subject: ${kepalaUtf8(subjek)}`,
+        "MIME-Version: 1.0",
+    ];
+    const badan = [
+        'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        potongBase64(Buffer.from(teks, "utf8")),
+    ];
+    const berkas = lampiran || [];
+    if (berkas.length === 0) return [...kepala, ...badan].join("\r\n");
+
+    const batas = `poriku-${Date.now().toString(36)}`;
+    return [
+        ...kepala,
+        `Content-Type: multipart/mixed; boundary="${batas}"`,
+        "",
+        `--${batas}`,
+        ...badan,
+        "",
+        ...berkas.flatMap(item => [
+            `--${batas}`,
+            `Content-Type: application/pdf; name="${kepalaUtf8(item.nama)}"`,
+            // filename* carries the real name; the quoted filename is the ASCII fallback for
+            // clients that do not read the extended form
+            `Content-Disposition: attachment; filename="${kepalaUtf8(item.nama)}"; `
+                + `filename*=UTF-8''${encodeURIComponent(item.nama)}`,
+            "Content-Transfer-Encoding: base64",
+            "",
+            potongBase64(item.isi),
+            "",
+        ]),
+        `--${batas}--`,
+    ].join("\r\n");
+}
+
+// Nothing here may hang a caller: the form route sends inside the write queue, so a stalled
+// Gmail call would hold every other submission behind it.
+const dalamBatas = (janji, ms) => Promise.race([janji, new Promise((resolve, reject) => {
+    setTimeout(() => reject(new Error("Pengiriman e-mail melebihi batas waktu.")), ms).unref?.();
+})]);
+
+// An MX lookup catches the typo class the send cannot: a domain that does not exist, or one
+// that accepts no mail at all. It says nothing about the name in front of the @ - that only
+// ever surfaces as a bounce, which sapuPantulan picks up afterwards. A DNS failure of any
+// other kind lets the submission through: a resolver hiccup must not refuse a valid form.
+async function domainMenerimaSurat(email) {
+    const domain = email.split("@")[1];
+    try {
+        const mx = await dns.resolveMx(domain);
+        return mx.length > 0;
+    } catch (error) {
+        return !["ENOTFOUND", "ENODATA"].includes(error.code);
+    }
+}
+
+// Gmail refuses a message past ~25 MB and answers with something unreadable, so the total is
+// checked here where the reason can be said plainly. Per file, multer already caps at 10 MB.
+const EMAIL_BATAS_TOTAL = 20 * 1024 * 1024;
+
+async function kirimSurat({ ke, subjek, teks, lampiran }) {
+    if (!await ensureGajiDriveReady()) throw new Error("Akun pengirim e-mail belum terhubung.");
+    const total = (lampiran || []).reduce((jumlah, item) => jumlah + item.isi.length, 0);
+    if (total > EMAIL_BATAS_TOTAL) {
+        throw new Error(`Total lampiran ${Math.round(total / 1048576)} MB melebihi batas `
+            + `${EMAIL_BATAS_TOTAL / 1048576} MB untuk satu e-mail. Kirim sebagian dahulu.`);
+    }
+    // Checked here rather than only on the public form, so an address corrected by hand or a
+    // domain that has since lapsed is caught before a send that could only bounce
+    if (!await domainMenerimaSurat(ke)) throw new Error(`Domain alamat "${ke}" tidak menerima e-mail.`);
+    const mime = susunSurat({ dari: EMAIL_ALAMAT_PENGIRIM, ke, subjek, teks, lampiran });
+    // media upload, not a raw request body: a 10 MB attachment is base64 past the cap for a
+    // plain JSON send, and the failure mode there is a 413 rather than anything readable
+    await dalamBatas(gmailGaji.users.messages.send({
+        userId: "me",
+        media: { mimeType: "message/rfc822", body: mime },
+    }), EMAIL_BATAS_MS);
+}
+
+// Never throws: every caller records the outcome in the sheet and carries on, because the
+// permintaan and the uploaded document are both valid whether or not the mail left.
+async function cobaKirimSurat(surat) {
+    try {
+        await kirimSurat(surat);
+        return { berhasil: true, pesan: "" };
+    } catch (error) {
+        console.error("Gagal mengirim e-mail Layanan Gaji:", error);
+        const sebab = error?.errors?.[0]?.message || error?.response?.data?.error?.message || error.message;
+        // The one failure an admin can fix themselves, and Google words it as "insufficient
+        // authentication scopes", which says nothing about what to do next
+        const pesan = /insufficient authentication scopes|insufficientPermissions/i.test(String(sebab))
+            ? "Akun pengirim belum diizinkan mengirim e-mail. Buka /auth/google/gaji dan setujui akses Gmail."
+            : String(sebab);
+        return { berhasil: false, pesan: pesan.slice(0, 300) };
+    }
+}
+
+const TANDA_TANGAN = "Mohon tidak membalas surat elektronik ini.\n\n"
+    + "Hormat kami,\nBagian Keuangan\nBadan Keamanan Laut Republik Indonesia";
+
+const suratAntrian = (baris) => ({
+    ke: baris.email,
+    subjek: `[Pelayanan Gaji] Permintaan ${baris.jenisPermintaan} - Nomor Antrian ${baris.no}`,
+    teks: `Yth. ${baris.namaLengkap},\n\n`
+        + "Permintaan dokumen Anda telah kami terima dan sedang diproses.\n\n"
+        + `Nomor Antrian    : ${baris.no}\n`
+        + `Jenis Permintaan : ${baris.jenisPermintaan}\n`
+        + `Detail Dokumen   : ${baris.detailDokumen}\n`
+        + `Unit Kerja       : ${baris.unitKerja}\n`
+        + `Waktu Permintaan : ${baris.timestamp}\n\n`
+        + "Dokumen akan kami kirimkan ke alamat surat elektronik ini setelah selesai diproses. "
+        + "Untuk hardcopy dapat diambil di Bagian Keuangan pada hari dan jam kerja.\n\n"
+        + TANDA_TANGAN,
+});
+
+// lampiran is what this message carries, which after a partial upload is not everything the
+// permintaan asked for - so the list names the documents actually attached, not the jenis.
+const suratDokumen = (record, petugas, lampiran) => ({
+    ke: record.email,
+    subjek: `[Pelayanan Gaji] Dokumen Gaji - Nomor Antrian ${record.no}`,
+    teks: `Yth. ${record.namaLengkap},\n\n`
+        + "Dokumen yang Anda minta telah selesai diproses dan terlampir pada surat elektronik ini.\n\n"
+        + `Nomor Antrian    : ${record.no}\n`
+        + `Berkas           : ${lampiran.map(item => item.nama).join("\n                   ")}\n`
+        + `Petugas          : ${petugas || "-"}\n\n`
+        + "Apabila terdapat kekeliruan pada dokumen tersebut, silakan hubungi Bagian Keuangan "
+        + "pada hari dan jam kerja dengan menyebutkan nomor antrian di atas.\n\n"
+        + TANDA_TANGAN,
+    lampiran,
+});
+
+// --- Layanan Gaji: antrian ----------------------------------------------------
+// Permintaan dokumen gaji from Bakamla staff, on the 'Database Antrian' tab of its own
+// spreadsheet. That spreadsheet lives on the verifikasi account, so every call here goes
+// through sheets2 - the pengajuan service account is not shared on it and would 403.
+// The rows are entered elsewhere (the public form comes later); this screen only reads
+// them and attaches the finished document. Borrows Pembayaran BP's multer and cache and
+// the KKP cell builders: R holds a file drop attachment exactly as those sheets do, so
+// writing and reading one back is the same problem, not a similar one.
+
+const LAYANAN_GAJI_SHEET = "Database Antrian";
+const LAYANAN_GAJI_FIRST_ROW = 2;   // row 1 is the header
+// The highest No ever issued, kept off to the side of A:T so no read or write of the table
+// touches it. Deleting a row must not hand its number to the next pemohon - that number is in
+// the confirmation e-mail the pemohon already has, and on the public queue they check it
+// against. Same device as the pengajuan flows' counterCell, and read the same way: never
+// below the highest number actually present, so a row typed in by hand still counts.
+const LAYANAN_GAJI_COUNTER_CELL = "Z1";
+
+// Only two states, and a blank Status cell is the first of them: a permintaan is in hand the
+// moment the form is submitted, which is what the confirmation e-mail tells the pemohon. So a
+// row nobody has opened yet still reads as being worked on, never as unknown or as waiting.
+const LAYANAN_GAJI_PROSES = "Sedang Diproses";
+const LAYANAN_GAJI_SELESAI = "Selesai";
+// The document is on Drive and the row is finished, but the pemohon has not received it.
+// A state of its own rather than a flag, because it is the desk's queue of work left to do.
+const LAYANAN_GAJI_GAGAL_EMAIL = "Gagal Kirim Email File";
+
+// Column S is a verdict on the address in column E, not a log of one send. Every attempt
+// keeps it current - the antrian mail, the document mail and each retry - so a corrected
+// address is re-tested by the very next send rather than staying unknown until a bounce.
+// Blank means untested. Aktif is what the evidence supports at the time: Gmail accepted the
+// message and no bounce has come back for it, which the sweep downgrades the moment one does.
+const LAYANAN_GAJI_EMAIL_AKTIF = "Aktif";
+const LAYANAN_GAJI_EMAIL_MATI = "Tidak Aktif";
+// Sending to a proven dead address only manufactures another bounce: Gmail accepts anything
+// on a live domain, so the send would report success while the document went nowhere.
+// Correcting the address blanks S, which is what lifts this.
+// Rows written while S recorded a single send still carry that wording. Translated on read
+// so the pill and the send block treat them alike, and the next send rewrites the cell - a
+// migration nobody has to run, over a column that heals itself.
+const LAYANAN_GAJI_EMAIL_LAMA = { Berhasil: LAYANAN_GAJI_EMAIL_AKTIF, Gagal: LAYANAN_GAJI_EMAIL_MATI };
+
+const LAYANAN_GAJI_ALAMAT_GAGAL =
+    "Alamat e-mail ini terbukti tidak aktif. Perbaiki alamatnya, lalu kirim ulang.";
+
+// index is the sheet column, 0 based - the read starts at A.
+const LAYANAN_GAJI_COLUMNS = [
+    { index: 0,  key: "no" },                        // A
+    { index: 1,  key: "timestamp" },                 // B
+    { index: 2,  key: "namaLengkap" },               // C
+    { index: 3,  key: "nip" },                       // D
+    { index: 4,  key: "email" },                     // E
+    { index: 5,  key: "jenisPegawai" },              // F
+    { index: 6,  key: "pangkat" },                   // G
+    { index: 7,  key: "golongan" },                  // H
+    { index: 8,  key: "jabatan" },                   // I
+    { index: 9,  key: "kelasJabatan" },              // J
+    { index: 10, key: "eselon" },                    // K
+    { index: 11, key: "unitKerja" },                 // L
+    { index: 12, key: "jenisPermintaan" },           // M
+    { index: 13, key: "detailDokumen" },             // N
+    { index: 14, key: "tujuanDokumen" },             // O
+    { index: 15, key: "status" },                    // P
+    { index: 16, key: "petugas" },                   // Q
+    { index: 17, key: "lampiran", berkas: true },     // R
+    { index: 18, key: "statusEmail" },               // S
+    { index: 19, key: "keterangan" },                // T
+];
+const LAYANAN_GAJI_RANGE = `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:T`;
+
+// P, Q and R are adjacent, which is why finishing a row is one updateCells rather than three
+const LAYANAN_GAJI_SELESAI_COLUMN = 15;
+// T, the reason the last e-mail failed. Not adjacent to P:R because S records the antrian
+// mail and must survive an upload, so a finished row is two ranges in one batchUpdate.
+const LAYANAN_GAJI_KETERANGAN_COLUMN = 19;
+// S, the antrian e-mail. Adjacent to T, so a bounce writes the pair as one range.
+const LAYANAN_GAJI_EMAIL_COLUMN = 18;
+// E, the pemohon's address - the one cell of their half the desk may correct
+const LAYANAN_GAJI_EMAIL_ISIAN_COLUMN = 4;
+
+// No bare SPREADSHEET_ID_LAYANAN_GAJI exists, so getSpreadsheetId returns nothing for a
+// year that was never configured. Failing here beats reading an unrelated spreadsheet.
+function layananGajiSpreadsheet(req, res) {
+    const spreadsheetId = getSpreadsheetId(req, 'LAYANAN_GAJI');
+    if (!spreadsheetId) {
+        res.status(400).json({ message: "Spreadsheet Layanan Gaji untuk tahun ini belum dikonfigurasi." });
+        return null;
+    }
+    return spreadsheetId;
+}
+
+// The tab is resolved rather than assumed: updateCells addresses a sheetId, not a name.
+const layananGajiSheetId = (spreadsheetId) =>
+    cached(`id|${spreadsheetId}|${LAYANAN_GAJI_SHEET}`, async () => {
+        const response = await withBackoff(() => sheets2.spreadsheets.get({
+            spreadsheetId, fields: "sheets.properties(sheetId,title)",
+        }));
+        const match = (response.data.sheets || []).find(sheet => sheet.properties?.title === LAYANAN_GAJI_SHEET);
+        if (!match) throw new Error(`Tab "${LAYANAN_GAJI_SHEET}" tidak ditemukan.`);
+        return match.properties.sheetId;
+    });
+
+// One permintaan may ask for several documents, so M holds one jenis per line and R one file
+// name per line beside it. Newline rather than a comma: a jenis label may contain one, and
+// Sheets stacks the lines in the cell without any parsing of its own.
+const LAYANAN_GAJI_PEMISAH = "\n";
+const pecahBaris = (teks) => trimmed(teks).split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+
+// A cell holding several attachments carries one textFormatRun per file rather than the single
+// cell level hyperlink a one file cell has, and values.get returns neither - hence the grid
+// read. The hyperlink fallback is what keeps rows written before this change readable.
+function berkasDariSel(cell) {
+    const teks = String(cell?.formattedValue ?? "");
+    if (!teks.trim()) return [];
+    const runs = cell?.textFormatRuns || [];
+    let posisi = 0;
+    return teks.split(/\r?\n/).map(nama => {
+        const jalan = runs.filter(run => (run.startIndex || 0) <= posisi).pop();
+        posisi += nama.length + 1;
+        return { nama: nama.trim(), url: jalan?.format?.link?.uri || cell?.hyperlink || "" };
+    }).filter(item => item.nama);
+}
+
+// The reverse: names stacked in the cell, each carrying its own link run
+const selBerkasGaji = (daftar) => {
+    if (daftar.length === 0) return {};
+    const runs = [];
+    let posisi = 0;
+    for (const berkas of daftar) {
+        if (berkas.url) runs.push({ startIndex: posisi, format: { link: { uri: berkas.url } } });
+        posisi += berkas.nama.length + 1;
+    }
+    return {
+        userEnteredValue: { stringValue: daftar.map(berkas => berkas.nama).join(LAYANAN_GAJI_PEMISAH) },
+        ...(runs.length > 0 ? { textFormatRuns: runs } : {}),
+    };
+};
+
+function layananGajiToRecord(cells, rowNumber) {
+    const record = { rowNumber };
+    for (const column of LAYANAN_GAJI_COLUMNS) {
+        const cell = cells?.[column.index];
+        record[column.key] = column.berkas ? berkasDariSel(cell) : trimmed(cell?.formattedValue);
+    }
+    record.daftarJenis = pecahBaris(record.jenisPermintaan);
+    if (!record.status) record.status = LAYANAN_GAJI_PROSES;
+    record.statusEmail = LAYANAN_GAJI_EMAIL_LAMA[record.statusEmail] || record.statusEmail;
+    return record;
+}
+
+// Grid data, not values.get: the hyperlink in R comes back no other way.
+async function readLayananGajiRecords(spreadsheetId) {
+    const response = await withBackoff(() => sheets2.spreadsheets.get({
+        spreadsheetId,
+        includeGridData: true,
+        ranges: [LAYANAN_GAJI_RANGE],
+        fields: "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns))))",
+    }));
+    return (response.data.sheets?.[0]?.data?.[0]?.rowData || [])
+        .map((row, index) => layananGajiToRecord(row.values, LAYANAN_GAJI_FIRST_ROW + index))
+        .filter(record => record.namaLengkap !== "" || record.no !== "");
+}
+
+// One Sheets read per minute however many admins have the screen open, and the whole list
+// goes to the browser at once - paging on the client costs nothing, paging here would cost
+// a read per page. Same TTL the Pembayaran BP snapshot uses.
+const layananGajiRowsKey = (spreadsheetId) => `layanan-gaji|${spreadsheetId}`;
+const bacaLayananGaji = (spreadsheetId) => cached(layananGajiRowsKey(spreadsheetId),
+    () => readLayananGajiRecords(spreadsheetId), PEMBAYARAN_BP_SEARCH_TTL_MS);
+const forgetLayananGajiRows = (spreadsheetId) => pembayaranBpCache.delete(layananGajiRowsKey(spreadsheetId));
+
+// --- Layanan Gaji: pantulan ---------------------------------------------------------
+// A send reports that Gmail accepted the message, never that it arrived; a mailbox that does
+// not exist answers minutes later with a bounce into the sender's own inbox. So delivery is
+// established by reading that inbox back, not by anything the send returned.
+
+const PANTULAN_JENDELA = "newer_than:7d";
+const PANTULAN_TTL_MS = 5 * 60 * 1000;
+// id -> the bounce already read, so a sweep re-fetches nothing. Deliberately not a record of
+// what has been *applied*: a bounce that matched no row must stay available, or one sweep
+// against a stale snapshot swallows it and the row keeps claiming the mail arrived.
+const pantulanDibaca = new Map();
+
+// Metadata rather than the whole message, which would drag the original attachment back down.
+// X-Failed-Recipients is the test as well as the source: Gmail sets it on a permanent failure
+// and omits it on a Delay notice, whose text names the same address while Gmail is still
+// retrying for another day. Reading the address out of that text would fail a row that is
+// still on its way.
+async function bacaPantulan(id) {
+    const pesan = await withBackoff(() => gmailGaji.users.messages.get({
+        userId: "me", id, format: "metadata", metadataHeaders: ["X-Failed-Recipients"],
+    }));
+    const gagal = (pesan.data.payload?.headers || [])
+        .find(item => item.name.toLowerCase() === "x-failed-recipients")?.value;
+    return {
+        alamat: (gagal || "").split(",").map(item => item.trim().toLowerCase()).filter(Boolean),
+        snippet: String(pesan.data.snippet || ""),
+    };
+}
+
+// One list call per window however many admins have the screen open, and one metadata call per
+// bounce it has never seen. Never throws: the antrian read must not fail because a sweep did.
+async function cariPantulan() {
+    try {
+        if (!await ensureGajiDriveReady()) return [];
+        const daftar = await withBackoff(() => gmailGaji.users.messages.list({
+            userId: "me", q: `from:mailer-daemon ${PANTULAN_JENDELA}`, maxResults: 50,
+        }));
+        const ids = (daftar.data.messages || []).map(pesan => pesan.id);
+        for (const id of ids) {
+            if (!pantulanDibaca.has(id)) pantulanDibaca.set(id, await bacaPantulan(id));
+        }
+        // Rebuilt from the listing, so an id that has aged out of the window is dropped too
+        for (const id of pantulanDibaca.keys()) {
+            if (!ids.includes(id)) pantulanDibaca.delete(id);
+        }
+        return ids.map(id => pantulanDibaca.get(id)).filter(item => item.alamat.length > 0);
+    } catch (error) {
+        console.error("Gagal membaca pantulan e-mail:", error);
+        return [];
+    }
+}
+
+// Matching runs against the current rows on every sweep, never once against whatever snapshot
+// happened to be loaded when the bounce first appeared. Only rows that disagree are written,
+// so a bounce already recorded costs nothing the next time round.
+//
+// One bounce marks one row: each send produces its own, so an address that submitted three
+// times and failed three times gets three bounces and three rows - matching every row to
+// every bounce would instead fail a delivery that had already succeeded. The newest unmarked
+// row is the one claimed, because rows are only ever appended.
+async function selaraskanPantulan(spreadsheetId, baris) {
+    const pantulan = await cariPantulan();
+    if (pantulan.length === 0) return false;
+
+    const requests = [];
+    const sheetId = await layananGajiSheetId(spreadsheetId);
+    const sel = (record, mulai, values) => requests.push({ updateCells: {
+        range: {
+            sheetId, startRowIndex: record.rowNumber - 1, endRowIndex: record.rowNumber,
+            startColumnIndex: mulai, endColumnIndex: mulai + values.length,
+        },
+        rows: [{ values }],
+        fields: "userEnteredValue",
+    } });
+
+    for (const item of pantulan) {
+        for (const alamat of item.alamat) {
+            const record = [...baris].reverse().find(row =>
+                row.email.toLowerCase() === alamat && row.statusEmail !== LAYANAN_GAJI_EMAIL_MATI);
+            if (!record) continue;
+
+            record.statusEmail = LAYANAN_GAJI_EMAIL_MATI;
+            record.keterangan = `E-mail dipantulkan: ${item.snippet}`.slice(0, 300);
+            sel(record, LAYANAN_GAJI_EMAIL_COLUMN,
+                [selTeksKkp(record.statusEmail), selTeksKkp(record.keterangan)]);
+            // The attachment demonstrably did not arrive, and this status is what puts the
+            // retry button on the row
+            if (record.status === LAYANAN_GAJI_SELESAI) {
+                record.status = LAYANAN_GAJI_GAGAL_EMAIL;
+                sel(record, LAYANAN_GAJI_SELESAI_COLUMN, [selTeksKkp(record.status)]);
+            }
+        }
+    }
+    if (requests.length === 0) return false;
+
+    await withBackoff(() => sheets2.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }));
+    return true;
+}
+
+// The timed sweep answers within five minutes, but a bounce can take a minute or two to come
+// back and the desk is often watching for one it has just caused. This is the same sweep with
+// the interval taken off, so nobody has to reload and wait it out.
+app.post("/layanan-gaji/periksa-email", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const jumlah = baris.filter(row => row.statusEmail === LAYANAN_GAJI_EMAIL_MATI).length;
+        if (await selaraskanPantulan(spreadsheetId, baris)) forgetLayananGajiRows(spreadsheetId);
+        // Dropped so the timed sweep does not answer from a window this check has overtaken
+        pembayaranBpCache.delete(`pantulan|${spreadsheetId}`);
+
+        const baru = baris.filter(row => row.statusEmail === LAYANAN_GAJI_EMAIL_MATI).length - jumlah;
+        return res.status(200).json({
+            message: baru > 0
+                ? `${baru} alamat e-mail ditandai tidak aktif.`
+                : "Belum ada pantulan baru. Coba lagi beberapa menit lagi.",
+            data: baris,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/periksa-email:", error);
+        return res.status(500).json({ message: "Gagal memeriksa status e-mail." });
+    }
+});
+
+// --- Layanan Gaji: sakelar sistem ----------------------------------------------------
+// The public page can be sent back to the Google Form and the old 'Sheet1' queue without a
+// deploy. There is no staging server, so this is the rollback: the pre-existing path is kept
+// alive behind the switch rather than deleted, exactly as the pilot flags elsewhere are.
+
+const TABEL_HILANG = "42P01";  // migration 011 not applied yet
+
+// True when the table is missing, so a server that has not run the migration behaves as it
+// does today rather than falling back to a Google Form nobody is watching any more.
+async function pakaiSistemBaru() {
+    try {
+        const [row] = await sql`SELECT pakai_sistem_baru FROM layanan_gaji_pengaturan WHERE id = 1`;
+        return row ? row.pakai_sistem_baru : true;
+    } catch (error) {
+        if (error.code === TABEL_HILANG) return true;
+        throw error;
+    }
+}
+
+// Public: Gaji.jsx has to know which queue to read and where to point its button before a
+// visitor has done anything, and the answer is one boolean that reveals nothing.
+app.get("/layanan-gaji/pengaturan", async (req, res) => {
+    try {
+        return res.status(200).json({ sistemBaru: await pakaiSistemBaru() });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/pengaturan:", error);
+        // The page is useless without an answer, and the new system is the safe default
+        return res.status(200).json({ sistemBaru: true });
+    }
+});
+
+app.patch("/layanan-gaji/pengaturan", async (req, res) => {
+    try {
+        const sistemBaru = req.body?.sistemBaru === true || req.body?.sistemBaru === "true";
+        await sql`
+            INSERT INTO layanan_gaji_pengaturan (id, pakai_sistem_baru, diubah_oleh, updated_at)
+            VALUES (1, ${sistemBaru}, ${trimmed(req.viewer?.name)}, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                pakai_sistem_baru = EXCLUDED.pakai_sistem_baru,
+                diubah_oleh = EXCLUDED.diubah_oleh,
+                updated_at = NOW()`;
+        return res.status(200).json({
+            message: sistemBaru
+                ? "Halaman Pelayanan Gaji kini memakai formulir dan antrian baru."
+                : "Halaman Pelayanan Gaji dikembalikan ke Google Form dan antrian lama.",
+            sistemBaru,
+        });
+    } catch (error) {
+        if (error.code === TABEL_HILANG) {
+            console.error("layanan_gaji_pengaturan missing - apply migration 011.");
+            return res.status(503).json({ message: "Pengaturan belum tersedia. Terapkan migrasi 011 terlebih dahulu." });
+        }
+        console.error("Error in PATCH /layanan-gaji/pengaturan:", error);
+        return res.status(500).json({ message: "Gagal mengubah pengaturan." });
+    }
+});
+
+// The pre-switch queue, read from 'Sheet1' of the old GAJI spreadsheet with its hidden rows
+// honoured. Untouched from before Layanan Gaji existed - restoring the old behaviour means
+// restoring it exactly, not an approximation of it.
+// Layanan Gaji antrian
+app.get("/bendahara/antrian-gaji", async (req, res) => {
+    try {
+        const spreadsheetIdGaji = getSpreadsheetId(req, 'GAJI');
+        const { page = 1, limit = 5 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        //Get hidden rows metadata
+        const metaResponse = await withBackoff(async () => {
+            return await sheets.spreadsheets.get({
+                spreadsheetId: spreadsheetIdGaji,
+                includeGridData: false,
+                ranges: ["'Sheet1'!A:C"],
+                fields: 'sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))'
+            })
+        })
+
+        const hiddenRowIdx = new Set();
+
+        metaResponse.data.sheets[0].data.forEach(grid => {
+            grid.rowMetadata.forEach((rowMeta, idx) => {
+                if (rowMeta.hiddenByUser || rowMeta.hiddenByFilter) {
+                    hiddenRowIdx.add(idx);      // row index is zero–based
+                }
+            });
+        });
+
+        //Get filtered values
+        const valueResponse = await readRange(sheets, spreadsheetIdGaji, `'Sheet1'!A:C`);
+
+        const visibleRows = valueResponse.data.values.filter(
+            (_, idx) => !hiddenRowIdx.has(idx)
+        );
+
+        // Ensure each row has 3 columns
+        const normalizedRows = visibleRows.slice(1).reverse().map(row => {
+            while (row.length < 3) row.push("");
+            return row;
+        });
+
+        const allRows = normalizedRows.length;
+
+        // Apply pagination
+        const startIndex = (pageNum - 1) * limitNum;
+        const endIndex = startIndex + limitNum;
+        const paginatedRows = normalizedRows.slice(startIndex, endIndex);
+
+        res.json({ data: paginatedRows, rowLength: allRows });
+
+
+    } catch (error) {
+        console.error("Error in fetching gaji antrian data:", error);
+        res.status(500).json({ error: "Failed to fetch data." });
+    }
+
+})
+
+// --- Layanan Gaji: antrian publik ----------------------------------------------------
+// The queue as an anonymous visitor sees it on /layanan-gaji: a number and a status, nothing
+// else. The row it is built from holds NIP, e-mail, pangkat and jabatan for a named person,
+// so this projects two fields rather than dropping the rest - a field that is never built
+// cannot be leaked by a later edit here. Keterangan is deliberately not among them: the app
+// writes bounce notices into it that quote the pemohon's own address.
+// It reads the same 60 second snapshot the admin screen uses, so public traffic adds no
+// Sheets calls at all, and it deliberately does not sweep - an anonymous request must not be
+// able to drive Gmail calls.
+
+const ANTRIAN_PUBLIK_BATAS = 25;
+const ANTRIAN_PUBLIK_IP_BATAS = 120;
+const ANTRIAN_PUBLIK_JENDELA_MS = 5 * 60 * 1000;
+
+app.get("/layanan-gaji/antrian-publik", async (req, res) => {
+    try {
+        // The snapshot caps what this can cost Google, but not what it can cost this server
+        if (!lolosJejak(`publik|${alamatPemohon(req)}`, ANTRIAN_PUBLIK_JENDELA_MS, ANTRIAN_PUBLIK_IP_BATAS)) {
+            return res.status(429).json({ message: "Terlalu banyak permintaan. Silakan coba lagi nanti." });
+        }
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), ANTRIAN_PUBLIK_BATAS);
+        const baris = await bacaLayananGaji(spreadsheetId);
+
+        // Newest first: someone who has just submitted is looking for their own row
+        const mulai = (page - 1) * limit;
+        const data = [...baris].reverse().slice(mulai, mulai + limit)
+            .map(record => [record.no, record.status]);
+
+        return res.status(200).json({ data, rowLength: baris.length });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/antrian-publik:", error);
+        return res.status(500).json({ message: "Gagal memuat antrian." });
+    }
+});
+
+// Swept on the admin's own read rather than on a timer: a bounce nobody is looking at can
+// wait, and this way the sweep costs nothing while the screen is closed.
+const sapuPantulan = (spreadsheetId, baris) => cached(`pantulan|${spreadsheetId}`, async () => {
+    if (await selaraskanPantulan(spreadsheetId, baris)) forgetLayananGajiRows(spreadsheetId);
+    return Date.now();
+}, PANTULAN_TTL_MS);
+
+app.get("/layanan-gaji/antrian", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const baris = await bacaLayananGaji(spreadsheetId);
+        // Mutates baris in place when it finds one, so the response already carries the
+        // correction that was just written rather than showing it a request later
+        await sapuPantulan(spreadsheetId, baris);
+        return res.status(200).json({ data: baris });
+    } catch (error) {
+        console.error("Error in GET /layanan-gaji/antrian:", error);
+        return res.status(500).json({ message: "Gagal memuat antrian Layanan Gaji." });
+    }
+});
+
+const driveFolderIdSlipGaji = process.env.DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI;
+// Same multer as Pembayaran BP: PDF only, same 10 MB cap
+// .any(), not .single(): one permintaan may ask for several documents, and each file arrives
+// under the field name "lampiran-<n>" where n indexes the jenis it answers - the pairing has
+// to survive multer, which keeps files and text fields in separate bags.
+const handleSlipGajiUpload = runPembayaranBpUpload(uploadPembayaranBp.any());
+
+// The folder is on the perbendaharaan uploader account, not on the verifikasi one that
+// owns the spreadsheet - the two identities are unrelated and both are needed here.
+// The jenis is in the file name, which is also how an already stored file is matched back to
+// the jenis it answers - the sheet has one Lampiran column and no room for a second field.
+const namaBerkasGaji = (record, jenis) => {
+    // yyyy-mm-dd hh-mm-ss: the timestamp as the sheet spells it, with the colons swapped for
+    // dashes because Drive shows a colon but Windows refuses to save a file holding one
+    const waktu = getFormattedDate().fullDateTimeFormat.replace(/:/g, "-");
+    return `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(jenis) || "Dokumen"} ${waktu}.pdf`;
+};
+const berkasUntukJenis = (daftar, jenis) =>
+    daftar.find(berkas => berkas.nama.includes(` - ${safePart(jenis)} `));
+
+// Files arrive as lampiran-<n>, n indexing record.daftarJenis. Uploaded only once the row has
+// been found, so a rejected request leaves no orphan in the folder.
+async function unggahLampiranGaji(req, res, record) {
+    if (!driveFolderIdSlipGaji) {
+        console.error("DRIVE_FOLDER_ID_UPLOAD_SLIP_GAJI belum diatur - upload dibatalkan.");
+        res.status(503).json({ message: "Folder penyimpanan Lampiran File belum dikonfigurasi." });
+        return null;
+    }
+    if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return null;
+
+    const baru = [];
+    for (const file of req.files || []) {
+        const posisi = parseInt(String(file.fieldname).split("-")[1], 10);
+        const jenis = record.daftarJenis[posisi];
+        if (!jenis) {
+            res.status(400).json({ message: "Jenis permintaan untuk berkas ini tidak dikenal." });
+            return null;
+        }
+        const nama = namaBerkasGaji(record, jenis);
+        baru.push({ jenis, nama, isi: file.buffer, url: await uploadToDriveFolder(file, driveFolderIdSlipGaji, nama) });
+    }
+    return baru;
+}
+
+// Attaching the finished document is what completes the request, so Status and Petugas are
+// stamped in the same write rather than left for the admin to remember. Petugas comes off
+// the JWT, never off the body. A replacement upload overwrites all three; the superseded
+// Drive file is left in place, as on Pembayaran BP - the row's link is what moves on.
+app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        if (!req.files?.length) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
+            return res.status(400).json({ message: "Baris permintaan tidak dikenal." });
+        }
+
+        // Rows are only ever appended here, so a row number from the snapshot still points
+        // at the same permintaan even once the snapshot itself has gone stale.
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
+
+        const baru = await unggahLampiranGaji(req, res, record);
+        if (!baru) return;
+
+        // Documents are often ready at different times, so an upload adds to what is there
+        // rather than replacing it - only the file answering the same jenis is superseded.
+        const lampiran = [
+            ...record.lampiran.filter(lama =>
+                !baru.some(berkas => lama.nama.includes(` - ${safePart(berkas.jenis)} `))),
+            ...baru.map(berkas => ({ nama: berkas.nama, url: berkas.url })),
+        ];
+
+        const petugas = trimmed(req.viewer?.name);
+        // The document is already safe on Drive, so a bounced mail is a state to record and
+        // retry rather than a failed upload: the desk keeps the file and the pemohon does not
+        // have to send the permintaan again. Only what was just uploaded is attached - the rest
+        // has already been sent.
+        const surat = record.statusEmail === LAYANAN_GAJI_EMAIL_MATI
+            ? { berhasil: false, pesan: LAYANAN_GAJI_ALAMAT_GAGAL }
+            : await cobaKirimSurat(suratDokumen(record, petugas, baru));
+
+        // Selesai only once every jenis the pemohon asked for has a file against it: with
+        // several documents in one permintaan, one upload is rarely the whole job.
+        const lengkap = record.daftarJenis.every(jenis => berkasUntukJenis(lampiran, jenis));
+        const status = !surat.berhasil ? LAYANAN_GAJI_GAGAL_EMAIL
+            : lengkap ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_PROSES;
+
+        await tulisSelesaiLayananGaji(spreadsheetId, rowNumber, {
+            status, petugas, lampiran, keterangan: surat.pesan,
+            statusEmail: surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI,
+        });
+
+        return res.status(200).json({
+            message: surat.berhasil
+                ? `${baru.length} lampiran untuk ${record.namaLengkap || "permintaan ini"} terkirim ke ${record.email}.`
+                : `Lampiran tersimpan, tetapi e-mail gagal dikirim: ${surat.pesan}`,
+            status, petugas, lampiran, keterangan: surat.pesan, emailTerkirim: surat.berhasil,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/lampiran:", error);
+        return res.status(500).json({ message: "Gagal mengunggah lampiran." });
+    }
+});
+
+// Status, Petugas, Lampiran, Status E-mail and Keterangan are P through T, one unbroken run,
+// so finishing a row is a single range. S belongs in it now that every send re-tests the
+// address rather than only the antrian mail claiming a verdict over it.
+async function tulisSelesaiLayananGaji(spreadsheetId, rowNumber, { status, petugas, lampiran, statusEmail, keterangan }) {
+    const sheetId = await layananGajiSheetId(spreadsheetId);
+    await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ updateCells: {
+            range: {
+                sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                startColumnIndex: LAYANAN_GAJI_SELESAI_COLUMN,
+                endColumnIndex: LAYANAN_GAJI_KETERANGAN_COLUMN + 1,
+            },
+            rows: [{ values: [
+                selTeksKkp(status), selTeksKkp(petugas), selBerkasGaji(lampiran),
+                selTeksKkp(statusEmail), selTeksKkp(keterangan),
+            ] }],
+            fields: "userEnteredValue,textFormatRuns",
+        } }] },
+    }));
+    forgetLayananGajiRows(spreadsheetId);
+}
+
+// A rowNumber only means something against the snapshot it came from, and a delete shifts
+// every row below it up. Timestamp is the one field two permintaan cannot share, so it is
+// what proves the client is still talking about the row it thinks it is - without it, an
+// upload made from a stale table could mail one pemohon's document to another.
+function barisTakCocok(record, req, res) {
+    const stempel = trimmed(req.body?.timestamp);
+    if (!stempel || stempel === record.timestamp) return false;
+    res.status(409).json({ message: "Data antrian sudah berubah. Muat ulang halaman lalu coba lagi." });
+    return true;
+}
+
+// Removing a permintaan outright. Located by timestamp against a freshly read sheet rather
+// than by the rowNumber the browser sent: a delete is the one operation that invalidates
+// every other row number, so it must not trust one. The Drive file is deliberately left in
+// place - the row can no longer reach it, but an accidental delete stays recoverable.
+app.delete("/layanan-gaji/antrian", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const stempel = trimmed(req.body?.timestamp);
+        if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
+            return res.status(400).json({ message: "Baris permintaan tidak dikenal." });
+        }
+
+        const sheetId = await layananGajiSheetId(spreadsheetId);
+        const terhapus = await queuePembayaranBpWrite(spreadsheetId, async () => {
+            const segar = await readLayananGajiRecords(spreadsheetId);
+            const record = stempel
+                ? segar.find(row => row.timestamp === stempel)
+                : segar.find(row => row.rowNumber === rowNumber);
+            if (!record) return null;
+
+            await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: { requests: [{ deleteDimension: { range: {
+                    sheetId, dimension: "ROWS",
+                    startIndex: record.rowNumber - 1, endIndex: record.rowNumber,
+                } } }] },
+            }));
+            return record;
+        });
+        forgetLayananGajiRows(spreadsheetId);
+
+        if (!terhapus) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        return res.status(200).json({
+            message: `Permintaan No. ${terhapus.no} atas nama ${terhapus.namaLengkap || "-"} dihapus.`,
+        });
+    } catch (error) {
+        console.error("Error in DELETE /layanan-gaji/antrian:", error);
+        return res.status(500).json({ message: "Gagal menghapus permintaan." });
+    }
+});
+
+// Correcting the address on a row whose e-mail bounced. Writes E, then clears S and T: both
+// are the verdict on the address that has just been replaced, and leaving S at Gagal would
+// block every send to the corrected address as well. The bounce itself stays in the mailbox,
+// which is the real record; the sweep can mark the new address on its own evidence.
+app.patch("/layanan-gaji/email", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const email = trimmed(req.body?.email);
+        if (!EMAIL_POLA.test(email)) return res.status(400).json({ message: "Alamat e-mail tidak valid." });
+        if (!await domainMenerimaSurat(email)) {
+            return res.status(400).json({ message: "Domain alamat e-mail tidak ditemukan. Periksa kembali penulisannya." });
+        }
+
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
+
+        const sheetId = await layananGajiSheetId(spreadsheetId);
+        const sel = (mulai, values) => ({ updateCells: {
+            range: {
+                sheetId, startRowIndex: rowNumber - 1, endRowIndex: rowNumber,
+                startColumnIndex: mulai, endColumnIndex: mulai + values.length,
+            },
+            rows: [{ values }],
+            fields: "userEnteredValue",
+        } });
+        await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: [
+                sel(LAYANAN_GAJI_EMAIL_ISIAN_COLUMN, [selTeksKkp(email)]),
+                sel(LAYANAN_GAJI_EMAIL_COLUMN, [selTeksKkp(""), selTeksKkp("")]),
+            ] },
+        }));
+        forgetLayananGajiRows(spreadsheetId);
+
+        return res.status(200).json({ message: `Alamat e-mail diubah menjadi ${email}.`, email });
+    } catch (error) {
+        console.error("Error in PATCH /layanan-gaji/email:", error);
+        return res.status(500).json({ message: "Gagal mengubah alamat e-mail." });
+    }
+});
+
+// Retry after a bounced document e-mail. The file is fetched back from Drive rather than
+// re-uploaded, so a retry costs the admin nothing and cannot land a second copy in the folder.
+app.post("/layanan-gaji/kirim-ulang", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const rowNumber = Number(trimmed(req.body?.rowNumber));
+        const baris = await bacaLayananGaji(spreadsheetId);
+        const record = baris.find(row => row.rowNumber === rowNumber);
+        if (!record) return res.status(404).json({ message: "Permintaan tidak ditemukan." });
+        if (barisTakCocok(record, req, res)) return;
+        if (record.lampiran.length === 0) {
+            return res.status(400).json({ message: "Belum ada lampiran untuk dikirim." });
+        }
+        // Refused rather than attempted: a retry to the same dead address is one more bounce
+        if (record.statusEmail === LAYANAN_GAJI_EMAIL_MATI) {
+            return res.status(400).json({ message: LAYANAN_GAJI_ALAMAT_GAGAL });
+        }
+        if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return;
+
+        // Everything on the row, not just whatever failed last time: which files a given send
+        // carried is not recorded anywhere, and re-sending one the pemohon already has costs
+        // nothing next to leaving one out.
+        const lampiran = [];
+        for (const berkas of record.lampiran) {
+            const fileId = driveFileIdFromLink(berkas.url);
+            if (!fileId) return res.status(400).json({ message: `Tautan lampiran "${berkas.nama}" tidak dikenal.` });
+            const isi = await driveGaji.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+            lampiran.push({ nama: berkas.nama, isi: Buffer.from(isi.data) });
+        }
+
+        const petugas = trimmed(record.petugas) || trimmed(req.viewer?.name);
+        const surat = await cobaKirimSurat(suratDokumen(record, petugas, lampiran));
+        const lengkap = record.daftarJenis.every(jenis => berkasUntukJenis(record.lampiran, jenis));
+        const status = !surat.berhasil ? LAYANAN_GAJI_GAGAL_EMAIL
+            : lengkap ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_PROSES;
+
+        // Q and R already hold the right values, but the range has to start at P, so both are
+        // rewritten as they stand rather than read back and diffed
+        await tulisSelesaiLayananGaji(spreadsheetId, rowNumber, {
+            status, petugas, lampiran: record.lampiran, keterangan: surat.pesan,
+            statusEmail: surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI,
+        });
+
+        return res.status(surat.berhasil ? 200 : 502).json({
+            message: surat.berhasil
+                ? `Lampiran terkirim ke ${record.email}.`
+                : `E-mail masih gagal dikirim: ${surat.pesan}`,
+            status, keterangan: surat.pesan, emailTerkirim: surat.berhasil,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/kirim-ulang:", error);
+        return res.status(500).json({ message: "Gagal mengirim ulang lampiran." });
+    }
+});
+
+// --- Layanan Gaji: form permintaan --------------------------------------------------
+// The public entry point: Bakamla staff hold no account, so this route is in PUBLIC_ROUTES
+// and the checks below are the only thing between the internet and the sheet. It writes A:T
+// in one go, leaving P:R blank - Status, Petugas and Lampiran are the gaji desk's half of the
+// row, and a blank Status already reads as "Sedang Diproses".
+
+// Kelas Jabatan and Eselon are absent on purpose: neither applies to every pegawai.
+const LAYANAN_GAJI_WAJIB = ["namaLengkap", "nip", "email", "jenisPegawai", "pangkat", "golongan",
+    "jabatan", "unitKerja", "jenisPermintaan", "detailDokumen", "tujuanDokumen"];
+// Roomy enough for several Jenis Permintaan stacked in one cell
+const LAYANAN_GAJI_BATAS_PANJANG = 500;
+
+const LAYANAN_GAJI_IP_JENDELA_MS = 60 * 60 * 1000;
+const LAYANAN_GAJI_IP_BATAS = 5;
+const LAYANAN_GAJI_ULANG_MS = 10 * 60 * 1000;
+
+// Both guards are one Map of key -> submission times, filtered to the window on every read,
+// so nothing accumulates and neither costs a Sheets call. In process only: a restart forgets
+// them, which is the right trade for a guard whose job is to blunt a flood, not to audit one.
+const layananGajiJejak = new Map();
+function lolosJejak(kunci, jendelaMs, batas) {
+    const sekarang = Date.now();
+    if (layananGajiJejak.size > 500) {
+        for (const [lama, waktu] of layananGajiJejak) {
+            if (sekarang - waktu[waktu.length - 1] > LAYANAN_GAJI_IP_JENDELA_MS) layananGajiJejak.delete(lama);
+        }
+    }
+    const jejak = (layananGajiJejak.get(kunci) || []).filter(waktu => sekarang - waktu < jendelaMs);
+    if (jejak.length >= batas) return false;
+    layananGajiJejak.set(kunci, [...jejak, sekarang]);
+    return true;
+}
+
+// x-forwarded-for over req.ip: the app sits behind a proxy, so req.ip is the proxy for
+// everyone and would rate limit the whole of Bakamla as one visitor.
+const alamatPemohon = (req) => trimmed(req.headers["x-forwarded-for"]).split(",")[0].trim() || req.ip || "?";
+
+// C..O, the pemohon's half of the row. No and Timestamp are stamped by the server, and P..R
+// belong to the gaji desk, so neither is ever taken from the body.
+const LAYANAN_GAJI_ISIAN = LAYANAN_GAJI_COLUMNS.slice(2, LAYANAN_GAJI_SELESAI_COLUMN);
+
+function periksaFormGaji(body) {
+    const nilai = {};
+    for (const column of LAYANAN_GAJI_ISIAN) {
+        const isi = body?.[column.key];
+        // Jenis Permintaan arrives as an array when the pemohon ticks more than one, and goes
+        // into the cell one per line - the same shape the sheet is read back in
+        nilai[column.key] = Array.isArray(isi)
+            ? isi.map(item => trimmed(item)).filter(Boolean).join(LAYANAN_GAJI_PEMISAH)
+            : trimmed(isi);
+    }
+
+    for (const key of LAYANAN_GAJI_WAJIB) {
+        if (!nilai[key]) return { pesan: "Semua isian wajib harus diisi." };
+    }
+    if (Object.values(nilai).some(isi => isi.length > LAYANAN_GAJI_BATAS_PANJANG)) {
+        return { pesan: `Isian melebihi ${LAYANAN_GAJI_BATAS_PANJANG} karakter.` };
+    }
+    if (!EMAIL_POLA.test(nilai.email)) return { pesan: "Alamat e-mail tidak valid." };
+    // No shape check on NIP/NRP: the two are numbered differently, some carry letters or
+    // punctuation, and refusing a real one is worse than accepting an odd one. Required and
+    // length capped like every other field, nothing more.
+    return { nilai };
+}
+
+app.post("/layanan-gaji/form", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const { nilai, pesan } = periksaFormGaji(req.body);
+        if (pesan) return res.status(400).json({ message: pesan });
+        if (!await domainMenerimaSurat(nilai.email)) {
+            return res.status(400).json({ message: "Domain alamat e-mail tidak ditemukan. Periksa kembali penulisannya." });
+        }
+
+        if (!lolosJejak(`ip|${alamatPemohon(req)}`, LAYANAN_GAJI_IP_JENDELA_MS, LAYANAN_GAJI_IP_BATAS)) {
+            return res.status(429).json({ message: "Terlalu banyak permintaan. Silakan coba lagi nanti." });
+        }
+        // Counted only once the request is otherwise sound, so a rejected form does not spend
+        // the pemohon's quota on a typo they are about to fix
+        if (!lolosJejak(`ulang|${nilai.nip}|${nilai.jenisPermintaan}`, LAYANAN_GAJI_ULANG_MS, 1)) {
+            return res.status(409).json({ message: "Permintaan yang sama baru saja dikirim dan sedang diproses." });
+        }
+
+        // Serialised on the same queue Pembayaran BP uses: two submits would otherwise read the
+        // same last row and one would overwrite the other. Column A only - the narrowest read
+        // that answers both where the row goes and what number it gets.
+        const hasil = await queuePembayaranBpWrite(spreadsheetId, async () => {
+            // Both ranges in one batchGet: the column answers where the row goes, the counter
+            // what number it gets, and neither is worth a call of its own
+            const [kolom, hitungan] = (await readRanges(sheets2, spreadsheetId, [
+                `'${LAYANAN_GAJI_SHEET}'!A${LAYANAN_GAJI_FIRST_ROW}:A`,
+                `'${LAYANAN_GAJI_SHEET}'!${LAYANAN_GAJI_COUNTER_CELL}`,
+            ])).data.valueRanges;
+            const isi = kolom.values || [];
+            const nomor = isi.map(row => parseInt(row?.[0], 10)).filter(Number.isInteger);
+            // Never below what the counter has issued, and never below what is on the sheet:
+            // the counter is authoritative for deleted rows, the rows for hand typed ones
+            const berikutnya = Math.max(parseInt(hitungan.values?.[0]?.[0], 10) || 0, 0, ...nomor) + 1;
+            const baris = { ...nilai, no: berikutnya, timestamp: getFormattedDate().fullDateTimeVerifFormat };
+
+            // Mailed before the row is written, not after, so the outcome lands in the same
+            // write as the permintaan itself - one Sheets write per submission rather than two,
+            // and the row never briefly claims an e-mail that had not been attempted.
+            const surat = await cobaKirimSurat(suratAntrian(baris));
+            baris.statusEmail = surat.berhasil ? LAYANAN_GAJI_EMAIL_AKTIF : LAYANAN_GAJI_EMAIL_MATI;
+            baris.keterangan = surat.pesan;
+
+            const row = LAYANAN_GAJI_FIRST_ROW + isi.length;
+            // Row and counter in one batchUpdate. Built from the column table so a new column
+            // cannot land in the wrong cell, and RAW throughout: an 18 digit NIP would come
+            // back in scientific notation once Sheets had parsed it.
+            await writeRanges(sheets2, spreadsheetId, [
+                {
+                    range: `'${LAYANAN_GAJI_SHEET}'!A${row}:T${row}`,
+                    values: [LAYANAN_GAJI_COLUMNS.map(column => baris[column.key] ?? "")],
+                },
+                { range: `'${LAYANAN_GAJI_SHEET}'!${LAYANAN_GAJI_COUNTER_CELL}`, values: [[berikutnya]] },
+            ]);
+            return { no: berikutnya, surat };
+        });
+        forgetLayananGajiRows(spreadsheetId);
+
+        return res.status(201).json({
+            message: `Permintaan Anda tercatat dengan nomor antrian ${hasil.no}.`,
+            no: hasil.no, status: LAYANAN_GAJI_PROSES, emailTerkirim: hasil.surat.berhasil,
+        });
+    } catch (error) {
+        console.error("Error in POST /layanan-gaji/form:", error);
+        return res.status(500).json({ message: "Gagal mengirim permintaan. Silakan coba lagi." });
     }
 });
 

@@ -36,6 +36,13 @@
     grid-template-rows: 90px 1fr;
 }
 
+/* The 90px above is a fixed track sized for a single row of filters, and the table starts at
+   90px whatever the filters actually need - Layanan Gaji puts Cari on a line of its own, which
+   overruns it. Scoped rather than changed in place: that rule is shared with six screens. */
+.pengajuan.pengajuan-layanan {
+    grid-template-rows: auto 1fr;
+}
+
 .pengajuan-filter {
     background-color:none;
     margin: 8px 8px;
@@ -726,6 +733,138 @@
     color: #8A6100;
 }
 
+/* Layanan Gaji: the switch that decides what the public page serves. Above the filters and
+   visually apart from them - it changes what every visitor sees, not what this table shows. */
+.lg-sistem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 10px 14px;
+    border: 1px solid #E4E9F0;
+    border-radius: 10px;
+    background-color: #FBFCFE;
+}
+
+.lg-sistem div {
+    display: flex;
+    flex-direction: column;
+}
+
+.lg-sistem b {
+    font-size: 0.95rem;
+}
+
+.lg-sistem span {
+    font-size: 0.85rem;
+    color: #6B7A90;
+}
+
+/* Layanan Gaji: the per jenis upload dialog */
+.ulg {
+    padding: 24px 26px;
+    color: #00204A;
+}
+
+.ulg h2 {
+    margin: 0 0 6px 0;
+    font-size: 1.25rem;
+}
+
+.ulg-sub {
+    margin: 0 0 18px 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #41506B;
+}
+
+.ulg-daftar {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ulg-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #E4E9F0;
+    border-radius: 10px;
+}
+
+.ulg-jenis {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-size: 0.95rem;
+}
+
+.ulg-jenis em {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    font-style: normal;
+    overflow-wrap: anywhere;
+}
+
+.ulg-ada {
+    color: #0F7A3D;
+}
+
+.ulg-baru {
+    color: #00449C;
+    font-weight: 600;
+}
+
+.ulg-kosong {
+    color: #8A6100;
+}
+
+.ulg-catatan {
+    margin: 16px 0 0 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #6B7A90;
+}
+
+.ulg-aksi {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* Layanan Gaji: the editable e-mail inside a row's detail panel */
+.lg-email {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.lg-email-input {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    border: 1px solid #C9D2E0;
+    border-radius: 6px;
+    outline: none;
+}
+
+.lg-email-input:focus {
+    border-color: #00449C;
+}
+
 .dp-actions {
     display: flex;
     align-items: center;
@@ -1113,19 +1252,27 @@
     z-index: 99;
 }
 
+/* height, not min-height, used to be fixed at 210px with two equal rows - fine for the one
+   line default, but a message naming a person and a file ran into the border and out of the
+   box. The message row now takes what it needs and the buttons keep to their own. */
 .popup {
     position: inherit;
     display: grid;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: 1fr auto;
+    box-sizing: border-box;
     width: 550px;
-    height: 210px;
+    max-width: 90vw;
+    height: auto;
+    min-height: 210px;
     background-color: #f5f6fa;
     border-radius: 20px;
 }
 
 .popup.ketentuan {
     width: 80%;
+    max-width: none;
     height: 80%;
+    overflow-y: auto;
 }
 
 .ketentuan-text {
@@ -1138,12 +1285,24 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 28px 40px 0 40px;
     font-size: 1rem;
     font-weight: 400;
 }
 
+/* The h2 carries a browser default margin that fought the padding above, and at heading size
+   a two line message wrapped badly against the 550px width */
+.popup-text h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.55;
+    text-align: center;
+}
+
 .popup-footer {
-    margin-top: 30px;
+    margin-top: 24px;
+    padding-bottom: 24px;
 }
 
 .popup-btn {
@@ -2412,6 +2571,52 @@ input[type="number"]::-webkit-inner-spin-button {
 /* The shared 50px is sized for the old inline run and leaves a hole in a gap-based row */
 .bar-cari .spm-button {
     margin-left: 0;
+}
+
+/* Cari takes a line of its own: it is the only control here anyone types into, and sharing a
+   row with two selects and two buttons left it too narrow to hold a name. */
+.bar-cari.lg-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.lg-filter-baris {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+}
+
+/* .type-btn is 230px, sized for a unit kerja name; on its own line the search box can hold
+   the whole of what people paste into it */
+.lg-cari {
+    width: 320px;
+    max-width: 100%;
+}
+
+/* .spm-button is a fixed 80x25 pill sized for the word "Reset", so a real sentence and an
+   icon overflow it. Two classes rather than one, because that rule is declared further down
+   the file and would otherwise win on order. */
+.spm-button.lg-periksa {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    height: auto;
+    min-height: 30px;
+    padding: 4px 16px;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.spm-button.lg-periksa:disabled {
+    background-color: #7A8699;
+    box-shadow: none;
+    cursor: not-allowed;
 }
 
 /* Inside the card, under its title and above the table, on the same 35px gutter the head and

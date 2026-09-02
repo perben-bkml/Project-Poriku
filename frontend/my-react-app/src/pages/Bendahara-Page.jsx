@@ -14,6 +14,7 @@ import KirimDokumenGaji from "../components/bendahara/Kirim-Dokumen-Gaji.jsx";
 import PembayaranBp from "../components/bendahara/Pembayaran-Bp.jsx";
 import PembayaranTup from "../components/bendahara/Pembayaran-Tup.jsx";
 import KelolaKkp from "../components/bendahara/Kelola-Kkp.jsx";
+import LayananGaji from "../components/bendahara/Layanan-Gaji.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
 // Import Static Component
@@ -30,6 +31,7 @@ import MonitorIcon from '@mui/icons-material/Monitor';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CalculateIcon from '@mui/icons-material/Calculate';
+import RequestPageIcon from '@mui/icons-material/RequestPage';
 
 // Single source of truth for both the sidebar and the access check, so the two cannot
 // drift. "master admin" is never listed - it opens everything.
@@ -46,6 +48,9 @@ const MENU_ROLES = {
     "monitoring-drpp": ["admin"],
     "aksi-drpp": ["admin"],
     "monitor-data-gaji": ["admin", "admin_gaji"],
+    // The permintaan rows carry NIP, pangkat and jabatan for named staff, so a plain
+    // admin is left out here even though Monitor Data Gaji lets one read
+    "layanan-gaji": ["admin_gaji"],
     "pembayaran-bp": ["admin"],
     "pembayaran-tup": ["admin"],
     // SBM is reference data an admin maintains and only an admin calculates against
@@ -72,6 +77,7 @@ const MENU_BUTTONS = [
     {name: "lihat-antrian", label: "Lihat Antrian", Icon: ChecklistIcon},
     {name: "SPM-bendahara", label: "SPM Bendahara", Icon: FindInPageIcon},
     {name: "monitor-data-gaji", label: "Monitor Data Gaji", Icon: PaymentsIcon},
+    {name: "layanan-gaji", label: "Layanan Gaji", Icon: RequestPageIcon},
     {name: "pembayaran-bp", label: "Pembayaran BP", Icon: ReceiptLongIcon},
     // labelUser: a user sees only the SBM kalkulator inside this screen, so the menu is
     // named for what they can actually do there rather than for the admin screen it is part of
@@ -192,6 +198,7 @@ function BendaharaPage(props) {
             case "pembayaran-bp":     return <PembayaranBp changeComponent={setButtonSelect} />
             case "pembayaran-tup":    return <PembayaranTup changeComponent={setButtonSelect} />
             case "kelola-kkp":        return <KelolaKkp />
+            case "layanan-gaji":      return <LayananGaji />
             case "edit-dokumen-gaji":
                 return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:

@@ -412,5 +412,189 @@ const kkpWarnaUnit = (indeks) => indeks < 0
     };
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit };
+// Layanan Gaji. Twins of LAYANAN_GAJI_PROSES/LAYANAN_GAJI_SELESAI in server.js - a blank
+// Status cell is served as "Sedang Diproses", and the upload route stamps "Selesai".
+const layananGajiStatus = ["Sedang Diproses", "Selesai", "Gagal Kirim Email File"];
+
+// Its own palette rather than DAFTAR_STATUS_STYLE: neither label is in that map, and adding
+// them there would repaint Pembayaran BP's SELESAI along with them. Amber in progress, green
+// done - the same language as the pengajuan pills.
+const LAYANAN_GAJI_STATUS_STYLE = {
+    "sedang diproses":        {bg: "#FFF1CF", fg: "#8A6100"},
+    "selesai":                {bg: "#D6F5E1", fg: "#0F7A3D"},
+    "gagal kirim email file": {bg: "#FDE0E0", fg: "#A81E1E"},
+};
+const layananGajiStatusStyle = (status) =>
+    LAYANAN_GAJI_STATUS_STYLE[String(status ?? "").trim().toLowerCase()]
+    || LAYANAN_GAJI_STATUS_STYLE["sedang diproses"];
+
+// Column S, the verdict on the row's address. Blank means untested - rows written before the
+// mailer existed, and rows whose address was just corrected - so an unset value is left
+// unstyled rather than reported as a failure that never happened.
+const LAYANAN_GAJI_EMAIL_STYLE = {
+    "aktif":       {bg: "#D6F5E1", fg: "#0F7A3D"},
+    "tidak aktif": {bg: "#FDE0E0", fg: "#A81E1E"},
+};
+// Twin of LAYANAN_GAJI_EMAIL_MATI in server.js: the address is known not to receive mail, so
+// every send to it is blocked until the address is corrected.
+const layananGajiEmailGagal = "Tidak Aktif";
+const layananGajiEmailStyle = (status) =>
+    LAYANAN_GAJI_EMAIL_STYLE[String(status ?? "").trim().toLowerCase()] || null;
+
+// Everything the row carries that the table itself does not show. The five promoted
+// columns (No., Nama Lengkap, Jenis Permintaan, Status, Petugas) are deliberately absent:
+// the dropdown is the rest of the permintaan, not a repeat of the row above it.
+const layananGajiDetailFields = [
+    {key: "timestamp", label: "Timestamp"},
+    {key: "nip", label: "NIP/NRP"},
+    {key: "email", label: "E-mail"},
+    {key: "jenisPegawai", label: "Jenis Pegawai"},
+    {key: "pangkat", label: "Pangkat"},
+    {key: "golongan", label: "Golongan"},
+    {key: "jabatan", label: "Jabatan"},
+    {key: "kelasJabatan", label: "Kelas Jabatan Tunjangan Kinerja"},
+    {key: "eselon", label: "Tunjangan Jabatan Struktural - Eselon"},
+    {key: "unitKerja", label: "Unit Kerja"},
+    {key: "detailDokumen", label: "Detail Dokumen"},
+    {key: "tujuanDokumen", label: "Tujuan Dokumen"},
+    {key: "keterangan", label: "Keterangan"},
+];
+
+// Input-Form-Gaji.jsx, the public form. The sheet holds no data validation, so these lists
+// are the only thing keeping a column spellable one way - correct them here and both the
+// form and every filter built on the column follow.
+const layananGajiPegawai = ["PNS", "PPPK", "TNI", "Polri"];
+
+const layananGajiGolongan = [
+    "I.a", "I.b", "I.c", "I.d",
+    "II.a", "II.b", "II.c", "II.d",
+    "III.a", "III.b", "III.c", "III.d",
+    "IV.a", "IV.b", "IV.c", "IV.d", "IV.e",
+];
+const layananGajiKelasJabatan = Array.from({length: 17}, (item, index) => String(index + 1));
+const layananGajiEselon = ["I.a", "I.b", "II.a", "II.b", "III.a", "III.b", "IV.a", "IV.b"];
+
+const layananGajiUnitKerja = [
+    "Sekretariat Utama",
+    "Deputi Bidang Kebijakan dan Strategi",
+    "Deputi Bidang Operasi dan Latihan",
+    "Deputi Bidang Informasi, Hukum, dan Kerja Sama",
+    "Inspektorat",
+    "Unit Penindakan Hukum",
+    "KPIML",
+    "Zona Maritim Barat",
+    "Zona Maritim Tengah",
+    "Zona Maritim Timur",
+    "Pangkalan Armada Bakamla Batam",
+    "Pangkalan Armada Bakamla Serei",
+    "Pangkalan Armada Bakamla Ambon",
+    "SPKKL Manembo Nembo",
+    "SPKKL Kema",
+    "SPKKL Tarakan",
+    "SPKKL Bali",
+    "SPKKL Ambon",
+    "SPKKL Kupang",
+    "SPKKL Tual",
+    "SPKKL Jayapura",
+    "SPKKL Merauke",
+    "SPKKL Aceh",
+    "SPKKL Natuna",
+    "SPKKL TBK",
+    "SPKKL Teluk Mata Ikan",
+    "SPKKL Sambas",
+    "Stasiun Bumi Manembo Nembo",
+    "Stasiun Bumi Bangka Belitung",
+    "Stasiun Bumi Semarang",
+    "KN Tanjung Datu 301",
+    "KN Pulau Nipah 321",
+    "KN Pulau Marore 322",
+    "KN Pulau Dana 323",
+    "KN Bintang Laut 401",
+    "KN Singa Laut 402",
+    "KN Kuda Laut 403",
+    "KN Gajah Laut 404",
+    "KN Ular Laut 405",
+    "KN Belut Laut 406",
+    "Catamaran 501 Bangka Belitung",
+    "Catamaran 502 Kupang",
+    "Catamaran 503 Batam",
+    "Catamaran 504 Jakarta",
+    "Catamaran 505 Sambas",
+    "Catamaran 506 Serei",
+    "Catamaran 507 Tual",
+    "Catamaran 508 Batam",
+    "RHIB 87-02 Manembo Nembo",
+    "RHIB 87-04 Bali",
+    "RHIB 87-05 Batam",
+    "RHIB 87-06 Pangkalan Ambon",
+    "RHIB 87-07 Jakarta",
+    "RHIB 87-08 Pangkalan Ambon",
+    "RHIB 87-11 Jakarta",
+    "RHIB 87-12 Jakarta",
+    "HSC 32-01 Batam",
+    "HSC 32-02 Batam",
+    "HSC 32-03 Tengah",
+    "Lainnya",
+];
+
+const layananPangkat = [
+    "Laksamana Madya Bakamla",
+    "Laksamana Muda Bakamla",
+    "Laksamana Pertama Bakamla",
+    "Kolonel Bakamla",
+    "Letnan Kolonel Bakamla",
+    "Mayor Bakamla",
+    "Kapten Bakamla",
+    "Lettu Bakamla",
+    "Letda Bakamla",
+    "Peltu Bakamla",
+    "Pelda Bakamla",
+    "Serma Bakamla",
+    "Serka Bakamla",
+    "Sertu Bakamla",
+    "Serda Bakamla",
+    "Kopka Bakamla",
+    "Koptu Bakamla",
+    "Kopda Bakamla",
+    "Lainnya",
+];
+
+// The five documents Gaji.jsx already advertises on the same page
+const layananGajiPermintaan = [
+    "Slip Gaji",
+    "Surat Keterangan Penghasilan",
+    "Surat Keterangan KP4",
+    "Dokumen Lain Berkaitan dengan Gaji/Tunjangan Kinerja",
+];
+
+// Twin of LAYANAN_GAJI_WAJIB in server.js. Kelas Jabatan and Eselon carry no wajib flag
+// because neither applies to every pegawai; the backend refuses the rest when blank.
+const layananGajiFormFields = [
+    {key: "namaLengkap", label: "Nama Lengkap (dengan gelar)", wajib: true, autoComplete: "name"},
+    // No inputMode and no shape check: NIP and NRP are numbered differently and some carry
+    // letters, so the form takes what the pemohon has rather than refusing a real one
+    {key: "nip", label: "NIP/NRP", wajib: true},
+    {key: "email", label: "E-mail", wajib: true, type: "email", autoComplete: "email",
+        petunjuk: "Dokumen dikirim ke alamat ini"},
+    {key: "jenisPegawai", label: "Jenis Pegawai", wajib: true, pilihan: layananGajiPegawai},
+    {key: "pangkat", label: "Pangkat", wajib: true, pilihan: layananPangkat},
+    {key: "golongan", label: "Golongan", wajib: true, pilihan: layananGajiGolongan},
+    {key: "jabatan", label: "Jabatan", wajib: true},
+    {key: "kelasJabatan", label: "Kelas Jabatan Tunjangan Kinerja", pilihan: layananGajiKelasJabatan},
+    {key: "eselon", label: "Tunjangan Jabatan Struktural - Eselon", pilihan: layananGajiEselon,
+        petunjuk: "Kosongkan bila tidak menjabat struktural"},
+    // cari: the list runs past sixty entries, so it is typed into rather than scrolled
+    {key: "unitKerja", label: "Unit Kerja", wajib: true, pilihan: layananGajiUnitKerja, cari: true},
+    // banyak: one permintaan may ask for several documents at once, and the desk answers each
+    // with its own file. Checkboxes rather than a multi-select, which is unusable on a phone.
+    {key: "jenisPermintaan", label: "Jenis Permintaan Dokumen", wajib: true, lebar: true,
+        banyak: true, pilihan: layananGajiPermintaan, petunjuk: "Boleh pilih lebih dari satu"},
+    {key: "detailDokumen", label: "Detail Dokumen", wajib: true, baris: 3, lebar: true,
+        petunjuk: "Contoh: Slip Gaji bulan Januari sampai Maret 2026"},
+    {key: "tujuanDokumen", label: "Tujuan Dokumen", wajib: true, baris: 2, lebar: true,
+        petunjuk: "Contoh: Pengajuan pinjaman kredit bank"},
+];
+
+
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
 

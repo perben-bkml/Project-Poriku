@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate, {LoadingScreen} from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {SubmitButton} from "../../ui/buttons.jsx";
-import {statusPegawaiOptions} from "./head-data.js";
+import {statusPegawaiOptions, mediaKirimOptions} from "./head-data.js";
 
 const MAX_FILE_MB = 10;
 
@@ -15,12 +15,21 @@ export default function KirimDokumenGaji(props) {
     const passedData = props.passedData;
 
     //State
+    const [jenisSurat, setJenisSurat] = useState(
+        props.editTarget === "surat-masuk" ? "Biasa" : "Gaji"
+    );
+    const isBiasa = jenisSurat === "Biasa";
+
     const [formData, setFormData] = useState({
         tanggalSurat: "",
         nomorSurat: "",
+        // Gaji-only fields:
         namaTercantum: "",
         statusPegawai: "",
         keteranganSurat: "",
+        // Biasa-only fields:
+        keterangan: "",
+        mediaKirim: "",
     });
     const [file, setFile] = useState(null);
     const [fileError, setFileError] = useState("");
@@ -36,7 +45,7 @@ export default function KirimDokumenGaji(props) {
         if (!field) return;
         field.style.height = "auto";
         field.style.height = `${field.scrollHeight}px`;
-    }, [formData.keteranganSurat, isFetching]);
+    }, [formData.keteranganSurat, formData.keterangan, isFetching, jenisSurat]);
 
     function backToMonitor() {
         props.changeComponent("monitor-data-gaji");
@@ -54,13 +63,23 @@ export default function KirimDokumenGaji(props) {
         let cancelled = false;
         (async () => {
             try {
-                const response = await apiClient.get(`/dokumen-gaji/${passedData.rowNumber}`, {
+                const endpoint = props.editTarget === "surat-masuk"
+                    ? `/surat-masuk/${passedData.rowNumber}`
+                    : `/dokumen-gaji/${passedData.rowNumber}`;
+                const response = await apiClient.get(endpoint, {
                     params: {expectedNo: passedData.no, expectedNomorSurat: passedData.nomorSurat}
                 });
                 if (cancelled) return;
-                const {tanggalSurat, nomorSurat, namaTercantum, statusPegawai, keteranganSurat, fileLink} = response.data;
-                setFormData({tanggalSurat, nomorSurat, namaTercantum, statusPegawai, keteranganSurat});
-                setCurrentFileLink(fileLink || "");
+                
+                if (props.editTarget === "surat-masuk") {
+                    const {tanggalSurat, nomorSurat, keterangan, mediaKirim, fileLink} = response.data;
+                    setFormData(prev => ({...prev, tanggalSurat, nomorSurat, keterangan, mediaKirim: mediaKirim || ""}));
+                    setCurrentFileLink(fileLink || "");
+                } else {
+                    const {tanggalSurat, nomorSurat, namaTercantum, statusPegawai, keteranganSurat, mediaKirim, fileLink} = response.data;
+                    setFormData(prev => ({...prev, tanggalSurat, nomorSurat, namaTercantum, statusPegawai, keteranganSurat, mediaKirim: mediaKirim || ""}));
+                    setCurrentFileLink(fileLink || "");
+                }
             } catch (error) {
                 if (cancelled) return;
                 console.log("Gagal memuat data dokumen.", error);
@@ -112,21 +131,42 @@ export default function KirimDokumenGaji(props) {
         }
 
         const sendData = new FormData();
-        Object.entries(formData).forEach(([key, value]) => sendData.append(key, value));
+        
+        if (isBiasa) {
+            sendData.append('tanggalSurat', formData.tanggalSurat);
+            sendData.append('nomorSurat', formData.nomorSurat);
+            sendData.append('keterangan', formData.keterangan);
+            sendData.append('mediaKirim', formData.mediaKirim);
+        } else {
+            sendData.append('tanggalSurat', formData.tanggalSurat);
+            sendData.append('nomorSurat', formData.nomorSurat);
+            sendData.append('namaTercantum', formData.namaTercantum);
+            sendData.append('statusPegawai', formData.statusPegawai);
+            sendData.append('keteranganSurat', formData.keteranganSurat);
+            sendData.append('mediaKirim', formData.mediaKirim);
+        }
+
         if (file) sendData.append('file', file);
+        
         if (isEdit) {
             // Re-checked server side, so a row that shifted under us is refused
             sendData.append('expectedNo', passedData.no ?? "");
             sendData.append('expectedNomorSurat', passedData.nomorSurat ?? "");
         }
 
+        const url = isEdit
+            ? (props.editTarget === "surat-masuk"
+                ? `/surat-masuk/${passedData.rowNumber}`
+                : `/dokumen-gaji/${passedData.rowNumber}`)
+            : (isBiasa ? '/surat-masuk/kirim' : '/dokumen-gaji/kirim');
+
         try {
             setIsLoading(true);
             const response = isEdit
-                ? await apiClient.put(`/dokumen-gaji/${passedData.rowNumber}`, sendData, {
+                ? await apiClient.put(url, sendData, {
                     headers: {'Content-Type': 'multipart/form-data'},
                 })
-                : await apiClient.post('/dokumen-gaji/kirim', sendData, {
+                : await apiClient.post(url, sendData, {
                     headers: {'Content-Type': 'multipart/form-data'},
                 });
             if (response.status === 200) {
@@ -163,10 +203,22 @@ export default function KirimDokumenGaji(props) {
         <div>
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">
-                    {isEdit ? "Ubah" : "Pengiriman"} Dokumen Perubahan Data Penghasilan Pegawai
+                    {isEdit ? "Ubah" : "Pengiriman"} {isBiasa ? "Surat Masuk Keuangan" : "Dokumen Perubahan Data Penghasilan Pegawai"}
                 </h2>
                 {isFetching ? <LoadingAnimate/> :
                 <form className="dokumen-gaji-form" onSubmit={handleSubmit}>
+                    
+                    {!isEdit && (
+                        <>
+                            <label htmlFor="jenisSurat">Jenis Surat</label>
+                            <select id="jenisSurat" name="jenisSurat" className="type-btn"
+                                value={jenisSurat} onChange={e => setJenisSurat(e.target.value)}>
+                                <option value="Biasa">Biasa</option>
+                                <option value="Gaji">Gaji</option>
+                            </select>
+                        </>
+                    )}
+
                     <label htmlFor="tanggalSurat">Tanggal Surat</label>
                     <input type="date" id="tanggalSurat" name="tanggalSurat" className="type-btn"
                            value={formData.tanggalSurat} onChange={handleInputChange} required/>
@@ -175,23 +227,43 @@ export default function KirimDokumenGaji(props) {
                     <input type="text" id="nomorSurat" name="nomorSurat" className="type-btn"
                            value={formData.nomorSurat} onChange={handleInputChange} required/>
 
-                    <label htmlFor="namaTercantum">Nama Tercantum</label>
-                    <input type="text" id="namaTercantum" name="namaTercantum" className="type-btn"
-                           value={formData.namaTercantum} onChange={handleInputChange} required/>
+                    {isBiasa ? (
+                        <>
+                            <label htmlFor="keterangan">Keterangan</label>
+                            <textarea id="keterangan" name="keterangan" className="type-btn" rows={3}
+                                      ref={keteranganRef} value={formData.keterangan}
+                                      onChange={handleInputChange} required/>
+                        </>
+                    ) : (
+                        <>
+                            <label htmlFor="namaTercantum">Nama Tercantum</label>
+                            <input type="text" id="namaTercantum" name="namaTercantum" className="type-btn"
+                                   value={formData.namaTercantum} onChange={handleInputChange} required/>
 
-                    <label htmlFor="statusPegawai">Status Pegawai</label>
-                    <select id="statusPegawai" name="statusPegawai" className="type-btn"
-                            value={formData.statusPegawai} onChange={handleInputChange} required>
-                        <option value="" disabled>Pilih status pegawai</option>
-                        {statusPegawaiOptions.map((status, index) => (
-                            <option key={index} value={status}>{status}</option>
+                            <label htmlFor="statusPegawai">Status Pegawai</label>
+                            <select id="statusPegawai" name="statusPegawai" className="type-btn"
+                                    value={formData.statusPegawai} onChange={handleInputChange} required>
+                                <option value="" disabled>Pilih status pegawai</option>
+                                {statusPegawaiOptions.map((status, index) => (
+                                    <option key={index} value={status}>{status}</option>
+                                ))}
+                            </select>
+
+                            <label htmlFor="keteranganSurat">Keterangan Surat</label>
+                            <textarea id="keteranganSurat" name="keteranganSurat" className="type-btn" rows={3}
+                                      ref={keteranganRef} value={formData.keteranganSurat}
+                                      onChange={handleInputChange} required/>
+                        </>
+                    )}
+
+                    <label htmlFor="mediaKirim">Media Kirim</label>
+                    <select id="mediaKirim" name="mediaKirim" className="type-btn"
+                        value={formData.mediaKirim} onChange={handleInputChange} required>
+                        <option value="" disabled>Pilih media kirim</option>
+                        {mediaKirimOptions.map((opt, i) => (
+                            <option key={i} value={opt}>{opt}</option>
                         ))}
                     </select>
-
-                    <label htmlFor="keteranganSurat">Keterangan Surat</label>
-                    <textarea id="keteranganSurat" name="keteranganSurat" className="type-btn" rows={3}
-                              ref={keteranganRef} value={formData.keteranganSurat}
-                              onChange={handleInputChange} required/>
 
                     <label htmlFor="berkas">
                         {isEdit ? "Ganti Berkas" : "Upload Berkas"} (PDF, maks. {MAX_FILE_MB} MB)
@@ -209,8 +281,6 @@ export default function KirimDokumenGaji(props) {
                         {fileError && <span className="dokumen-gaji-file-error">{fileError}</span>}
                     </div>
 
-                    {/* Native submit, not SubmitButton (type="button"), so the browser
-                        runs the `required` validation */}
                     <div className="form-submit">
                         <input type="submit" value={isEdit ? "Simpan Perubahan" : "Kirim Dokumen"}
                                name="submit-dokumen-gaji"/>
@@ -219,7 +289,6 @@ export default function KirimDokumenGaji(props) {
                 </form>}
             </div>
             {isLoading && <LoadingScreen/>}
-            {/* Success is reported by Monitor-Perubahan-Gaji after the redirect */}
             {errorMessage && <PopupAlert isAlert={!!errorMessage} severity="error" message={errorMessage}/>}
         </div>
     );

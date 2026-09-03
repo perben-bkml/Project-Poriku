@@ -250,6 +250,11 @@ const monthNames = [
 //For Kirim-Dokumen-Gaji.jsx & Monitor-Perubahan-Gaji.jsx
 const statusPegawaiOptions = ["PNS", "PPPK", "TNI/POLRI"];
 const dokumenGajiHeadData = ["No.", "Tanggal Terima", "Tanggal Surat", "Nomor Surat", "Nama Tercantum", "Status Pegawai", "Keterangan Surat", "Berkas"];
+const suratMasukHeadData = [
+    "No.", "Tanggal Terima", "Tanggal Surat", "Nomor Surat",
+    "Keterangan", "Media Kirim", "Jenis Surat", "Berkas"
+];
+const mediaKirimOptions = ["Email", "Whatsapp", "Srikandi", "Lainnya"];
 const rowsPerPageOptions = [10, 15, 20, 25];
 
 //For Cek-Sisa-Gup.jsx. Thresholds are absolute rupiah, not a share of the daily limit -
@@ -602,5 +607,5 @@ const layananGajiFormFields = [
 ];
 
 
-export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, STATUS_DIPERBAIKI, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
+export { columns, columns2, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, jenisMajuSpm, ringkasColumns, ringkasLabels, jenisValueFromLabel, pjkHeadData, pjkHeadDataMulai, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, headData1, headData2, headData3, headData4, headDataPjk, infoHeadData, drppHeadData, placeholderTable, spmKey, buktiSetorLabel, cardTitles, pajakStatus, monthNames, statusPegawaiOptions, dokumenGajiHeadData, suratMasukHeadData, mediaKirimOptions, rowsPerPageOptions, pembayaranBpHeadData, formatRupiah, formatTanggalPanjang, sisaGupBands, hariKerja, sisaGupHeadData, cariSorotKolom, sorotPotongan, formatRibuan, jenisPajakOptions, daftarStatusStyle, isStatusLabel, HEAD_CELL, BODY_CELL, kolomGaya, dash, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN, STATUS_DIPERBAIKI, sbmKolomTiket, sbmKolomHotel, sbmContohTiket, sbmContohHotel, sbmKelasPesawat, sbmGolonganHotel, sbmTiketHeadData, sbmHotelHeadData, sbmKolomUangHarian, sbmKolomTransportasi, sbmContohUangHarian, sbmContohTransportasi, sbmJenisUangHarian, sbmUangHarianHeadData, sbmTransportasiHeadData, sbmUnggahKeterangan, kalkulatorKeterangan, kkpTransaksiVia, kkpStatusBelum, kkpStatusSudah, kkpTransaksiHeadData, kkpWarnaUnit, layananGajiStatus, layananGajiStatusStyle, layananGajiEmailStyle, layananGajiEmailGagal, layananGajiDetailFields, layananGajiFormFields };
 

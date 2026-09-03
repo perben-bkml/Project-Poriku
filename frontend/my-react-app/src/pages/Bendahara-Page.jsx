@@ -58,6 +58,8 @@ const MENU_ROLES = {
     // Writing dokumen gaji stays with the roles the backend lets write it
     "input-dokumen-gaji": ["admin_gaji"],
     "edit-dokumen-gaji": ["admin_gaji"],
+    "input-surat-masuk": ["admin_gaji"],
+    "edit-surat-masuk": ["admin_gaji"],
 };
 
 // Verifikasi accounts do not handle DRPP, so those screens are closed to them whatever
@@ -101,6 +103,7 @@ function BendaharaPage(props) {
     const [drppSorot, setDrppSorot] = useState(null);
     // Which Dokumen Gaji row the edit form should load, set by Monitor-Perubahan-Gaji
     const [dokumenGajiData, setDokumenGajiData] = useState(null);
+    const [suratMasukEditData, setSuratMasukEditData] = useState(null);
 
 
     const canOpen = (menu) => !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
@@ -195,7 +198,7 @@ function BendaharaPage(props) {
             case "SPM-bendahara":
                 return <InfoSPMBendahara />
             case "monitor-data-gaji":
-                return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} />
+                return <MonitorPerubahanGaji changeComponent={setButtonSelect} alertMessage={alertMessage} editData={setDokumenGajiData} editSuratMasuk={setSuratMasukEditData} />
             case "input-dokumen-gaji":
                 return <KirimDokumenGaji type="buat" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             case "pembayaran-bp":     return <PembayaranBp changeComponent={setButtonSelect} />
@@ -204,6 +207,10 @@ function BendaharaPage(props) {
             case "layanan-gaji":      return <LayananGaji />
             case "edit-dokumen-gaji":
                 return <KirimDokumenGaji type="edit" passedData={dokumenGajiData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
+            case "input-surat-masuk":
+                return <KirimDokumenGaji type="buat" editTarget="surat-masuk" changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
+            case "edit-surat-masuk":
+                return <KirimDokumenGaji type="edit" editTarget="surat-masuk" passedData={suratMasukEditData} changeComponent={setButtonSelect} alertMessage={setAlertMessage} />
             default:
                 return null;
         }

@@ -300,7 +300,9 @@ const ROUTE_ROLES = {
 
     // Monitor Data Gaji is read-only for admin; only admin_gaji may write
     "GET /bendahara/monitor-perubahan-gaji": ADMIN_GAJI,
+    "GET /bendahara/monitor-surat-masuk": ADMIN_GAJI,
     "POST /dokumen-gaji/kirim": GAJI,
+    "POST /surat-masuk/kirim": GAJI,
 
     // Layanan Gaji: the permintaan dokumen queue. Closed to plain admin - the rows carry
     // NIP, pangkat and jabatan for named staff, which only the gaji desk handles.
@@ -339,6 +341,9 @@ const ROUTE_ROLES_PREFIX = [
     { method: "GET", prefix: "/dokumen-gaji/", roles: ADMIN_GAJI },
     { method: "PUT", prefix: "/dokumen-gaji/", roles: GAJI },
     { method: "DELETE", prefix: "/dokumen-gaji/", roles: GAJI },
+    { method: "GET", prefix: "/surat-masuk/", roles: ADMIN_GAJI },
+    { method: "PUT", prefix: "/surat-masuk/", roles: GAJI },
+    { method: "DELETE", prefix: "/surat-masuk/", roles: GAJI },
 ];
 
 // Verifikasi accounts do not handle DRPP. This is matched on the login username rather
@@ -4607,7 +4612,12 @@ app.get("/auth/google/gaji/callback", async (req, res) => {
 });
 
 const DOKUMEN_GAJI_SHEET = "Dokumen Gaji";
-const DOKUMEN_GAJI_FIRST_ROW = 3;
+const DOKUMEN_GAJI_FIRST_ROW = 2;
+const SURAT_MASUK_SHEET = "Surat Masuk";
+const SURAT_MASUK_FIRST_ROW = 2;
+const MEDIA_KIRIM_OPTIONS = ["Email", "Whatsapp", "Srikandi", "Lainnya"];
+const JENIS_BIASA = "Biasa";
+const JENIS_GAJI = "Gaji";
 const STATUS_PEGAWAI_OPTIONS = ["PNS", "PPPK", "TNI/POLRI"];
 
 // The Drive file name is derived from the form, so an edit that changes any of these
@@ -4615,6 +4625,10 @@ const STATUS_PEGAWAI_OPTIONS = ["PNS", "PPPK", "TNI/POLRI"];
 // Pegawai "TNI/POLRI" can appear inside Keterangan.
 function dokumenGajiFileName(nomorSurat, keteranganSurat, namaTercantum) {
     return `${safePart(nomorSurat)} - ${safePart(keteranganSurat)} - ${safePart(namaTercantum)}.pdf`;
+}
+
+function suratMasukFileName(nomorSurat, keterangan) {
+    return `${safePart(nomorSurat)} - ${safePart(keterangan)}.pdf`;
 }
 
 function bufferToStream(buffer) {
@@ -4670,13 +4684,10 @@ async function loadDokumenGajiRow(req, res, spreadsheetId, { unformatted = false
         return null;
     }
 
-    const response = await withBackoff(async () => {
-        return await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `'${DOKUMEN_GAJI_SHEET}'!A${rowNumber}:H${rowNumber}`,
-            ...(unformatted ? { valueRenderOption: "UNFORMATTED_VALUE" } : {}),
-        });
-    });
+    const response = await readRange(sheets2, spreadsheetId,
+        `'${DOKUMEN_GAJI_SHEET}'!A${rowNumber}:H${rowNumber}`,
+        unformatted ? { valueRenderOption: "UNFORMATTED_VALUE" } : {},
+    );
 
     const rawRow = (response.data.values || [])[0];
     if (!rawRow || rawRow.every(cell => String(cell ?? "").trim() === "")) {
@@ -4686,15 +4697,90 @@ async function loadDokumenGajiRow(req, res, spreadsheetId, { unformatted = false
     const row = Array.from({ length: 8 }, (_, i) => rawRow[i] ?? "");
 
     const source = { ...req.query, ...(req.body || {}) };
-    const expectedNo = String(source.expectedNo ?? "").trim();
-    const expectedNomorSurat = String(source.expectedNomorSurat ?? "").trim();
-    if ((expectedNo && String(row[0]).trim() !== expectedNo) ||
-        (expectedNomorSurat && String(row[3]).trim() !== expectedNomorSurat)) {
+    const expectedNo = trimmed(source.expectedNo);
+    const expectedNomorSurat = trimmed(source.expectedNomorSurat);
+    if ((expectedNo && trimmed(row[0]) !== expectedNo) ||
+        (expectedNomorSurat && trimmed(row[3]) !== expectedNomorSurat)) {
         res.status(409).json({ message: "Data sudah berubah, muat ulang halaman." });
         return null;
     }
 
     return { rowNumber, row };
+}
+
+async function loadSuratMasukRow(req, res, spreadsheetId, { unformatted = false } = {}) {
+    const rowNumber = parseInt(req.params.rowNumber, 10);
+    if (!Number.isInteger(rowNumber) || rowNumber < SURAT_MASUK_FIRST_ROW) {
+        res.status(400).json({ message: "Baris tidak valid." });
+        return null;
+    }
+    const response = await readRange(sheets2, spreadsheetId,
+        `'${SURAT_MASUK_SHEET}'!A${rowNumber}:H${rowNumber}`,
+        unformatted ? { valueRenderOption: "UNFORMATTED_VALUE" } : {},
+    );
+    const rawRow = (response.data.values || [])[0];
+    if (!rawRow || rawRow.every(cell => String(cell ?? "").trim() === "")) {
+        res.status(404).json({ message: "Data tidak ditemukan, muat ulang halaman." });
+        return null;
+    }
+    const row = Array.from({ length: 8 }, (_, i) => rawRow[i] ?? "");
+    const source = { ...req.query, ...(req.body || {}) };
+    const expectedNo = trimmed(source.expectedNo);
+    const expectedNomorSurat = trimmed(source.expectedNomorSurat);
+    if ((expectedNo && trimmed(row[0]) !== expectedNo) ||
+        (expectedNomorSurat && trimmed(row[3]) !== expectedNomorSurat)) {
+        res.status(409).json({ message: "Data sudah berubah, muat ulang halaman." });
+        return null;
+    }
+    return { rowNumber, row };
+}
+
+async function findCorrespondingRow(spreadsheetId, sheetName, firstRow, nomorSurat) {
+    const response = await readRange(sheets2, spreadsheetId, `'${sheetName}'!A${firstRow}:H`);
+    const rows = response.data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] || [];
+        if (trimmed(row[3]) === nomorSurat) {
+            return { rowNumber: firstRow + i, row: Array.from({ length: 8 }, (_, j) => row[j] ?? "") };
+        }
+    }
+    return null;
+}
+
+async function deleteSheetRow(spreadsheetId, sheetName, firstRow, rowNumber, fileLink) {
+    const fileId = extractDriveFileId(fileLink);
+    if (fileId) {
+        if (!await ensureGajiDriveReady()) return false;
+        try {
+            await driveGaji.files.delete({ fileId, supportsAllDrives: true });
+        } catch (error) {
+            if (error.code !== 404 && error.response?.status !== 404) throw error;
+        }
+    }
+
+    const sheetInfo = await withBackoff(() => sheets2.spreadsheets.get({ spreadsheetId }));
+    const sheetId = sheetInfo.data.sheets
+        .find(s => s.properties.title === sheetName)?.properties.sheetId;
+    if (sheetId === undefined) return false;
+
+    await withBackoff(() => sheets2.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+            requests: [{ deleteDimension: {
+                range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber }
+            }}]
+        }
+    }));
+
+    const remaining = await readRange(sheets2, spreadsheetId, `'${sheetName}'!A${firstRow}:A`);
+    const count = (remaining.data.values || []).length;
+    if (count > 0) {
+        await writeRange(sheets2, spreadsheetId,
+            `'${sheetName}'!A${firstRow}:A${firstRow + count - 1}`,
+            Array.from({ length: count }, (_, i) => [i + 1]), "RAW",
+        );
+    }
+    return true;
 }
 
 // Separate from the shared `upload` so existing routes keep their unrestricted storage
@@ -4725,19 +4811,25 @@ function handleDokumenGajiUpload(req, res, next) {
 // Submit handler for the Kirim Dokumen Gaji form
 app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
     try {
-        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
         const tanggalSurat = String(req.body.tanggalSurat || "").trim();
         const nomorSurat = String(req.body.nomorSurat || "").trim();
         const namaTercantum = String(req.body.namaTercantum || "").trim();
         const statusPegawai = String(req.body.statusPegawai || "").trim();
         const keteranganSurat = String(req.body.keteranganSurat || "").trim();
+        const mediaKirim = String(req.body.mediaKirim || "").trim();
 
         // Re-check server side - the route has no auth of its own
-        if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat) {
+        if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat || !mediaKirim) {
             return res.status(400).json({ message: "Semua kolom wajib diisi." });
         }
         if (!STATUS_PEGAWAI_OPTIONS.includes(statusPegawai)) {
             return res.status(400).json({ message: "Status Pegawai tidak valid." });
+        }
+        if (!MEDIA_KIRIM_OPTIONS.includes(mediaKirim)) {
+            return res.status(400).json({ message: "Media Kirim tidak valid." });
         }
         if (!req.file) {
             return res.status(400).json({ message: "Berkas PDF wajib diunggah." });
@@ -4766,9 +4858,9 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
         const fileLink = driveResponse.data.webViewLink || "";
 
         // Next free row / running No. Sheets trims trailing empty rows, so the
-        // length of column A is the offset of the last populated row from row 3.
+        // length of column A is the offset of the last populated row from row 2.
         const existingResponse = await readRange(
-            sheets,
+            sheets2,
             spreadsheetId,
             `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
         );
@@ -4777,7 +4869,7 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
         const nextId = existingRows.length + 1;
 
         await writeRange(
-            sheets,
+            sheets2,
             spreadsheetId,
             `'${DOKUMEN_GAJI_SHEET}'!A${targetRow}:H${targetRow}`,
             [[
@@ -4793,6 +4885,18 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
             "USER_ENTERED",
         );
 
+        // Dual-write to Surat Masuk (Jenis = "Gaji")
+        const smExisting = await readRange(sheets2, spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!A${SURAT_MASUK_FIRST_ROW}:A`);
+        const smCount = (smExisting.data.values || []).length;
+        const smTarget = SURAT_MASUK_FIRST_ROW + smCount;
+
+        await writeRange(sheets2, spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!A${smTarget}:H${smTarget}`,
+            [[smCount + 1, getFormattedDate().fullDateFormat, tanggalSurat,
+              nomorSurat, keteranganSurat, mediaKirim, JENIS_GAJI, fileLink]],
+            "USER_ENTERED");
+
         return res.status(200).json({ message: "Dokumen Berhasil Dikirim" });
 
     } catch (error) {
@@ -4801,16 +4905,92 @@ app.post("/dokumen-gaji/kirim", handleDokumenGajiUpload, async (req, res) => {
     }
 });
 
-//Monitor Data Gaji component handler
+// Submit handler for the Kirim Surat Masuk form
+app.post("/surat-masuk/kirim", handleDokumenGajiUpload, async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const tanggalSurat = trimmed(req.body.tanggalSurat);
+        const nomorSurat = trimmed(req.body.nomorSurat);
+        const keterangan = trimmed(req.body.keterangan);
+        const mediaKirim = trimmed(req.body.mediaKirim);
+
+        if (!tanggalSurat || !nomorSurat || !keterangan || !mediaKirim) {
+            return res.status(400).json({ message: "Semua kolom wajib diisi." });
+        }
+        if (!MEDIA_KIRIM_OPTIONS.includes(mediaKirim)) {
+            return res.status(400).json({ message: "Media Kirim tidak valid." });
+        }
+        if (!req.file) {
+            return res.status(400).json({ message: "Berkas PDF wajib diunggah." });
+        }
+
+        if (!driveFolderIdDokumenGaji) {
+            console.error("DRIVE_FOLDER_ID_DOKUMEN_GAJI belum diatur - upload dibatalkan.");
+            return res.status(503).json({ message: "Folder penyimpanan belum dikonfigurasi. Hubungi admin." });
+        }
+
+        if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
+
+        const fileName = suratMasukFileName(nomorSurat, keterangan);
+
+        const driveResponse = await driveGaji.files.create({
+            requestBody: {
+                name: fileName,
+                parents: [driveFolderIdDokumenGaji],
+            },
+            media: { mimeType: req.file.mimetype, body: bufferToStream(req.file.buffer) },
+            fields: "webViewLink",
+            supportsAllDrives: true,
+        });
+        const fileLink = driveResponse.data.webViewLink || "";
+
+        const existingResponse = await readRange(
+            sheets2,
+            spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!A${SURAT_MASUK_FIRST_ROW}:A`,
+        );
+        const existingRows = existingResponse.data.values || [];
+        const targetRow = SURAT_MASUK_FIRST_ROW + existingRows.length;
+        const nextId = existingRows.length + 1;
+
+        await writeRange(
+            sheets2,
+            spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!A${targetRow}:H${targetRow}`,
+            [[
+                nextId,
+                getFormattedDate().fullDateFormat,
+                tanggalSurat,
+                nomorSurat,
+                keterangan,
+                mediaKirim,
+                JENIS_BIASA,
+                fileLink,
+            ]],
+            "USER_ENTERED",
+        );
+
+        return res.status(200).json({ message: "Surat Masuk Berhasil Dikirim" });
+
+    } catch (error) {
+        console.error("Error in /surat-masuk/kirim:", error);
+        return res.status(500).json({ message: "Pengiriman Gagal, Coba Lagi" });
+    }
+});
+
+// Monitor Data Gaji - Tab Surat Gaji
 app.get("/bendahara/monitor-perubahan-gaji", async (req, res) => {
     try {
-        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
         const { page = 1, limit = 10, month = "", statusPegawai = "" } = req.query;
 
         const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
         const rowsPerPage = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 25);
 
-        const response = await readRange(sheets, spreadsheetId, `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:H`);
+        const response = await readRange(sheets2, spreadsheetId, `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:H`);
         const rows = response.data.values || [];
 
         // Pad to 8 cells so the table never sees undefined. Index 8 is the sheet row
@@ -4851,18 +5031,62 @@ app.get("/bendahara/monitor-perubahan-gaji", async (req, res) => {
     }
 });
 
-// One row, read back for the edit form. Read unformatted so Tanggal Surat arrives as a
-// serial number the server can turn into yyyy-mm-dd, instead of whatever display format
-// the spreadsheet locale happens to use.
+// Monitor Data Gaji - Tab Surat Masuk Keuangan
+app.get("/bendahara/monitor-surat-masuk", async (req, res) => {
+    try {
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const { page = 1, limit = 10, month = "" } = req.query;
+        const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+        const rowsPerPage = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 25);
+
+        const response = await readRange(sheets2, spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!A${SURAT_MASUK_FIRST_ROW}:H`);
+        const rows = response.data.values || [];
+
+        let data = rows
+            .map((row, index) => ({ row: row || [], rowNumber: SURAT_MASUK_FIRST_ROW + index }))
+            .filter(({ row }) => row.some(cell => trimmed(cell) !== ""))
+            .map(({ row, rowNumber }) => [
+                ...Array.from({ length: 8 }, (_, i) => row[i] || ""), rowNumber,
+            ]);
+
+        if (month) {
+            data = data.filter(row => String(row[1] || "").slice(5, 7) === month);
+        }
+
+        data.reverse();
+        const totalRows = data.length;
+        const startIndex = (pageNumber - 1) * rowsPerPage;
+        return res.status(200).json({
+            data: data.slice(startIndex, startIndex + rowsPerPage), totalRows, rowsPerPage,
+        });
+    } catch (error) {
+        console.error("Error in /bendahara/monitor-surat-masuk:", error);
+        return res.status(500).json({ error: "Failed to fetch surat masuk data" });
+    }
+});
+
+// One row, read back for the edit form.
 app.get("/dokumen-gaji/:rowNumber", async (req, res) => {
     try {
         if (!allowDokumenGajiWrite(req, res)) return;
 
-        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
         const target = await loadDokumenGajiRow(req, res, spreadsheetId, { unformatted: true });
         if (!target) return;
 
         const { rowNumber, row } = target;
+        let mediaKirim = "";
+        const smMatch = await findCorrespondingRow(
+            spreadsheetId, SURAT_MASUK_SHEET, SURAT_MASUK_FIRST_ROW,
+            String(row[3] ?? "").trim()
+        );
+        if (smMatch) {
+            mediaKirim = trimmed(smMatch.row[5]);
+        }
+
         return res.status(200).json({
             rowNumber,
             no: String(row[0] ?? "").trim(),
@@ -4871,11 +5095,38 @@ app.get("/dokumen-gaji/:rowNumber", async (req, res) => {
             namaTercantum: String(row[4] ?? "").trim(),
             statusPegawai: String(row[5] ?? "").trim(),
             keteranganSurat: String(row[6] ?? "").trim(),
+            mediaKirim,
             fileLink: String(row[7] ?? "").trim(),
         });
 
     } catch (error) {
         console.error("Error in GET /dokumen-gaji/:rowNumber:", error);
+        return res.status(500).json({ message: "Gagal memuat data, coba lagi." });
+    }
+});
+
+app.get("/surat-masuk/:rowNumber", async (req, res) => {
+    try {
+        if (!allowDokumenGajiWrite(req, res)) return;
+
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+        const target = await loadSuratMasukRow(req, res, spreadsheetId, { unformatted: true });
+        if (!target) return;
+
+        const { rowNumber, row } = target;
+        return res.status(200).json({
+            rowNumber,
+            no: trimmed(row[0]),
+            tanggalSurat: toDateInputValue(row[2]),
+            nomorSurat: trimmed(row[3]),
+            keterangan: trimmed(row[4]),
+            mediaKirim: trimmed(row[5]),
+            jenisSurat: trimmed(row[6]) || JENIS_BIASA,
+            fileLink: trimmed(row[7]),
+        });
+    } catch (error) {
+        console.error("Error in GET /surat-masuk/:rowNumber:", error);
         return res.status(500).json({ message: "Gagal memuat data, coba lagi." });
     }
 });
@@ -4886,23 +5137,29 @@ app.put("/dokumen-gaji/:rowNumber", handleDokumenGajiUpload, async (req, res) =>
     try {
         if (!allowDokumenGajiWrite(req, res)) return;
 
-        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
         const tanggalSurat = String(req.body.tanggalSurat || "").trim();
         const nomorSurat = String(req.body.nomorSurat || "").trim();
         const namaTercantum = String(req.body.namaTercantum || "").trim();
         const statusPegawai = String(req.body.statusPegawai || "").trim();
         const keteranganSurat = String(req.body.keteranganSurat || "").trim();
+        const mediaKirim = String(req.body.mediaKirim || "").trim();
 
-        if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat) {
+        if (!tanggalSurat || !nomorSurat || !namaTercantum || !statusPegawai || !keteranganSurat || !mediaKirim) {
             return res.status(400).json({ message: "Semua kolom wajib diisi." });
         }
         if (!STATUS_PEGAWAI_OPTIONS.includes(statusPegawai)) {
             return res.status(400).json({ message: "Status Pegawai tidak valid." });
         }
+        if (!MEDIA_KIRIM_OPTIONS.includes(mediaKirim)) {
+            return res.status(400).json({ message: "Media Kirim tidak valid." });
+        }
 
         const target = await loadDokumenGajiRow(req, res, spreadsheetId, {});
         if (!target) return;
         const { rowNumber, row } = target;
+        const originalNomorSurat = trimmed(row[3]);
 
         if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
 
@@ -4951,7 +5208,7 @@ app.put("/dokumen-gaji/:rowNumber", handleDokumenGajiUpload, async (req, res) =>
 
         // A No. (column A) and Tanggal Terima (column B) are not the user's to change
         await writeRange(
-            sheets,
+            sheets2,
             spreadsheetId,
             `'${DOKUMEN_GAJI_SHEET}'!C${rowNumber}:H${rowNumber}`,
             [[
@@ -4965,10 +5222,126 @@ app.put("/dokumen-gaji/:rowNumber", handleDokumenGajiUpload, async (req, res) =>
             "USER_ENTERED",
         );
 
+        // Cascade to Surat Masuk: find by original nomorSurat
+        const smMatch = await findCorrespondingRow(
+            spreadsheetId, SURAT_MASUK_SHEET, SURAT_MASUK_FIRST_ROW,
+            originalNomorSurat
+        );
+        if (smMatch) {
+            await writeRange(sheets2, spreadsheetId,
+                `'${SURAT_MASUK_SHEET}'!C${smMatch.rowNumber}:H${smMatch.rowNumber}`,
+                [[tanggalSurat, nomorSurat, keteranganSurat, mediaKirim || smMatch.row[5], JENIS_GAJI, fileLink]],
+                "USER_ENTERED");
+        }
+
         return res.status(200).json({ message: "Dokumen Berhasil Diperbarui" });
 
     } catch (error) {
         console.error("Error in PUT /dokumen-gaji/:rowNumber:", error);
+        return res.status(500).json({ message: "Perubahan Gagal, Coba Lagi" });
+    }
+});
+
+app.put("/surat-masuk/:rowNumber", handleDokumenGajiUpload, async (req, res) => {
+    try {
+        if (!allowDokumenGajiWrite(req, res)) return;
+
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const tanggalSurat = trimmed(req.body.tanggalSurat);
+        const nomorSurat = trimmed(req.body.nomorSurat);
+        const keterangan = trimmed(req.body.keterangan);
+        const mediaKirim = trimmed(req.body.mediaKirim);
+
+        if (!tanggalSurat || !nomorSurat || !keterangan || !mediaKirim) {
+            return res.status(400).json({ message: "Semua kolom wajib diisi." });
+        }
+        if (!MEDIA_KIRIM_OPTIONS.includes(mediaKirim)) {
+            return res.status(400).json({ message: "Media Kirim tidak valid." });
+        }
+
+        const target = await loadSuratMasukRow(req, res, spreadsheetId, {});
+        if (!target) return;
+        const { rowNumber, row } = target;
+        const originalNomorSurat = trimmed(row[3]);
+        const jenisSurat = trimmed(row[6]) || JENIS_BIASA;
+
+        if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
+
+        const fileName = suratMasukFileName(nomorSurat, keterangan);
+        const media = req.file
+            ? { mimeType: req.file.mimetype, body: bufferToStream(req.file.buffer) }
+            : undefined;
+
+        async function uploadReplacement() {
+            if (!driveFolderIdDokumenGaji) {
+                throw new Error("DRIVE_FOLDER_ID_DOKUMEN_GAJI belum diatur - upload dibatalkan.");
+            }
+            const created = await driveGaji.files.create({
+                requestBody: { name: fileName, parents: [driveFolderIdDokumenGaji] },
+                media: { mimeType: req.file.mimetype, body: bufferToStream(req.file.buffer) },
+                fields: "webViewLink",
+                supportsAllDrives: true,
+            });
+            return created.data.webViewLink || "";
+        }
+
+        let fileLink = String(row[7] || "").trim();
+        const fileId = extractDriveFileId(fileLink);
+        if (fileId) {
+            try {
+                const updated = await driveGaji.files.update({
+                    fileId,
+                    requestBody: { name: fileName },
+                    ...(media ? { media } : {}),
+                    fields: "webViewLink",
+                    supportsAllDrives: true,
+                });
+                fileLink = updated.data.webViewLink || fileLink;
+            } catch (error) {
+                if (!req.file) throw error;
+                console.error("Gagal memperbarui berkas Drive, mengunggah ulang:", error.message);
+                fileLink = await uploadReplacement();
+            }
+        } else if (req.file) {
+            fileLink = await uploadReplacement();
+        }
+
+        // Update Surat Masuk row (columns C to H)
+        await writeRange(
+            sheets2,
+            spreadsheetId,
+            `'${SURAT_MASUK_SHEET}'!C${rowNumber}:H${rowNumber}`,
+            [[
+                tanggalSurat,
+                nomorSurat,
+                keterangan,
+                mediaKirim,
+                jenisSurat,
+                fileLink,
+            ]],
+            "USER_ENTERED",
+        );
+
+        // If jenisSurat === JENIS_GAJI, cascade to Dokumen Gaji
+        if (jenisSurat === JENIS_GAJI) {
+            const dgMatch = await findCorrespondingRow(
+                spreadsheetId, DOKUMEN_GAJI_SHEET, DOKUMEN_GAJI_FIRST_ROW,
+                originalNomorSurat
+            );
+            if (dgMatch) {
+                await writeRange(sheets2, spreadsheetId,
+                    `'${DOKUMEN_GAJI_SHEET}'!C${dgMatch.rowNumber}:H${dgMatch.rowNumber}`,
+                    [[tanggalSurat, nomorSurat, dgMatch.row[4], dgMatch.row[5], keterangan, fileLink]],
+                    "USER_ENTERED");
+            }
+        }
+
+        return res.status(200).json({ message: "Surat Masuk Berhasil Diperbarui" });
+
+    } catch (error) {
+        console.error("Error in PUT /surat-masuk/:rowNumber:", error);
         return res.status(500).json({ message: "Perubahan Gagal, Coba Lagi" });
     }
 });
@@ -4979,72 +5352,73 @@ app.delete("/dokumen-gaji/:rowNumber", async (req, res) => {
     try {
         if (!allowDokumenGajiWrite(req, res)) return;
 
-        const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
         const target = await loadDokumenGajiRow(req, res, spreadsheetId, {});
         if (!target) return;
         const { rowNumber, row } = target;
+        const originalNomorSurat = trimmed(row[3]);
+        const fileLink = trimmed(row[7]);
 
-        const fileId = extractDriveFileId(row[7]);
-        if (fileId) {
+        if (fileLink && extractDriveFileId(fileLink)) {
             if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
-            try {
-                await driveGaji.files.delete({ fileId, supportsAllDrives: true });
-            } catch (error) {
-                // Already gone is the outcome we wanted anyway
-                if (error.code !== 404 && error.response?.status !== 404) throw error;
-                console.log(`Berkas Drive ${fileId} sudah tidak ada, lanjut hapus baris.`);
-            }
         }
 
-        const sheetInfo = await withBackoff(async () => {
-            return await sheets.spreadsheets.get({ spreadsheetId });
-        });
-        const sheetId = sheetInfo.data.sheets
-            .find(s => s.properties.title === DOKUMEN_GAJI_SHEET)?.properties.sheetId;
-        if (sheetId === undefined) {
+        const success = await deleteSheetRow(spreadsheetId, DOKUMEN_GAJI_SHEET, DOKUMEN_GAJI_FIRST_ROW, rowNumber, fileLink);
+        if (!success) {
             return res.status(500).json({ message: `Tab '${DOKUMEN_GAJI_SHEET}' tidak ditemukan.` });
         }
 
-        await withBackoff(async () => {
-            return await sheets.spreadsheets.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                    requests: [{
-                        deleteDimension: {
-                            range: {
-                                sheetId,
-                                dimension: "ROWS",
-                                startIndex: rowNumber - 1,  // deleteDimension is 0-based
-                                endIndex: rowNumber,
-                            }
-                        }
-                    }]
-                }
-            });
-        });
-
-        // Column A is a running counter and /dokumen-gaji/kirim derives the next No. from
-        // how many rows it finds, so the numbering has to close up behind the deleted row
-        const remainingResponse = await readRange(
-            sheets,
-            spreadsheetId,
-            `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A`,
-        );
-        const remainingCount = (remainingResponse.data.values || []).length;
-        if (remainingCount > 0) {
-            await writeRange(
-                sheets,
-                spreadsheetId,
-                `'${DOKUMEN_GAJI_SHEET}'!A${DOKUMEN_GAJI_FIRST_ROW}:A${DOKUMEN_GAJI_FIRST_ROW + remainingCount - 1}`,
-                Array.from({ length: remainingCount }, (_, i) => [i + 1]),
-                "RAW",
-            );
+        // Cascade delete in Surat Masuk if corresponding row exists (Drive file already deleted, pass null)
+        const smMatch = await findCorrespondingRow(spreadsheetId, SURAT_MASUK_SHEET, SURAT_MASUK_FIRST_ROW, originalNomorSurat);
+        if (smMatch) {
+            await deleteSheetRow(spreadsheetId, SURAT_MASUK_SHEET, SURAT_MASUK_FIRST_ROW, smMatch.rowNumber, null);
         }
 
         return res.status(200).json({ message: "Dokumen Berhasil Dihapus" });
 
     } catch (error) {
         console.error("Error in DELETE /dokumen-gaji/:rowNumber:", error);
+        return res.status(500).json({ message: "Penghapusan Gagal, Coba Lagi" });
+    }
+});
+
+app.delete("/surat-masuk/:rowNumber", async (req, res) => {
+    try {
+        if (!allowDokumenGajiWrite(req, res)) return;
+
+        const spreadsheetId = layananGajiSpreadsheet(req, res);
+        if (!spreadsheetId) return;
+
+        const target = await loadSuratMasukRow(req, res, spreadsheetId, {});
+        if (!target) return;
+        const { rowNumber, row } = target;
+        const originalNomorSurat = trimmed(row[3]);
+        const jenisSurat = trimmed(row[6]) || JENIS_BIASA;
+        const fileLink = trimmed(row[7]);
+
+        if (fileLink && extractDriveFileId(fileLink)) {
+            if (!await requireGajiDriveReady(res, "Token Dokumen Gaji")) return;
+        }
+
+        const success = await deleteSheetRow(spreadsheetId, SURAT_MASUK_SHEET, SURAT_MASUK_FIRST_ROW, rowNumber, fileLink);
+        if (!success) {
+            return res.status(500).json({ message: `Tab '${SURAT_MASUK_SHEET}' tidak ditemukan.` });
+        }
+
+        // Cascade delete in Dokumen Gaji if Jenis === "Gaji" (Drive file already deleted, pass null)
+        if (jenisSurat === JENIS_GAJI) {
+            const dgMatch = await findCorrespondingRow(spreadsheetId, DOKUMEN_GAJI_SHEET, DOKUMEN_GAJI_FIRST_ROW, originalNomorSurat);
+            if (dgMatch) {
+                await deleteSheetRow(spreadsheetId, DOKUMEN_GAJI_SHEET, DOKUMEN_GAJI_FIRST_ROW, dgMatch.rowNumber, null);
+            }
+        }
+
+        return res.status(200).json({ message: "Surat Masuk Berhasil Dihapus" });
+
+    } catch (error) {
+        console.error("Error in DELETE /surat-masuk/:rowNumber:", error);
         return res.status(500).json({ message: "Penghapusan Gagal, Coba Lagi" });
     }
 });

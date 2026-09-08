@@ -106,8 +106,11 @@ function BendaharaPage(props) {
     const [suratMasukEditData, setSuratMasukEditData] = useState(null);
 
 
-    const canOpen = (menu) => !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
-        && (user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role));
+    const canOpen = (menu) => {
+        if (menu === "layanan-gaji" && user.username === "bendahara-pengeluaran") return true;
+        return !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
+            && (user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role));
+    };
     const labelMenu = (item) => (user.role === "user" && item.labelUser) || item.label;
     const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 

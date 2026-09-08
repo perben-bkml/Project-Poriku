@@ -376,7 +376,11 @@ app.use((req, res, next) => {
     if (DRPP_ROUTES.has(key) && tanpaDrpp(viewer.username)) {
         return res.status(403).json({ message: "Akses ditolak." });
     }
-    if (viewer.role !== MASTER_ROLE && !rolesForRoute(req.method, path).includes(viewer.role)) {
+    if (
+        viewer.role !== MASTER_ROLE &&
+        !rolesForRoute(req.method, path).includes(viewer.role) &&
+        !(path.startsWith('/layanan-gaji') && viewer.username === 'bendahara-pengeluaran')
+    ) {
         return res.status(403).json({ message: "Akses ditolak." });
     }
     req.viewer = viewer;

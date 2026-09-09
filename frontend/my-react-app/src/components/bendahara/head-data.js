@@ -570,12 +570,11 @@ const layananPangkat = [
     "Lainnya",
 ];
 
-// The five documents Gaji.jsx already advertises on the same page
+// The four documents Gaji.jsx already advertises on the same page
 const layananGajiPermintaan = [
     "Slip Gaji",
     "Surat Keterangan Penghasilan",
     "Surat Keterangan KP4",
-    "Dokumen Lain Berkaitan dengan Gaji/Tunjangan Kinerja",
 ];
 
 // Twin of LAYANAN_GAJI_WAJIB in server.js. Kelas Jabatan and Eselon carry no wajib flag

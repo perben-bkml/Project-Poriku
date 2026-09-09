@@ -103,7 +103,6 @@ export default function Gaji() {
                 <li>Surat Keterangan Penghasilan</li>
                 <li>Surat Keterangan KP4 (untuk pengajuan BPJS)</li>
                 <li>Surat Rekomendasi Atasan (untuk pengajuan pinjaman)</li>
-                <li>Dokumen lain berkaitan dengan Gaji/Tunjangan Kinerja</li>
             </ol>
         )
     }

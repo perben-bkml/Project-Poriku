@@ -9984,11 +9984,11 @@ const handleSlipGajiUpload = runPembayaranBpUpload(uploadPembayaranBp.any());
 // owns the spreadsheet - the two identities are unrelated and both are needed here.
 // The jenis is in the file name, which is also how an already stored file is matched back to
 // the jenis it answers - the sheet has one Lampiran column and no room for a second field.
-const namaBerkasGaji = (record, jenis) => {
+const namaBerkasGaji = (record, jenis, suffix = "") => {
     // yyyy-mm-dd hh-mm-ss: the timestamp as the sheet spells it, with the colons swapped for
     // dashes because Drive shows a colon but Windows refuses to save a file holding one
     const waktu = getFormattedDate().fullDateTimeFormat.replace(/:/g, "-");
-    return `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(jenis) || "Dokumen"} ${waktu}.pdf`;
+    return `${safePart(record.namaLengkap) || "Tanpa Nama"} - ${safePart(jenis) || "Dokumen"}${suffix} ${waktu}.pdf`;
 };
 const berkasUntukJenis = (daftar, jenis) =>
     daftar.find(berkas => berkas.nama.includes(` - ${safePart(jenis)} `));
@@ -10003,6 +10003,12 @@ async function unggahLampiranGaji(req, res, record) {
     }
     if (!await requireGajiDriveReady(res, "Token Lampiran Layanan Gaji")) return null;
 
+    const fileCounts = {};
+    for (const file of req.files || []) {
+        fileCounts[file.fieldname] = (fileCounts[file.fieldname] || 0) + 1;
+    }
+
+    const fileIndexes = {};
     const baru = [];
     for (const file of req.files || []) {
         const posisi = parseInt(String(file.fieldname).split("-")[1], 10);
@@ -10011,7 +10017,12 @@ async function unggahLampiranGaji(req, res, record) {
             res.status(400).json({ message: "Jenis permintaan untuk berkas ini tidak dikenal." });
             return null;
         }
-        const nama = namaBerkasGaji(record, jenis);
+        
+        fileIndexes[file.fieldname] = (fileIndexes[file.fieldname] || 0) + 1;
+        const total = fileCounts[file.fieldname];
+        const suffix = total > 1 ? ` (${fileIndexes[file.fieldname]})` : "";
+
+        const nama = namaBerkasGaji(record, jenis, suffix);
         baru.push({ jenis, nama, isi: file.buffer, url: await uploadToDriveFolder(file, driveFolderIdSlipGaji, nama) });
     }
     return baru;

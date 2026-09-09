@@ -108,7 +108,7 @@ export default function LayananGaji() {
         return tersaring.slice(mulai, mulai + barisPerHalaman);
     }, [tersaring, halaman, barisPerHalaman]);
 
-    // berkas is a Map of jenis index -> File, so each document goes up under the field name the
+    // berkas is a Map of jenis index -> Array of File, so each document goes up under the field name the
     // backend pairs by. Files picked but never submitted are dropped with the dialog.
     const kirimBerkas = useCallback(async (row, berkas) => {
         setUnggahTarget(null);
@@ -118,7 +118,9 @@ export default function LayananGaji() {
         // The backend refuses the write if this no longer matches the row - a table left open
         // while someone else deleted an entry would otherwise address the wrong permintaan
         formData.append("timestamp", row.timestamp);
-        for (const [posisi, file] of berkas) formData.append(`lampiran-${posisi}`, file);
+        for (const [posisi, files] of berkas) {
+            for (const file of files) formData.append(`lampiran-${posisi}`, file);
+        }
         try {
             const {data} = await apiClient.post("/layanan-gaji/lampiran", formData);
             showAlert(data.message || "Lampiran berhasil diunggah.", "success");

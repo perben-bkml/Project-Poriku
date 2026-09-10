@@ -118,8 +118,18 @@ const writeRanges = (client, spreadsheetId, data, valueInputOption = "RAW") =>
     }));
 
 // Allowing CORS to get request and cookies from frontend
+const allowedOrigins = process.env.FRONTEND_ORIGIN 
+    ? process.env.FRONTEND_ORIGIN.split(',') 
+    : ['https://poriku.vercel.app', 'http://localhost:5173', 'http://localhost:3000'];
+
 const corsOption = {
-    origin: process.env.FRONTEND_ORIGIN,
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }
 
@@ -142,10 +152,11 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+        secure: true, // MUST be true for sameSite 'none'
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true, // Prevent XSS attacks
-        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax' // Consistent with auth cookies
+        sameSite: 'none', // MUST be 'none' for cross-site cookies (Vercel frontend -> Render backend)
+        path: '/'
     },
     name: 'session_id' // Custom session name for better security
 }));
@@ -856,9 +867,10 @@ app.post("/login-auth", async (req, res) => {
 
         res.cookie("auth_token", token, {   //The cookie name is "auth_token"
             httpOnly: true, // Prevent JavaScript access
-            secure: process.env.NODE_ENV === "production", // Only send cookie over HTTPS
-            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            secure: true, // MUST be true for sameSite: 'none'
+            sameSite: 'none', // MUST be 'none' for cross-origin (Render -> Vercel)
+            // DO NOT set domain. If omitted, it defaults to the exact API domain, 
+            // which is correct for third-party cookies. Setting it to frontend domain breaks it.
             path: '/', // Add explicit path
             maxAge: 5 * 60 * 60 * 1000, // 5 hours
         });
@@ -881,9 +893,8 @@ app.post("/logout", (req, res) => {
         
         res.clearCookie("auth_token", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
-            domain: process.env.NODE_ENV === "production" ? process.env.HOSTNAME_DOMAIN : undefined,
+            secure: true,
+            sameSite: 'none',
             path: '/', // Add explicit path
             expires: new Date(0) // Set to past date to ensure deletion
         })

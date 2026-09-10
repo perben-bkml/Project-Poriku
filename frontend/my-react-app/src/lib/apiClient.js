@@ -1,5 +1,8 @@
 import axios from 'axios';
 
+// Set globally just in case other files import axios directly instead of apiClient
+axios.defaults.withCredentials = true;
+
 const apiClient = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
     withCredentials: true

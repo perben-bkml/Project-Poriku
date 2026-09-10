@@ -32,6 +32,7 @@ export function AuthProvider({children}) {
             localStorage.removeItem("selectedButtonBendahara");
             localStorage.removeItem("selectedButtonVerif")//remove button select data
             localStorage.removeItem("poriku-selected-year"); // Clear year selection
+            localStorage.removeItem("poriku-auth-token"); // Clear JWT so Safari stops sending it
         } catch (error) {
             console.log("Logout failed:", error);
         }

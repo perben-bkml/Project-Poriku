@@ -51,6 +51,7 @@ function Login () {
                 withCredentials: true, //Ensure cookies are sent
             })
             if (response.status === 200) {
+                localStorage.setItem('poriku-auth-token', response.data.token);
                 setScreenLoading(false)
                 setIsAuthenticated(true)
                 setUser({

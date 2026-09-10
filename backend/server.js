@@ -17,6 +17,7 @@ import dns from 'node:dns/promises';
 
 // Initialize tools
 const app = express();
+app.set('trust proxy', 1);
 const upload = multer({ storage: multer.memoryStorage() });
 const getFormattedDate = () => {
     const date = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
@@ -378,9 +379,13 @@ app.use((req, res, next) => {
     const key = `${req.method} ${path}`;
     if (req.method === "OPTIONS" || PUBLIC_ROUTES.has(key)) return next();
 
+    const bearerToken = req.headers.authorization?.startsWith('Bearer ')
+        ? req.headers.authorization.slice(7)
+        : null;
+    const jwtToken = bearerToken || req.cookies.auth_token;
     let viewer;
     try {
-        viewer = jwt.verify(req.cookies.auth_token, process.env.JWT_SECRET);
+        viewer = jwt.verify(jwtToken, process.env.JWT_SECRET);
     } catch {
         return res.status(401).json({ message: "Sesi tidak valid, silakan login ulang." });
     }
@@ -880,7 +885,10 @@ app.post("/login-auth", async (req, res) => {
         // Make array to send only Name and Role
         const sendData = [userData[0].name, userData[0].role]
 
-        res.json({data: sendData, message: "Login Success!"})
+        // Return the token in the body so the frontend can store it in localStorage and
+        // send it as Authorization: Bearer on subsequent requests (Safari/iOS ITP fix).
+        // The cookie path remains for backward compat with Chrome/desktop.
+        res.json({data: sendData, token, message: "Login Success!"})
     } catch (error) {
         console.log("Error sending data to DB.", error)
         res.status(500).json({error: "Can't write data to DB."})
@@ -906,9 +914,12 @@ app.post("/logout", (req, res) => {
     }
 })
 
-//Check user cookies
+//Check user auth — reads JWT from Authorization header (Safari/iOS) or cookie (Chrome/desktop)
 app.get("/check-auth", (req, res) => {
-    const token = req.cookies.auth_token;
+    const bearerToken = req.headers.authorization?.startsWith('Bearer ')
+        ? req.headers.authorization.slice(7)
+        : null;
+    const token = bearerToken || req.cookies.auth_token;
     
     if (!token) {
         console.log("❌ Authentication failed: No token found");

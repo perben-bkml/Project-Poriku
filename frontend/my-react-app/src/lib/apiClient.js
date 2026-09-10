@@ -8,8 +8,15 @@ const apiClient = axios.create({
     withCredentials: true
 });
 
-// Auto-inject year from localStorage into all requests
+// Inject auth token from localStorage as Authorization: Bearer header.
 apiClient.interceptors.request.use(config => {
+    const token = localStorage.getItem('poriku-auth-token');
+    if (token) {
+        config.headers = config.headers || {};
+        config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Auto-inject year from localStorage into all requests
     const year = localStorage.getItem('poriku-selected-year') || new Date().getFullYear().toString();
 
     if (config.params) {

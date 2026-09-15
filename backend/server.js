@@ -10058,7 +10058,8 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
     try {
         const spreadsheetId = layananGajiSpreadsheet(req, res);
         if (!spreadsheetId) return;
-        if (!req.files?.length) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
+        const paksaSelesai = req.body?.forceSelesai === "true";
+        if (!req.files?.length && !paksaSelesai) return res.status(400).json({ message: "Berkas lampiran wajib diunggah." });
 
         const rowNumber = Number(trimmed(req.body?.rowNumber));
         if (!Number.isInteger(rowNumber) || rowNumber < LAYANAN_GAJI_FIRST_ROW) {
@@ -10090,11 +10091,13 @@ app.post("/layanan-gaji/lampiran", handleSlipGajiUpload, async (req, res) => {
         // has already been sent.
         const surat = record.statusEmail === LAYANAN_GAJI_EMAIL_MATI
             ? { berhasil: false, pesan: LAYANAN_GAJI_ALAMAT_GAGAL }
-            : await cobaKirimSurat(suratDokumen(record, petugas, baru));
+            : baru.length === 0
+                ? { berhasil: true, pesan: "" }
+                : await cobaKirimSurat(suratDokumen(record, petugas, baru));
 
         // Selesai only once every jenis the pemohon asked for has a file against it: with
         // several documents in one permintaan, one upload is rarely the whole job.
-        const lengkap = record.daftarJenis.every(jenis => berkasUntukJenis(lampiran, jenis));
+        const lengkap = paksaSelesai || record.daftarJenis.every(jenis => berkasUntukJenis(lampiran, jenis));
         const status = !surat.berhasil ? LAYANAN_GAJI_GAGAL_EMAIL
             : lengkap ? LAYANAN_GAJI_SELESAI : LAYANAN_GAJI_PROSES;
 

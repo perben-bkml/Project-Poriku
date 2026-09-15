@@ -2,8 +2,11 @@ import {useMemo, useRef, useState} from "react";
 import PropTypes from "prop-types";
 import Dialog from "@mui/material/Dialog";
 import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 // One permintaan may ask for several documents, and the desk answers each with its own file(s).
 // The dialog lists the jenis the pemohon actually asked for, so a missing document is visible
@@ -12,6 +15,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 export default function UnggahLampiranGaji({row, maxMb, onTutup, onKirim, onGagal}) {
     // jenis index -> Array of File. A Map because the index is what the backend pairs on.
     const [berkas, setBerkas] = useState(new Map());
+    const [paksa, setPaksa] = useState(false);
     const inputRef = useRef(null);
     const posisiRef = useRef(null);
 
@@ -79,11 +83,38 @@ export default function UnggahLampiranGaji({row, maxMb, onTutup, onKirim, onGaga
                     tetap tersimpan dan tidak dikirim ulang.
                 </p>
 
+                <div className="ulg-paksa">
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={paksa}
+                                onChange={e => setPaksa(e.target.checked)}
+                                size="small"
+                                color="warning"
+                            />
+                        }
+                        label={
+                            <span className="ulg-paksa-label">
+                                <WarningAmberIcon sx={{fontSize: 15, verticalAlign: "middle", mr: "4px"}} />
+                                Paksa kirim meskipun ada kategori yang belum diunggah
+                            </span>
+                        }
+                    />
+                    {paksa && (
+                        <p className="ulg-paksa-peringatan">
+                            Kategori yang belum diunggah tidak akan dikirimkan ke penerima.
+                            Pastikan ini disengaja sebelum melanjutkan.
+                        </p>
+                    )}
+                </div>
+
                 <input ref={inputRef} type="file" accept="application/pdf" multiple hidden onChange={dipilih} />
                 <div className="ulg-aksi">
                     <Button onClick={onTutup} color="inherit" sx={{textTransform: "none"}}>Batal</Button>
-                    <Button variant="contained" disabled={berkas.size === 0} sx={{textTransform: "none"}}
-                            onClick={() => onKirim(row, berkas)}>
+                    <Button variant="contained" disabled={berkas.size === 0 && !paksa}
+                            color={paksa ? "warning" : "primary"}
+                            sx={{textTransform: "none"}}
+                            onClick={() => onKirim(row, berkas, paksa)}>
                         Unggah &amp; Kirim ({totalFiles})
                     </Button>
                 </div>

@@ -574,7 +574,7 @@ const layananPangkat = [
 const layananGajiPermintaan = [
     "Slip Gaji",
     "Surat Keterangan Penghasilan",
-    "Surat Keterangan KP4",
+    "Surat Keterangan KP4 (untuk BPJS)",
 ];
 
 // Twin of LAYANAN_GAJI_WAJIB in server.js. Kelas Jabatan and Eselon carry no wajib flag

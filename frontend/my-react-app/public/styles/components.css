@@ -835,6 +835,28 @@
     color: #6B7A90;
 }
 
+.ulg-paksa {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid #F5C842;
+    border-radius: 8px;
+    background: #FFFBEA;
+}
+
+.ulg-paksa-label {
+    font-size: 0.875rem;
+    color: #7A5000;
+    display: flex;
+    align-items: center;
+}
+
+.ulg-paksa-peringatan {
+    margin: 6px 0 0 28px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #7A5000;
+}
+
 .ulg-aksi {
     display: flex;
     justify-content: flex-end;

@@ -110,7 +110,8 @@ export default function LayananGaji() {
 
     // berkas is a Map of jenis index -> Array of File, so each document goes up under the field name the
     // backend pairs by. Files picked but never submitted are dropped with the dialog.
-    const kirimBerkas = useCallback(async (row, berkas) => {
+    // paksa=true tells the backend to mark the row Selesai even when some jenis are still missing.
+    const kirimBerkas = useCallback(async (row, berkas, paksa = false) => {
         setUnggahTarget(null);
         setBarisSibuk(row.rowNumber);
         const formData = new FormData();
@@ -118,6 +119,7 @@ export default function LayananGaji() {
         // The backend refuses the write if this no longer matches the row - a table left open
         // while someone else deleted an entry would otherwise address the wrong permintaan
         formData.append("timestamp", row.timestamp);
+        if (paksa) formData.append("forceSelesai", "true");
         for (const [posisi, files] of berkas) {
             for (const file of files) formData.append(`lampiran-${posisi}`, file);
         }

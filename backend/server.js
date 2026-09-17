@@ -187,29 +187,24 @@ const ANY_ROLE = ["user", "admin", "admin_gaji"];
 // The satker taking part in the pilot, matched on the account name the JWT carries.
 // Comparison goes through normalizeSatker, so case and stray whitespace in poriku_users
 // cannot drop an account out of the pilot. Kept in sync with PILOT_SATKER in src/lib/pilot.js.
-const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
+const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi", "Sestama"];
 const isPilotSatker = (name) => PILOT_SATKER.some(satker => normalizeSatker(satker) === normalizeSatker(name));
 // The accounts the holds are lifted for: the pilot satker, plus "master admin", which has
 // passed every hold since the pilot started.
 const isPilotViewer = (viewer) => viewer?.role === MASTER_ROLE || isPilotSatker(viewer?.name);
 
-// Non-GUP/PTUP jenis are open to the pilot accounts only, matching the option list
-// Buat-Pengajuan.jsx offers. Rows submitted before the hold still open, edit and verify normally.
-const PILOT_JENIS_PILOT_ONLY = true;
+// Pilot complete: all users may now pick any Jenis Pengajuan. Flag kept at false so the
+// backend still accepts any jenis from any role without a hold.
+const PILOT_JENIS_PILOT_ONLY = false;
 const PILOT_JENIS_ALLOWED = ["gup", "ptup"];
-// Kelola-Pengajuan stops parking a GUP/PTUP row on the verifikator PJK: once the bendahara
-// has set Pajak, Anggaran and the Tanggal Selesai Verifikasi the row moves straight on to
-// Sudah Verifikasi. Rows whose Unit Kerja is a pilot satker are exempt - they run the new
-// flow and do wait on the verifikator, so the card holds their rows and nobody else's. The
-// PJK verification itself is untouched and still runs on the mirror either way.
-const PILOT_SKIP_MENUNGGU_PJK = true;
+// Pilot complete: all GUP/PTUP rows now go through the full PJK verification step.
+// Setting this to false means every row gets a mirror and waits on the verifikator.
+const PILOT_SKIP_MENUNGGU_PJK = false;
 // Whether any row can still park on the PJK, and so whether the mirror sheet is worth reading
 const PILOT_ANY_MENUNGGU_PJK = !PILOT_SKIP_MENUNGGU_PJK || PILOT_SATKER.length > 0;
 // Which GUP/PTUP submissions register a mirror row on the verifikasi antrian. The mirror only
-// exists so the PJK step has a row to hang off, and while the hold is on no other satker's row
-// ever reaches that step - registering one would only put a row on the verifikator's screen that
-// nobody is meant to act on. A PJK actually being attached still forces one, since the mirror is
-// the only place that link can live. Turning PILOT_SKIP_MENUNGGU_PJK off mirrors everything again.
+// exists so the PJK step has a row to hang off. With PILOT_SKIP_MENUNGGU_PJK off, every
+// GUP/PTUP row gets one (unless it has a PJK file, which forces one regardless).
 const shouldMirrorAntrian = (viewer, hasPjkFile) =>
     !PILOT_SKIP_MENUNGGU_PJK || isPilotViewer(viewer) || !!hasPjkFile;
 

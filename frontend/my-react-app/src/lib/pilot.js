@@ -11,7 +11,7 @@
 // The satker taking part in the pilot, matched on user.name. Comparison is case and
 // whitespace insensitive so a stray double space in poriku_users cannot drop an account
 // out of the pilot. Kept in sync with PILOT_SATKER in server.js.
-export const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi"];
+export const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi", "Sestama"];
 
 const satkerKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 const isPilotSatker = (name) => PILOT_SATKER.some(satker => satkerKey(satker) === satkerKey(name));
@@ -21,14 +21,14 @@ const isPilotSatker = (name) => PILOT_SATKER.some(satker => satkerKey(satker) ==
 export const isPilotUser = (user) => user?.role === "master admin" || isPilotSatker(user?.name);
 
 export const PILOT = {
-    // Buat-Pengajuan: only the pilot accounts may pick a Jenis Pengajuan outside GUP/PTUP
-    jenisPengajuanPilotOnly: true,
-    // Kelola-Pengajuan: hide the "Menunggu Diuji Verifikator PJK" card and table. The
-    // backend now parks only pilot satker rows there, so the card has rows to show for as
-    // long as the pilot has participants - it is dead weight only once the list is empty.
-    hideMenungguPjkSection: PILOT_SATKER.length === 0,
-    // Home: hide the right hand dashboard from role="user", pilot accounts excepted
-    hideHomeDashboardFromUser: true,
+    // Pilot complete: all users may now pick any Jenis Pengajuan. Flag set to false so
+    // the full jenis list is shown to everyone.
+    jenisPengajuanPilotOnly: false,
+    // Pilot complete: PILOT_SKIP_MENUNGGU_PJK is false on the backend, so every GUP/PTUP
+    // row parks on the PJK. The card always has rows - never hide it.
+    hideMenungguPjkSection: false,
+    // Pilot complete: the right-hand dashboard is shown to all users.
+    hideHomeDashboardFromUser: false,
 };
 
 // The jenis everyone may still submit while jenisPengajuanPilotOnly is on.

@@ -5,7 +5,7 @@ import apiClient from "../../lib/apiClient";
 // Import Components
 import Popup from "../../ui/Popup.jsx";
 import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
-import { PILOT, PILOT_JENIS_ALLOWED, isPilotUser } from "../../lib/pilot.js";
+
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
 
@@ -103,7 +103,7 @@ function BuatPengajuan(props) {
     // must leave it that way rather than send a table the backend has nowhere to put.
     const [tabelAda, setTabelAda] = useState(true);
     const nomorSppRequired = !isTabelPenuh && componentType !== "lihat";
-    const canUploadPjk = isPilotUser(user) || String(user?.role ?? "").includes("admin");
+    const canUploadPjk = true;
     const showUploadGroup = componentType !== "lihat" && (isTabelPenuh || canUploadPjk);
     // Which antrian/table sheet pair this pengajuan lives on
     const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
@@ -119,15 +119,8 @@ function BuatPengajuan(props) {
         [isTabelPenuh]
     );
 
-    // Pilot hold: the verifikasi jenis are being trialled on the live server, so everyone
-    // outside the pilot composes GUP/PTUP only. Reopened rows are untouched - their select
-    // below is already fixed to the flow the row lives on, so an LS pengajuan submitted
-    // before the hold still opens and edits normally.
-    const jenisOptions = useMemo(() => (
-        PILOT.jenisPengajuanPilotOnly && !isPilotUser(user)
-            ? jenisPengajuan.filter(jenis => PILOT_JENIS_ALLOWED.includes(jenis.value))
-            : jenisPengajuan
-    ), [user]);
+    // All jenis are available to all users.
+    const jenisOptions = jenisPengajuan;
 
     // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
     // left over from a reopened row can outlive the switch to composing. Snap it back to a

@@ -176,37 +176,7 @@ const USER_ADMIN = ["user", "admin"];
 const ADMIN_GAJI = ["admin", "admin_gaji"];
 const ANY_ROLE = ["user", "admin", "admin_gaji"];
 
-// --- Pilot switches -----------------------------------------------------------
-// There is no staging server, so a couple of finished features are held back on the live
-// one while they are trialled. Nothing behind these flags is removed - each is a temporary
-// hold, and setting it to false restores the behaviour the code already had.
-// PILOT_SKIP_MENUNGGU_PJK has a twin on the frontend (hideMenungguPjkSection in
-// src/lib/pilot.js) that hides the card this flag would leave empty; flip the two together.
-// PILOT_SATKER is duplicated there too - a name added here has to be added there as well.
 
-// The satker taking part in the pilot, matched on the account name the JWT carries.
-// Comparison goes through normalizeSatker, so case and stray whitespace in poriku_users
-// cannot drop an account out of the pilot. Kept in sync with PILOT_SATKER in src/lib/pilot.js.
-const PILOT_SATKER = ["Biro Umum", "Biro Umum TU Rumga", "Biro Sarana dan Prasarana", "Dit Operasi Laut", "Zona Maritim Barat", "Zona Maritim Tengah", "Zona Maritim Timur", "Dit Data dan Informasi", "Sestama"];
-const isPilotSatker = (name) => PILOT_SATKER.some(satker => normalizeSatker(satker) === normalizeSatker(name));
-// The accounts the holds are lifted for: the pilot satker, plus "master admin", which has
-// passed every hold since the pilot started.
-const isPilotViewer = (viewer) => viewer?.role === MASTER_ROLE || isPilotSatker(viewer?.name);
-
-// Pilot complete: all users may now pick any Jenis Pengajuan. Flag kept at false so the
-// backend still accepts any jenis from any role without a hold.
-const PILOT_JENIS_PILOT_ONLY = false;
-const PILOT_JENIS_ALLOWED = ["gup", "ptup"];
-// Pilot complete: all GUP/PTUP rows now go through the full PJK verification step.
-// Setting this to false means every row gets a mirror and waits on the verifikator.
-const PILOT_SKIP_MENUNGGU_PJK = false;
-// Whether any row can still park on the PJK, and so whether the mirror sheet is worth reading
-const PILOT_ANY_MENUNGGU_PJK = !PILOT_SKIP_MENUNGGU_PJK || PILOT_SATKER.length > 0;
-// Which GUP/PTUP submissions register a mirror row on the verifikasi antrian. The mirror only
-// exists so the PJK step has a row to hang off. With PILOT_SKIP_MENUNGGU_PJK off, every
-// GUP/PTUP row gets one (unless it has a PJK file, which forces one regardless).
-const shouldMirrorAntrian = (viewer, hasPjkFile) =>
-    !PILOT_SKIP_MENUNGGU_PJK || isPilotViewer(viewer) || !!hasPjkFile;
 
 // Reachable without a session: login itself, the public Layanan Gaji page, and the
 // Google redirect targets the browser lands on without passing through the app
@@ -1631,12 +1601,6 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             if (!jenis) {
                 return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
             }
-            // Pilot hold: the option list in Buat-Pengajuan.jsx already stops at GUP/PTUP for
-            // everyone else, this is the same rule where it cannot be edited around
-            if (PILOT_JENIS_PILOT_ONLY && !isPilotViewer(req.viewer)
-                && !PILOT_JENIS_ALLOWED.includes(jenisSlug)) {
-                return res.status(403).json({ message: "Jenis pengajuan ini belum tersedia." });
-            }
             if (jenis.flow === "verif" && trimmed(nomorSpp) === "") {
                 return res.status(400).json({ message: "Nomor SPP wajib diisi." });
             }
@@ -1652,10 +1616,8 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
 
             // GUP/PTUP also register in the verifikasi antrian, using the same short
             // layout the other jenis write, but never get a Write Table Verif block.
-            // Pilot hold: only rows that can actually reach the PJK step get one.
-            const mirrorFlow = jenis.flow === "gup" && shouldMirrorAntrian(req.viewer, pjkFile)
-                ? AJUAN_FLOWS.verif
-                : null;
+            // Every GUP/PTUP row registers a mirror on the verifikasi antrian for the PJK step.
+            const mirrorFlow = jenis.flow === "gup" ? AJUAN_FLOWS.verif : null;
 
             // Get textdata/input data antrian and tabledata
             const ranges = [
@@ -2436,15 +2398,13 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 
         // Column B drives the date filter; the verifikasi antrian rides alongside it so the
         // PJK status of each mirror row costs no extra round trip.
-        // REFACTOR: when no row at all can park on the PJK, nothing reads that PJK status,
-        // so the whole mirror sheet was being fetched and thrown away on every page load.
         const [response, mirrorResponse] = await Promise.all([
             readRange(sheets, spreadsheetId, "'Write Antrian'!B:B"),
-            PILOT_ANY_MENUNGGU_PJK ? readRange(
+            readRange(
                 sheets,
                 spreadsheetId,
                 `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
-            ) : null,
+            ),
         ]);
 
         // Get all rows
@@ -2516,10 +2476,6 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
         // has no PJK to wait on, so it stays where it was.
         const isOk = value => trimmed(value) === "OK";
         const waitingPjk = (row) => {
-            // Pilot hold: only a pilot satker's row waits on the verifikator. Everyone else
-            // falls through to the section its own status column puts it in, the way it did
-            // before the PJK step existed.
-            if (PILOT_SKIP_MENUNGGU_PJK && !isPilotSatker(row[ANTRIAN_UNIT_KERJA_INDEX])) return false;
             const pjk = pjkByKey.get(mirrorRowKey(row[1], row[2]));
             return !!pjk && isOk(row[12]) && isOk(row[13])
                 && !(PJK_VERIFIED_VALUES.includes(String(pjk[0] ?? "").trim())

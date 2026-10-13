@@ -375,6 +375,8 @@ function BuatPengajuan(props) {
     }, [updateNilaiTerima]);
 
     const handleCellBlur = useCallback((cellrowIndex, cellcolumnIndex, value) => {
+        value = String(value ?? "");
+
         //Exclude column 1 - 4 from auto formatting
         if (cellcolumnIndex >= 0 && cellcolumnIndex <= 3) {
             return;
@@ -657,7 +659,8 @@ function BuatPengajuan(props) {
 
                 row.forEach((cell, j) => {
                     const targetCol = startCol + j;
-                    if (targetCol < updatedData[targetRow].length) {
+                    // Excel selections can extend past the last destination column.
+                    if (targetCol >= 0 && targetCol < updatedData[targetRow].length) {
                         // Safely handle undefined/null cells
                         const safeCell = cell != null ? String(cell) : "";
                         
@@ -686,9 +689,9 @@ function BuatPengajuan(props) {
                                 updatedData[targetRow][targetCol] = trimmedCell;
                             }
                         }
+                        //Auto format pasted values
+                        handleCellBlur(targetRow, targetCol, updatedData[targetRow][targetCol]);
                     }
-                    //Auto format pasted values
-                    handleCellBlur(targetRow, targetCol, updatedData[targetRow][targetCol]);
                 });
             });
 

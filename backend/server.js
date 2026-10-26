@@ -375,20 +375,18 @@ const sql = postgres(process.env.DATABASE_URL, {
 
 // Credentials for Pengajuan Gsheet
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-const auth = new google.auth.JWT(
-    process.env.AJUAN_CLIENT_EMAIL,
-    null,
-    process.env.AJUAN_PRIVATE_KEY,
-    SCOPES
-);
+const auth = new google.auth.JWT({
+    email: process.env.AJUAN_CLIENT_EMAIL,
+    key: process.env.AJUAN_PRIVATE_KEY,
+    scopes: SCOPES,
+});
 
 // Credentials for Verifikasi Gsheet
-const auth2 = new google.auth.JWT(
-    process.env.VERIF_CLIENT_EMAIL,
-    null,
-    process.env.VERIF_PRIVATE_KEY,
-    SCOPES
-);
+const auth2 = new google.auth.JWT({
+    email: process.env.VERIF_CLIENT_EMAIL,
+    key: process.env.VERIF_PRIVATE_KEY,
+    scopes: SCOPES,
+});
 
 // OAuth2 Client for Google Drive Ajuan
 const oauth2Client = new google.auth.OAuth2(

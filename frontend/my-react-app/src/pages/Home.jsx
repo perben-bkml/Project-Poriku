@@ -1,29 +1,17 @@
-import React, {useContext, useEffect, useMemo, useState} from "react"
+import {useContext, useEffect, useMemo, useState} from "react"
 import { AuthContext } from "../lib/AuthContext";
-import {monthNames} from "../components/verifikasi/head-data.js";
 import apiClient from "../lib/apiClient";
 import LoadingAnimate from "../ui/loading.jsx"
 import { NewNavbar } from "../ui/Navbar.jsx"
-import { RealisasiCircle } from "../ui/cards.jsx"
-import { TableRealisasiLite } from "../ui/tables.jsx"
 
 function Home() {
     //Auth Context
     const { user } = useContext(AuthContext);
     const satkerName = user.name;
     const userRole = user.role;
-    const isAdmin = ["admin", "master admin", "admin_gaji"].includes(userRole);
-    // Dashboard is shown to all users.
-    const showDashboard = true;
 
     //State
-    const [realisasi, setRealisasi] = useState(null);
     const [dashboard, setDashboard] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [monthFilter, setMonthFilter] = useState(() => {
-        const saved = localStorage.getItem('home-realisasi-month');
-        return saved ? JSON.parse(saved) : "";
-    });
 
     // Year state (load from localStorage or default to current year)
     const currentYear = new Date().getFullYear();
@@ -40,20 +28,6 @@ function Home() {
         window.location.reload(); // Reload to apply year change
     };
 
-    // The route already scopes itself to the viewer: role="user" gets only its own
-    // satker, admin roles get every unit kerja rolled into totals.
-    async function fetchRealisasi() {
-        try {
-            setIsLoading(true);
-            const response = await apiClient.get('/verifikasi/realisasi-anggaran');
-            if (response.status === 200) setRealisasi(response.data);
-        } catch (error) {
-            console.error("Error fetching realisasi.", error);
-        } finally {
-            setIsLoading(false);
-        }
-    }
-
     async function fetchDashboard() {
         try {
             const response = await apiClient.get('/home/dashboard');
@@ -64,31 +38,8 @@ function Home() {
     }
 
     useEffect(() => {
-        fetchRealisasi();
-        if (showDashboard) fetchDashboard();
-    }, [showDashboard])
-
-    function handleMonthChange(event) {
-        setMonthFilter(event.target.value);
-        localStorage.setItem('home-realisasi-month', JSON.stringify(event.target.value));
-    }
-
-    const liteData = useMemo(() => {
-        if (!realisasi) return null;
-        const {anggaran, belanja, monthly} = realisasi.totals;
-        const spent = monthFilter
-            ? monthly.filter(bucket => bucket.month <= parseInt(monthFilter, 10)).reduce((sum, bucket) => sum + bucket.total, 0)
-            : belanja.total;
-        const persenAngka = anggaran.total ? (spent / anggaran.total) * 100 : 0;
-        return {
-            anggaran: anggaran.total,
-            belanja: spent,
-            sisa: anggaran.total - spent,
-            persenAngka,
-            persen: anggaran.total ? `${persenAngka.toFixed(2)}%` : "-",
-            kosong: realisasi.summary.length === 0,
-        };
-    }, [realisasi, monthFilter]);
+        fetchDashboard();
+    }, [])
 
     const dashboardSections = useMemo(() => dashboard ? [
         {title: "Data Pengajuan", cards: [
@@ -135,35 +86,8 @@ function Home() {
                         : "Admin PPK Unit Kerja"}</h3>
 
             </div>
-            <div className={`home-dashboard${showDashboard ? "" : " home-dashboard-solo"}`}>
-                <div className="home-dashboard-left">
-                    <h3 className={"dashboard-title"}>
-                        {isAdmin ? "Realisasi Anggaran" : `Realisasi Anggaran ${satkerName}`}
-                    </h3>
-                    <div className="dashboard-realisasi">
-                        <div className="dashboard-realisasi-filter">
-                            <label htmlFor="realisasi-month">Bulan:</label>
-                            <select id="realisasi-month" value={monthFilter} onChange={handleMonthChange}>
-                                {monthNames.map((month, index) => (
-                                    <option key={index} value={month.value}>{month.title || "Semua Bulan"}</option>
-                                ))}
-                            </select>
-                            <span className="dashboard-realisasi-note">Berdasarkan Data Bagian Keuangan</span>
-                        </div>
-                        {isLoading || !liteData ? <LoadingAnimate /> :
-                            liteData.kosong ?
-                                <p className="dashboard-realisasi-empty">
-                                    Data anggaran untuk {satkerName} belum tersedia.
-                                </p> :
-                                <div className="dashboard-realisasi-body">
-                                    <RealisasiCircle percent={liteData.persenAngka} />
-                                    <TableRealisasiLite anggaran={liteData.anggaran} belanja={liteData.belanja}
-                                                        sisa={liteData.sisa} persen={liteData.persen} />
-                                </div>
-                        }
-                    </div>
-                </div>
-                {showDashboard && <div className="home-dashboard-right">
+            <div className="home-dashboard">
+                <div className="home-dashboard-right">
                     {!dashboard ? <LoadingAnimate /> :
                         dashboardSections.map(section => (
                             <div key={section.title} className="dashboard-counts">
@@ -179,7 +103,7 @@ function Home() {
                             </div>
                         ))
                     }
-                </div>}
+                </div>
             </div>
         </div>
     )

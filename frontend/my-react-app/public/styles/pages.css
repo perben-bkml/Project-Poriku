@@ -452,14 +452,8 @@
 
 .home-dashboard {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    justify-items: center;
-}
-
-/* Pilot hold: with the right hand dashboard hidden the realisasi panel is the only
-   child left, so it takes the whole row instead of sitting in a half width column */
-.home-dashboard-solo {
     grid-template-columns: 1fr;
+    justify-items: center;
 }
 
 .dashboard-title {
@@ -468,17 +462,12 @@
     color: #00449C;
 }
 
-.home-dashboard-left, .home-dashboard-right {
+.home-dashboard-right {
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-}
-
-.home-dashboard-right {
-    width: 100%;
-    height: 100%;
 }
 
 .dashboard-counts {
@@ -531,60 +520,6 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
-}
-
-/* Home lite realisasi dashboard */
-.dashboard-realisasi {
-    width: 80%;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
-    border-radius: 15px;
-    padding: 20px 25px;
-    box-sizing: border-box;
-}
-
-.dashboard-realisasi-filter {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 18px;
-    color: #00204A;
-}
-
-.dashboard-realisasi-note {
-    margin-left: auto;
-    font-style: italic;
-    font-size: 0.9rem;
-    color: #7A7A7A;
-}
-
-.dashboard-realisasi-filter select {
-    font-family: inherit;
-    font-size: 0.95rem;
-    padding: 3px 6px;
-    border-radius: 8px;
-    border: 1px solid rgb(214, 214, 214);
-}
-
-.dashboard-realisasi-body {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 25px;
-    flex-wrap: wrap;
-}
-
-.dashboard-realisasi-body > *:last-child {
-    flex: 1;
-    min-width: 260px;
-}
-
-.dashboard-realisasi-empty {
-    color: #00449C;
-    font-size: 1rem;
-    text-align: center;
-    padding: 30px 0;
 }
 
 .dashboard-pjk-card {
@@ -1291,17 +1226,6 @@ textarea.fg-input {
 }
 
 @media screen and (max-width: 1400px) {
-    /* Realisasi note drops under the filter once the row gets tight */
-    .dashboard-realisasi {
-        width: 90%;
-    }
-
-    .dashboard-realisasi-note {
-        margin-left: 0;
-        width: 100%;
-        font-size: 0.8rem;
-    }
-
     /* Sizing Landing Page*/
 
     .landing-title h1 {

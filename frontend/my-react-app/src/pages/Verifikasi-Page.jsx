@@ -1,11 +1,10 @@
-import React, { useState, useContext, useEffect } from "react";
+import { useState, useContext, useEffect } from "react";
 // Import Components
 import KelolaPJK from "../components/verifikasi/Kelola-PJK.jsx";
 import PengujianPJK from "../components/verifikasi/Pengujian-PJK.jsx";
 import AksiVerifPJK from "../components/verifikasi/Aksi-Verif-PJK.jsx";
 import FormVerifikasi from "../components/verifikasi/Form-Verifikasi.jsx";
 import MonitorPJK from "../components/verifikasi/Monitor-PJK.jsx";
-import Realisasi from "../components/verifikasi/Realisasi.jsx";
 import Anggaran from "../components/verifikasi/Anggaran.jsx";
 // Import Context
 import { AuthContext } from "../lib/AuthContext";
@@ -18,7 +17,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ScreenSearchDesktopIcon from '@mui/icons-material/ScreenSearchDesktop';
 import ChecklistRtlIcon from '@mui/icons-material/ChecklistRtl';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
-import PaymentsIcon from '@mui/icons-material/Payments';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {NavLink} from "react-router-dom";
 
@@ -27,7 +25,6 @@ import {NavLink} from "react-router-dom";
 const MENU_ROLES = {
     "monitor-PJK": ["user"],
     "anggaran": ["user", "admin", "admin_gaji"],
-    "realisasi": ["admin", "admin_gaji"],
     "kelola-PJK": ["admin"],
     "pengujian-PJK": ["admin"],
     "aksi-verif-PJK": ["admin"],
@@ -36,7 +33,6 @@ const MENU_ROLES = {
 
 // Sidebar entries in display order. Menus reached from a parent screen are absent.
 const MENU_BUTTONS = [
-    {name: "realisasi", label: "Realisasi", Icon: PaymentsIcon},
     {name: "anggaran", label: "Anggaran", Icon: AccountBalanceWalletIcon},
     {name: "pengujian-PJK", label: "Pengujian PJK", Icon: FactCheckIcon},
     {name: "kelola-PJK", label: "Kelola PJK", Icon: DashboardIcon},
@@ -55,7 +51,8 @@ function VerifikasiPage(props) {
     const [pjkData, setPjkData] = useState([]);
 
 
-    const canOpen = (menu) => user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role);
+    const canOpen = (menu) => Boolean(MENU_ROLES[menu])
+        && (user.role === "master admin" || MENU_ROLES[menu].includes(user.role));
     const visibleButtons = MENU_BUTTONS.filter(item => canOpen(item.name));
 
     // Set buttonSelect when page renders
@@ -93,8 +90,6 @@ function VerifikasiPage(props) {
         // Never render a menu the role is not allowed to open, however buttonSelect got set
         if (!canOpen(buttonSelect)) return null;
         switch (buttonSelect) {
-            case "realisasi":
-                return <Realisasi />;
             case "anggaran":
                 return <Anggaran />;
             case "kelola-PJK":

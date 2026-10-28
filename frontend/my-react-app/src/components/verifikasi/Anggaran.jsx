@@ -8,6 +8,7 @@ import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpa
     anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan,
     anggaranKolomEkspor} from "./head-data.js";
 import {unduhExcel, selTeks, selAngka} from "../../lib/excel.js";
+import {unduhLaporanAnggaran} from "../../lib/anggaranReport.js";
 import {formatRupiah} from "../bendahara/head-data.js";
 // Import Tables
 import {TableAnggaranPohon, TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
@@ -21,6 +22,7 @@ export default function Anggaran() {
     const canUnggah = user.role === "admin" || user.role === "master admin";
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isLaporan, setIsLaporan] = useState(false);
     const [data, setData] = useState(null);
     const [revisiList, setRevisiList] = useState([]);
     const [alert, setAlert] = useState(null);
@@ -115,6 +117,18 @@ export default function Anggaran() {
         if (baris.length === 0) return showAlert("warning", "Tidak ada anggaran untuk diunduh.");
         await unduhExcel(`Anggaran ${data?.tahun || ""}.xlsx`, anggaranKolomEkspor, baris,
             [22, 16, 22, 26, 16, 12, 14, 14, 14, 14, 24]);
+    }
+
+    async function unduhLaporan() {
+        try {
+            setIsLaporan(true);
+            await unduhLaporanAnggaran(data);
+        } catch (error) {
+            console.error('Gagal mengunduh laporan anggaran.', error);
+            showAlert('error', error.message || 'Gagal mengunduh laporan anggaran. Coba lagi.');
+        } finally {
+            setIsLaporan(false);
+        }
     }
 
     // Preview. The server persists the parsed file as a draft revisi and answers with the
@@ -374,6 +388,10 @@ export default function Anggaran() {
                         <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel"
                                disabled={isLoading || !(data?.anggaran || []).length}
                                onClick={unduhAnggaran}/>
+                        <input className="btn-aksi btn-aksi-wide" type="button"
+                               value={isLaporan ? "Membuat Laporan..." : "Unduh Laporan Unit Kerja"}
+                               disabled={isLaporan || isLoading || !(data?.anggaran || []).length}
+                               onClick={unduhLaporan}/>
                         {override &&
                             <span className="anggaran-sinkron">
                                 Realisasi s.d. {override.tanggalBatas} dari unggahan

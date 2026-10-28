@@ -1740,12 +1740,17 @@ TableLayananGaji.propTypes = {
 // is the whole reason pagu is stored at every level rather than only at the leaf; "Sisa"
 // is that pagu less everything committed or already paid against it, and a negative one is
 // the computed replacement for the Pagu Minus an admin used to set by hand.
-// "Terpakai", not "Realisasi": it holds money still in the antrian as well as money already
-// SP2D, and only the latter is realisasi in the accounting sense. Sisa subtracts both, so a
-// unit cannot over-submit unnoticed while its pengajuan wait for KPPN.
+// The displayed "Realisasi" still uses the API's terpakai (commitments + realization).
+// Sisa subtracts both, so a unit cannot over-submit while its pengajuan wait for KPPN.
 const ANGGARAN_HEAD = [
-    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Terpakai", "Sisa", "Belum Dirinci",
+    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Belum Dirinci",
 ];
+
+const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0)
+    ? "-"
+    : `${(row.terpakai / row.pagu * 100).toLocaleString('id-ID', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+    })}%`;
 
 // Level indents rather than separate columns, so a deep row still reads as one line
 const indentSel = (level) => ({paddingLeft: `${16 + level * 28}px`, whiteSpace: "nowrap"});
@@ -1763,7 +1768,7 @@ const barisLencana = (...lencana) => {
 // count, so a collapsed row still shows that something inside it needs detailing in the DIPA.
 const tandaTakDirinci = (jumlah) => jumlah > 0
     ? <span key="dirinci" className="anggaran-tanda-baru"
-            title="Belum ada di DIPA, jadi tidak dihitung ke Terpakai">
+            title="Belum ada di DIPA, jadi tidak dihitung ke Realisasi">
         {jumlah} akun belum dirinci di DIPA
       </span>
     : null;
@@ -1824,6 +1829,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                     <TableCell sx={{fontWeight: 600, color: sisaWarna(unit.sisa)}}>
                                         {formatRupiah(unit.sisa)}
                                     </TableCell>
+                                    <TableCell>{persenRealisasi(unit)}</TableCell>
                                     <TableCell sx={{color: sisaWarna(unit.belumDirinci)}}>
                                         {formatRupiah(unit.belumDirinci)}
                                     </TableCell>
@@ -1842,7 +1848,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                         <Fragment key={kunciMak}>
                                             {mulaiLuar &&
                                                 <TableRow>
-                                                    <TableCell colSpan={6} className="anggaran-pemisah-luar">
+                                                    <TableCell colSpan={ANGGARAN_HEAD.length} className="anggaran-pemisah-luar">
                                                         Di luar pagu unit kerja ini - memakai Kode MAK milik unit kerja lain,
                                                         sehingga tidak mengurangi angka di atas
                                                     </TableCell>
@@ -1862,7 +1868,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                             </span>,
                                                         mak.diklaimOleh?.length > 0 &&
                                                             <span key="diklaim" className="anggaran-lencana-klaim"
-                                                                  title="Terpakai di bawah ini termasuk belanja unit kerja lain">
+                                                                  title="Realisasi di bawah ini termasuk belanja unit kerja lain">
                                                                 diklaim {mak.diklaimOleh.join(", ")}
                                                             </span>,
                                                         tandaTakDirinci(mak.akunTakDirinci),
@@ -1874,6 +1880,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 <TableCell sx={{color: sisaWarna(mak.sisa ?? 0)}}>
                                                     {selLuarPagu(mak.sisa, mak.luarPagu)}
                                                 </TableCell>
+                                                <TableCell>{persenRealisasi(mak)}</TableCell>
                                                 <TableCell sx={{color: sisaWarna(mak.belumDirinci ?? 0)}}>
                                                     {selLuarPagu(mak.belumDirinci, mak.luarPagu)}
                                                 </TableCell>
@@ -1885,7 +1892,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                         {barisLencana(
                                                             akun.takDirinci &&
                                                                 <span key="dirinci" className="anggaran-tanda-baru"
-                                                                      title="Belum ada di DIPA, jadi tidak dihitung ke Terpakai">
+                                                                      title="Belum ada di DIPA, jadi tidak dihitung ke Realisasi">
                                                                     belum dirinci di DIPA - tidak dihitung
                                                                 </span>,
                                                             akun.luarPagu &&
@@ -1904,6 +1911,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     <TableCell sx={{color: sisaWarna(akun.sisa ?? 0)}}>
                                                         {selLuarPagu(akun.sisa, akun.takDirinci || akun.luarPagu)}
                                                     </TableCell>
+                                                    <TableCell>{persenRealisasi(akun)}</TableCell>
                                                     {/* an akun has no children, so it has nothing left to detail */}
                                                     <TableCell/>
                                                 </TableRow>

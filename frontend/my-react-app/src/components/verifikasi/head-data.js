@@ -120,6 +120,8 @@ const anggaranKolomEkspor = [
     "Akun Belanja", "Pagu Akun", "Terpakai", "Sisa", "Belum Dirinci", "Keterangan",
 ]
 
+export const anggaranLaporanHead = ["Unit Kerja", "Pagu", "Realisasi", "Sisa", "% Realisasi"];
+
 // LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
 // their nominal can never be attributed to an akun. Said out loud on the screen rather than
 // left for someone to discover by reconciling by hand.

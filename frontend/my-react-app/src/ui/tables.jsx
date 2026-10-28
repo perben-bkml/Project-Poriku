@@ -1091,6 +1091,53 @@ export function TableRealisasiLite({anggaran, belanja, sisa, persen}) {
 // Pembayaran-Bp.jsx. Without onEdit the table drops the Aksi column, as TableDokumenGaji
 // does for roles that may only look.
 export function TablePembayaranBp(props) {
+    const [checkedRows, setCheckedRows] = useState(new Set());
+    const tableRef = useRef(null);
+    const totalRef = useRef(null);
+    const mousePosition = useRef({x: 0, y: 0});
+
+    useEffect(() => {
+        setCheckedRows(new Set());
+    }, [props.content]);
+
+    useEffect(() => {
+        if (checkedRows.size === 0) return;
+        const clearOutside = (event) => {
+            if (tableRef.current && !tableRef.current.contains(event.target)) {
+                setCheckedRows(new Set());
+            }
+        };
+        document.addEventListener('mousedown', clearOutside);
+        return () => document.removeEventListener('mousedown', clearOutside);
+    }, [checkedRows.size]);
+
+    // Sheet amounts use Indonesian separators; keep numeric API values intact.
+    const selectedTotal = props.content.reduce((total, row) => {
+        if (!checkedRows.has(row.rowNumber)) return total;
+        const value = typeof row.nilaiSp2d === 'number' ? row.nilaiSp2d
+            : Number(String(row.nilaiSp2d ?? '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, ''));
+        return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    function trackMouse(event) {
+        mousePosition.current = {x: event.clientX + 15, y: event.clientY - 10};
+        if (totalRef.current) {
+            totalRef.current.style.left = `${mousePosition.current.x}px`;
+            totalRef.current.style.top = `${mousePosition.current.y}px`;
+        }
+    }
+
+    function toggleAmount(row, event) {
+        const checked = event.target.checked;
+        trackMouse(event);
+        setCheckedRows(previous => {
+            const next = new Set(previous);
+            if (checked) next.add(row.rowNumber);
+            else next.delete(row.rowNumber);
+            return next;
+        });
+    }
+
     const showActions = Boolean(props.onEdit || props.onDelete);
     // Column order, matching pembayaranBpHeadData and PEMBAYARAN_BP_COLUMNS on the server
     const keys = ["no", "tanggalSp2d", "nomorSpm", "jenis", "va", "unitKerja", "nilaiSp2d",
@@ -1121,7 +1168,8 @@ export function TablePembayaranBp(props) {
     }
 
     return (
-        <TableContainer className="table-scroll-x"
+        <>
+        <TableContainer ref={tableRef} onMouseMove={trackMouse} className="table-scroll-x"
                         sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
             <Table>
                 <TableHead>
@@ -1149,7 +1197,19 @@ export function TablePembayaranBp(props) {
                             <TableRow key={row.rowNumber} hover>
                                 {keys.map((key, index) => (
                                     <TableCell key={key} className={freeze(index)}
-                                               sx={{whiteSpace: "nowrap"}}>{renderCell(row, key)}</TableCell>
+                                               sx={{whiteSpace: "nowrap", ...(key === "nilaiSp2d" ? {
+                                                   position: "relative",
+                                                   '& .bp-amount-checkbox': {opacity: checkedRows.has(row.rowNumber) ? 0.8 : 0},
+                                                   '&:hover .bp-amount-checkbox, &:focus-within .bp-amount-checkbox': {opacity: 1},
+                                               } : {})}}>
+                                        {renderCell(row, key)}
+                                        {key === "nilaiSp2d" &&
+                                            <Checkbox className="bp-amount-checkbox" size="small"
+                                                      checked={checkedRows.has(row.rowNumber)}
+                                                      onChange={event => toggleAmount(row, event)}
+                                                      inputProps={{'aria-label': `Pilih Nilai SP2D nomor ${row.no}`}}
+                                                      sx={{position: 'absolute', top: 2, left: 2, padding: '2px'}}/>}
+                                    </TableCell>
                                 ))}
                                 {showActions &&
                                     <TableCell align="center" sx={{whiteSpace: "nowrap"}}>
@@ -1172,8 +1232,29 @@ export function TablePembayaranBp(props) {
                 </TableBody>
             </Table>
         </TableContainer>
+        {checkedRows.size > 0 &&
+            <div ref={totalRef} role="status" style={{
+                position: 'fixed', left: mousePosition.current.x, top: mousePosition.current.y,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)', color: 'white', padding: '8px 12px',
+                borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', zIndex: 9999,
+                pointerEvents: 'none', whiteSpace: 'nowrap',
+            }}>
+                Total: {selectedTotal.toLocaleString('id-ID')}
+            </div>}
+        </>
     )
 }
+
+TablePembayaranBp.propTypes = {
+    header: PropTypes.array.isRequired,
+    content: PropTypes.arrayOf(PropTypes.shape({
+        rowNumber: PropTypes.number.isRequired,
+        no: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        nilaiSp2d: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    })).isRequired,
+    onEdit: PropTypes.func,
+    onDelete: PropTypes.func,
+};
 
 // SPM-Bend.jsx. Twelve month columns of berkas; without onUpload the table is read only.
 // A cell whose bisaUnggah is false sits inside a merge it does not anchor, so the sheet

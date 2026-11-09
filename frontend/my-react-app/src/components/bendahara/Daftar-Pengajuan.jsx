@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, jenisPengajuan, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -19,7 +19,7 @@ const TAB_KEY = 'daftarTabBendahara';
 // verifikasi flow and locks with LS even though it is listed under GUP/PTUP.
 const LOCKED_STATUS = {
     gup: ["Sudah Diterbitkan DRPP", ...statusSudahMaju],
-    verif: [...statusSudahVerifikasi, ...statusSudahMaju],
+    verif: [...statusSudahVerifikasi, ...statusSudahMajuVerif],
 };
 const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 

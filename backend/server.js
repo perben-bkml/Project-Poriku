@@ -1259,7 +1259,9 @@ const bermasalahNilai = (value) => {
 const STATUS_SUDAH_VERIFIKASI = [
     "Sudah Di Verifikasi", "Sudah Verifikasi", "Verifikasi OK", "Verifikasi OK Dengan Catatan",
 ];
+// Write Antrian retains its original status; only Write Antrian Verif was renamed.
 const STATUS_SUDAH_MAJU = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
+const STATUS_SUDAH_MAJU_VERIF = ["Siap Maju SPM", "Sudah SP2D"];
 const PJK_STATUS_INDEX = 5; // column F
 
 // Jenis is stored as a label, so the flow a row belongs to is read back off it
@@ -3993,7 +3995,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         // as it progresses and settles in Sudah Verifikasi
         const informasi = [], sedangVerif = [], sudahVerif = [];
         for (const row of rows) {
-            if (STATUS_SUDAH_MAJU.includes(trimmed(row[PJK_STATUS_INDEX]))
+            if (STATUS_SUDAH_MAJU_VERIF.includes(trimmed(row[PJK_STATUS_INDEX]))
                 || (filled(row[PJK_COLUMN.selesaiVerif])
                     && isVerified(row[PJK_COLUMN.substansi]) && isVerified(row[PJK_COLUMN.kelengkapan]))) {
                 sudahVerif.push(row);

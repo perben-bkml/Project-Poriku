@@ -121,12 +121,13 @@ const buktiSetorLabel = (entry) =>
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
-//Status values on 'Write Antrian Verif' column F, which the sheet owns. Twin of
-//STATUS_SUDAH_VERIFIKASI / STATUS_SUDAH_MAJU in server.js.
+// Status lists mirror the backend constants. Only Write Antrian Verif uses Siap Maju SPM;
+// Write Antrian retains Sudah Diajukan ke KPPN.
 const statusSudahVerifikasi = [
     "Sudah Di Verifikasi", "Sudah Verifikasi", "Verifikasi OK", "Verifikasi OK Dengan Catatan",
 ];
 const statusSudahMaju = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
+export const statusSudahMajuVerif = ["Siap Maju SPM", "Sudah SP2D"];
 const OK_CATATAN = "OK Catatan";
 // Twin of STATUS_DIPERBAIKI in server.js. Must not contain the word "masalah": daftarStatusStyle
 // tests for that first and would paint a repaired row red.
@@ -134,7 +135,7 @@ const STATUS_DIPERBAIKI = "Telah Diperbaiki";
 
 //Status pill colours, shared by the daftar table and the pengajuan detail view
 // Ordered as the row travels: neutral, blue, amber while in progress, then olive for
-// passed-with-notes, green for passed, teal and purple through DRPP/KPPN, and a solid
+// passed-with-notes, green for passed, teal and purple through DRPP/SPM/KPPN, and a solid
 // fill at SP2D - the only filled pill, because it is the one terminal state.
 const DAFTAR_STATUS_STYLE = {
     "dalam antrian":                { bg: "#E7ECF4", fg: "#41506B" },
@@ -149,6 +150,7 @@ const DAFTAR_STATUS_STYLE = {
     "verifikasi ok":                { bg: "#D6F5E1", fg: "#0F7A3D" },
     "sudah diterbitkan drpp":       { bg: "#D5EEF6", fg: "#0B6478" },
     "sudah diajukan ke kppn":       { bg: "#E5DEFA", fg: "#4B32A8" },
+    "siap maju spm":                { bg: "#E5DEFA", fg: "#4B32A8" },
     "sudah sp2d":                   { bg: "#0F7A3D", fg: "#FFFFFF" },
     // PJK verdicts (Substansi/Kelengkapan) and the bendahara's Pajak/Anggaran columns,
     // which share the pill treatment now that TableKelola renders them the same way

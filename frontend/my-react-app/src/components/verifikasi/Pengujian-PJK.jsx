@@ -19,6 +19,8 @@ const SPP = 6;
 const NOMINAL = 4;
 const SUBSTANSI = 9, KELENGKAPAN = 10;
 const UNIT_KERJA = 8;
+// Same column N used by Aksi-Verif-PJK's catatan field; already included in the API rows.
+const CATATAN = 13;
 
 // Informasi Pengajuan has nothing verified yet, so it is the one section without the link
 const DOK_HEAD = "Dok. Verifikasi";
@@ -28,7 +30,7 @@ const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
 const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
 const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
 const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
-const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 20, 16, 24, 13, 13, 46];
+const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 20, 16, 24, 13, 13, 46, 60];
 
 // Generation takes 6-8s; the cap stops a wedged job polling forever
 const POLL_INTERVAL_MS = 2000;
@@ -129,12 +131,15 @@ function PengujianPJK(props) {
     async function unduhTabel() {
         setIsExporting(true);
         try {
-            const baris = active.rows.map(row => active.columns.map(index =>
-                index === NOMINAL ? selAngka(row[index]) : selTeks(cellText(row, index), index === SPP)));
+            const baris = active.rows.map(row => [
+                ...active.columns.map(index =>
+                    index === NOMINAL ? selAngka(row[index]) : selTeks(cellText(row, index), index === SPP)),
+                {...selTeks(row[CATATAN]), wrap: true},
+            ]);
             const now = new Date();
             const tanggal = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
                 .map(part => String(part).padStart(2, "0")).join("-");
-            await unduhExcel(`${active.title} PJK ${tanggal}.xlsx`, active.head, baris, SUDAH_LEBAR);
+            await unduhExcel(`${active.title} PJK ${tanggal}.xlsx`, [...active.head, "Catatan"], baris, SUDAH_LEBAR);
         } catch (error) {
             console.error("Gagal membuat file Excel", error);
         } finally {

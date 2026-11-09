@@ -54,12 +54,12 @@ const jenisPengajuan = [
 ];
 
 // GUP/PTUP keep the full table and the Request Tanggal input. Everything else is a
-// verifikasi flow with a one row table cropped from the full one, except these two, which
+// verifikasi flow with a one row table cropped from the full one, except jenisBanyakBaris, which
 // keep that narrow shape but let the user add rows. Nothing is tableless any more; rows
 // created before that changed simply have no block on the sheet.
 const jenisTabelPenuh = ["gup", "ptup"];
 const jenisTanpaTabel = [];
-const jenisBanyakBaris = ["ls-pegawai", "ls-platform"];
+const jenisBanyakBaris = ["gup-kkp", "ls-pegawai", "ls-platform"];
 
 // Jenis the verifikator may push on to SPM. Twin of majuSpm in JENIS_PENGAJUAN.
 const jenisMajuSpm = new Set(["gup-kkp", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);

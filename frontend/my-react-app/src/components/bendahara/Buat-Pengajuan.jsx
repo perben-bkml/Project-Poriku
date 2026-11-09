@@ -129,7 +129,7 @@ function BuatPengajuan(props) {
         if (isBuat && !jenisOptions.some(jenis => jenis.value === ajuan)) setAjuan(jenisOptions[0].value);
     }, [isBuat, jenisOptions, ajuan]);
 
-    // The verifikasi table is a single row, and its sheet has no Request Tanggal column.
+    // Verifikasi has no Request Tanggal; only jenis outside jenisBanyakBaris use a single row.
     // Only applies while composing - a reopened row already arrives in its own shape.
     useEffect(() => {
         if (!isBuat || isTabelPenuh) return;
@@ -207,22 +207,24 @@ function BuatPengajuan(props) {
     }, [props.type, isTanpaTabel]);
 
 
-    //Handle how many rows the user wants
+    // Resize on change so the number spinner and table stay in sync without waiting for blur.
     function handleRowChange(event) {
-        const userRowValue = parseInt(event.target.value)
-        setRowNum(userRowValue);
-    }
-
-    function handleRowBlur(event) {
-        const userRowValue = parseInt(event.target.value);
-        setRowNum(userRowValue);
-        if (userRowValue > tableData.length) {
-            const newRows = Array.from({ length: userRowValue - tableData.length }, (_, index) => 
-                [tableData.length + index + 1, ...emptyCell] );
-            setTableData([...tableData, ...newRows]);
-        } else if (userRowValue < tableData.length) {
-            setTableData(tableData.slice(0, userRowValue).map((row, index) => [index + 1, ...row.slice(1)]))
-        }
+        const value = event.target.value;
+        const requested = Number(value);
+        // Clearing an input while replacing its number must not discard existing rows.
+        const count = value === "" || !Number.isFinite(requested)
+            ? Math.max(1, tableData.length)
+            : Math.max(1, Math.trunc(requested));
+        setRowNum(count);
+        setTableData(previous => {
+            if (count > previous.length) {
+                const newRows = Array.from({ length: count - previous.length }, (_, index) =>
+                    [previous.length + index + 1, ...emptyCell]);
+                return [...previous, ...newRows];
+            }
+            return previous.slice(0, count);
+        });
+        setPage(previous => Math.min(previous, Math.ceil(count / rowsPerPage) - 1));
     }
     //Number format generator
     function numberFormats(num) {
@@ -1203,9 +1205,9 @@ function BuatPengajuan(props) {
                             <p>Input Data Pengajuan</p>
                             {bisaAturBaris && <>
                             <label>Tentukan Jumlah Row Tabel:</label>
-                            <input type="number" value={rowNum > 0 ? rowNum : ""}
-                                onChange={handleRowChange} onBlur={handleRowBlur}
-                                readOnly={componentType === "lihat"} min="0"
+                            <input type="number" value={rowNum}
+                                onChange={handleRowChange}
+                                readOnly={componentType === "lihat"} min="1" step="1"
                                 disabled={lockRow}
                             />
                             <div className="table-lock" onClick={() => setLockRow(!lockRow)}>

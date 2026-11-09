@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
-import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm } from "../bendahara/head-data.js";
+import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm, isMonitorPjkRow, pjkRepairOptions } from "../bendahara/head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
@@ -14,6 +14,7 @@ const FIELD = {
     // Appended by the backend past R: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
     sourceId: 18,
     subjenis: 20,
+    deadline: 21, repairStatus: 22,
 };
 
 function AksiVerifPJK(props) {
@@ -37,6 +38,9 @@ function AksiVerifPJK(props) {
         maju_spm: false,
         tgl_sp2d: "",
     });
+    const [repairDecision, setRepairDecision] = useState("");
+    const [sp2dChanged, setSp2dChanged] = useState(false);
+    const canReviewRepair = isMonitorPjkRow(props.fulldata);
 
     // A GUP/PTUP block is the full table; every other jenis stores the cropped one
     const sourceId = props.fulldata[FIELD.sourceId];
@@ -50,6 +54,8 @@ function AksiVerifPJK(props) {
     );
 
     useEffect(() => {
+        const savedDecision = String(props.fulldata[FIELD.repairStatus] ?? "").trim();
+        setRepairDecision(pjkRepairOptions.includes(savedDecision) ? savedDecision : "");
         setPjkData({
             no_antri: props.fulldata[FIELD.no],
             mulai_verifikasi: props.fulldata[FIELD.mulaiVerif] === "" ? "FALSE" : "TRUE",
@@ -102,6 +108,7 @@ function AksiVerifPJK(props) {
     }, [pjkData]);
 
     function handleInputChange({name, value}) {
+        if (name === "tgl_sp2d") setSp2dChanged(true);
         setPjkData(prev => ({...prev, [name]: value}));
     }
 
@@ -138,6 +145,8 @@ function AksiVerifPJK(props) {
                 (row?.[0] || "") === (savedColors[index]?.[0] || "") ? [] : [{index, color: row?.[0] || ""}]);
             const result = await apiClient.post('/verifikasi/aksi-pjk', {
                 ...pjkData,
+                update_sp2d: sp2dChanged,
+                ...(canReviewRepair && repairDecision ? {status_perbaikan: repairDecision} : {}),
                 ...(changes.length ? {rowColors: {revision: colorRevision, changes}} : {}),
             });
             if (result.status === 200) props.changeComponent("pengujian-PJK");
@@ -185,8 +194,11 @@ function AksiVerifPJK(props) {
                     {bolehMajuSpm && <>
                         <label htmlFor="maju-spm">Maju SPM</label>
                         <input id="maju-spm" className="maju-spm-check" type="checkbox" checked={pjkData.maju_spm}
-                            onChange={e => setPjkData(prev => ({...prev, maju_spm: e.target.checked,
-                                tgl_sp2d: e.target.checked ? prev.tgl_sp2d : ""}))}/>
+                            onChange={e => {
+                                setSp2dChanged(true);
+                                setPjkData(prev => ({...prev, maju_spm: e.target.checked,
+                                    tgl_sp2d: e.target.checked ? prev.tgl_sp2d : ""}));
+                            }}/>
                         {pjkData.maju_spm && <>
                             <label className="maju-spm-date" htmlFor="tgl-sp2d">Tanggal SP2D</label>
                             <input id="tgl-sp2d" className="type-btn" type="date" name="tgl_sp2d" value={pjkData.tgl_sp2d}
@@ -195,6 +207,14 @@ function AksiVerifPJK(props) {
                         </>}
                     </>}
                 </div>
+                {canReviewRepair && <div className="pjk-repair-review">
+                    <label htmlFor="review-perbaikan">Penilaian Perbaikan</label>
+                    <select id="review-perbaikan" className="type-btn" value={repairDecision}
+                            onChange={event => setRepairDecision(event.target.value)}>
+                        <option value="">Pilih OK atau Tolak</option>
+                        {pjkRepairOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </div>}
 
                 <div className="lampiran-aksi-pengajuan">
                     <p>Lampiran: <span className={"padd-span-bend"}/>{ pjkData.lampiran ?

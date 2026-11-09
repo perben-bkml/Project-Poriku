@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, daftarStatusStyle } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
+import { PopupAlert } from "../../ui/Popup.jsx";
 
 // Column indices on 'Write Antrian Verif'; 18 is the source id the backend appends past R
 // Rows are already in hand, so the filters run locally and cost no additional Sheets read
@@ -15,6 +16,7 @@ const TANGGAL_SP2D = 17;
 const SOURCE_ID = 18;
 // Appended after sourceId (18) and Tanggal Perbaikan (19); not the raw sheet's T index.
 const SUBJENIS = 20;
+const DEADLINE = 21, REPAIR_STATUS = 22;
 const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, SUBJENIS, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
@@ -33,6 +35,9 @@ const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
 const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
 const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
 const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 60];
+const MONITOR_COLUMNS = [...SUDAH_COLUMNS, DEADLINE, REPAIR_STATUS];
+const MONITOR_HEAD = [...SUDAH_HEAD, ...monitorPjkHead];
+const MONITOR_LEBAR = [...SUDAH_LEBAR.slice(0, -1), 20, 24, 60];
 
 // Generation takes 6-8s; the cap stops a wedged job polling forever
 const POLL_INTERVAL_MS = 2000;
@@ -50,7 +55,7 @@ const diperbaiki = row => ditolak(row) && String(row[PERBAIKAN] ?? "").trim() !=
 const TAB_KEY = 'pengujianPjkTab';
 
 function PengujianPJK(props) {
-    const [sections, setSections] = useState([[], [], []]);
+    const [sections, setSections] = useState([[], [], [], []]);
     const [pending, setPending] = useState(new Set());
     const [isLoading, setIsLoading] = useState(true);
     const [activeTitle, setActiveTitle] = useState(() => localStorage.getItem(TAB_KEY) || "");
@@ -62,11 +67,13 @@ function PengujianPJK(props) {
     const [subjenis, setSubjenis] = useState("");
     const [substansiFilter, setSubstansiFilter] = useState("");
     const [kelengkapanFilter, setKelengkapanFilter] = useState("");
+    const [loadError, setLoadError] = useState("");
     const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
     async function fetchPjk({quiet = false} = {}) {
         try {
+            setLoadError("");
             if (!quiet) setIsLoading(true);
             const response = await apiClient.get('/verifikasi/pengujian-pjk');
             if (response.status === 200) {
@@ -75,6 +82,7 @@ function PengujianPJK(props) {
             }
         } catch (error) {
             console.error("Error fetching PJK data", error);
+            setLoadError(error.response?.data?.message || error.response?.data?.error || "Gagal memuat pengujian PJK.");
         } finally {
             if (!quiet) setIsLoading(false);
         }
@@ -99,6 +107,7 @@ function PengujianPJK(props) {
 
     // The plain text of a cell, so the table and the Excel export cannot drift apart
     const cellText = (row, index) => {
+        if (index === REPAIR_STATUS) return pjkRepairStatusLabel(row[index]);
         if (index === SPP) return formatNomorSpp(row[index]);
         if (index === SOURCE_ID) return row[index] || "-";
         if (index === DOK_VERIF) return pending.has(String(row[0])) ? "Sedang dibuat" : (row[index] || "-");
@@ -106,6 +115,11 @@ function PengujianPJK(props) {
     };
 
     const project = (rows, columns) => rows.map(row => columns.map(index => {
+        if (index === REPAIR_STATUS) {
+            const label = cellText(row, index);
+            const style = daftarStatusStyle(label);
+            return <span key={index} className="dp-status" style={{backgroundColor: style.bg, color: style.fg}}>{label}</span>;
+        }
         if (index === DOK_VERIF) {
             if (pending.has(String(row[0]))) return <span key={index} style={{color: '#8A6100'}}>Sedang dibuat…</span>;
             return row[index]
@@ -115,27 +129,33 @@ function PengujianPJK(props) {
         return cellText(row, index);
     }));
 
-    const tables = useMemo(() => [
-        {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0],
-            empty: "Tidak ada pengajuan yang perlu diuji."},
-        {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
-            empty: "Tidak ada pengajuan yang sedang diverifikasi."},
-        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
-            rows: sections[1].filter(row => ditolak(row) && !diperbaiki(row)), alert: true,
-            empty: "Tidak ada pengajuan bermasalah."},
-        {title: STATUS_DIPERBAIKI, head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
-            rows: sections[1].filter(diperbaiki),
-            empty: "Tidak ada pengajuan yang telah diperbaiki."},
-        {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
-            rows: sections[2].filter(row =>
-                (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
-                && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))
-                && (!jenis || jenisValueFromLabel(row[3]) === jenis)
-                && (!subjenis || normalSatker(row[SUBJENIS]) === normalSatker(subjenis))
-                && (!substansiFilter || normalSatker(row[SUBSTANSI]) === normalSatker(substansiFilter))
-                && (!kelengkapanFilter || normalSatker(row[KELENGKAPAN]) === normalSatker(kelengkapanFilter))),
-            empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
-    ], [sections, cariNomor, unitKerja, jenis, subjenis, substansiFilter, kelengkapanFilter]);
+    const tables = useMemo(() => {
+        const filterRows = rows => rows.filter(row =>
+            (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
+            && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))
+            && (!jenis || jenisValueFromLabel(row[3]) === jenis)
+            && (!subjenis || normalSatker(row[SUBJENIS]) === normalSatker(subjenis))
+            && (!substansiFilter || normalSatker(row[SUBSTANSI]) === normalSatker(substansiFilter))
+            && (!kelengkapanFilter || normalSatker(row[KELENGKAPAN]) === normalSatker(kelengkapanFilter)));
+        return [
+            {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0],
+                empty: "Tidak ada pengajuan yang perlu diuji."},
+            {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
+                empty: "Tidak ada pengajuan yang sedang diverifikasi."},
+            {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+                rows: sections[1].filter(row => ditolak(row) && !diperbaiki(row)), alert: true,
+                empty: "Tidak ada pengajuan bermasalah."},
+            {title: STATUS_DIPERBAIKI, head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+                rows: sections[1].filter(diperbaiki),
+                empty: "Tidak ada pengajuan yang telah diperbaiki."},
+            {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
+                rows: filterRows(sections[2]),
+                empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
+            {title: "Monitor PJK", head: MONITOR_HEAD, columns: MONITOR_COLUMNS, cari: true,
+                rows: filterRows(sections[3] || []), lebar: MONITOR_LEBAR,
+                empty: "Tidak ada PJK yang sudah SP2D dengan status OK Catatan.", unduh: true},
+        ];
+    }, [sections, cariNomor, unitKerja, jenis, subjenis, substansiFilter, kelengkapanFilter]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];
 
@@ -150,7 +170,8 @@ function PengujianPJK(props) {
             const now = new Date();
             const tanggal = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
                 .map(part => String(part).padStart(2, "0")).join("-");
-            await unduhExcel(`${active.title} PJK ${tanggal}.xlsx`, [...active.head, "Catatan"], baris, SUDAH_LEBAR);
+            const title = active.title.endsWith("PJK") ? active.title : `${active.title} PJK`;
+            await unduhExcel(`${title} ${tanggal}.xlsx`, [...active.head, "Catatan"], baris, active.lebar || SUDAH_LEBAR);
         } catch (error) {
             console.error("Gagal membuat file Excel", error);
         } finally {
@@ -247,6 +268,7 @@ function PengujianPJK(props) {
 
     return (
         <div className='kelola-container'>
+            {loadError && <PopupAlert severity="error" message={loadError}/>}
             <div className='kelola-tabs' role='tablist'>
                 {tables.map(table => {
                     const isActive = table.title === active.title;

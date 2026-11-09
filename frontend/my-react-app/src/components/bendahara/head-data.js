@@ -122,6 +122,15 @@ const pjkKelengkapanOptions = [
     ...pjkStatusOptions.slice(1),
 ];
 
+export const monitorPjkHead = ["Deadline Perbaikan", "Status Perbaikan"];
+export const pjkRepairOptions = ["OK", "Tolak"];
+export const isMonitorPjkRow = row =>
+    (String(row[5] ?? "").trim().toLowerCase() === "sudah sp2d" || String(row[17] ?? "").trim() !== "")
+    && [row[9], row[10]].some(value => String(value ?? "").trim().toLowerCase() === "ok catatan");
+export const pjkRepairStatusLabel = value => ({
+    "": "Belum Diperbaiki", "sudah upload": "Sudah Diperbaiki", "tolak": "Perbaikan Ditolak", "ok": "Sudah OK",
+}[String(value ?? "").trim().toLowerCase()] || String(value ?? "").trim());
+
 //For Aksi-Drpp.jsx
 const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
 
@@ -165,6 +174,10 @@ const DAFTAR_STATUS_STYLE = {
     "sudah diajukan ke kppn":       { bg: "#E5DEFA", fg: "#4B32A8" },
     "siap maju spm":                { bg: "#E5DEFA", fg: "#4B32A8" },
     "sudah sp2d":                   { bg: "#0F7A3D", fg: "#FFFFFF" },
+    "belum diperbaiki":             { bg: "#FFF1CF", fg: "#8A6100" },
+    "sudah diperbaiki":             { bg: "#DCE9FF", fg: "#00449C" },
+    "perbaikan ditolak":            { bg: "#FBE1DE", fg: "#BD1404" },
+    "sudah ok":                     { bg: "#D6F5E1", fg: "#0F7A3D" },
     // PJK verdicts (Substansi/Kelengkapan) and the bendahara's Pajak/Anggaran columns,
     // which share the pill treatment now that TableKelola renders them the same way
     "ok":                           { bg: "#D6F5E1", fg: "#0F7A3D" },

@@ -1231,6 +1231,8 @@ const AJUAN_FLOWS = {
         // Past the PJK columns, which already run beyond antrianLastColumn
         perbaikanColumn: "S",
         subjenisColumn: "T",
+        deadlineColumn: "U",
+        repairStatusColumn: "V",
         // canonical index ('Write Antrian' layout) -> column on this sheet
         antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
@@ -1272,6 +1274,43 @@ const STATUS_SUDAH_VERIFIKASI = [
 const STATUS_SUDAH_MAJU = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
 const STATUS_SUDAH_MAJU_VERIF = ["Siap Maju SPM", "Sudah SP2D"];
 const PJK_STATUS_INDEX = 5; // column F
+
+const monitorPjkEligible = (row) =>
+    (trimmed(row[PJK_STATUS_INDEX]).toLowerCase() === "sudah sp2d" || filled(row[PJK_COLUMN.tanggalSp2d]))
+    && [row[PJK_COLUMN.substansi], row[PJK_COLUMN.kelengkapan]]
+        .some(value => trimmed(value).toLowerCase() === "ok catatan");
+
+// Calendar arithmetic in UTC avoids shifting a date through local/DST time zones.
+// Preserve ISO or Indonesian day-first spelling, including its separator and padding.
+function pjkRepairDeadline(value) {
+    const iso = toIsoDate(value);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    const [year, month, day] = iso.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    date.setUTCDate(date.getUTCDate() + 10);
+    if (typeof value === "number") return Math.round(value) + 10;
+    const dmy = trimmed(value).match(/^(\d{1,2})([/-])(\d{1,2})\2(\d{4})$/);
+    if (dmy) return [String(date.getUTCDate()).padStart(dmy[1].length, "0"),
+        String(date.getUTCMonth() + 1).padStart(dmy[3].length, "0"), date.getUTCFullYear()].join(dmy[2]);
+    return date.toISOString().slice(0, 10);
+}
+
+async function ensurePjkMonitorColumns(spreadsheetId) {
+    const flow = AJUAN_FLOWS.verif;
+    const response = await withBackoff(() => sheets.spreadsheets.get({
+        spreadsheetId, fields: "sheets(properties(sheetId,title,gridProperties.columnCount))",
+    }));
+    const sheet = response.data.sheets?.find(item => item.properties.title === flow.antrianSheet);
+    if (!sheet) throw new Error("Sheet antrian verifikasi tidak ditemukan.");
+    const required = flow.repairStatusColumn.charCodeAt(0) - 64;
+    const count = sheet.properties.gridProperties.columnCount;
+    if (count < required) {
+        await withBackoff(() => sheets.spreadsheets.batchUpdate({spreadsheetId, requestBody: {requests: [
+            {appendDimension: {sheetId: sheet.properties.sheetId, dimension: "COLUMNS", length: required - count}},
+        ]}}));
+    }
+}
 
 // Jenis is stored as a label, so the flow a row belongs to is read back off it
 function resolveJenis(value) {
@@ -4087,11 +4126,12 @@ app.post("/verifikasi/verifikasi-form", async (req, res) => {
     }
 })
 
-// Pengujian PJK - the whole verifikasi antrian in one read, split into its three sections
+// Pengujian PJK: the existing sections plus an overlapping view of paid PJK needing follow-up.
 app.get("/verifikasi/pengujian-pjk", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const verifFlow = AJUAN_FLOWS.verif;
+        await ensurePjkMonitorColumns(spreadsheetId);
 
         // The gup antrian rides along so each mirror row can be labelled with the id of the
         // 'Write Antrian' row that produced it - two ranges, still one request
@@ -4099,11 +4139,31 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                // Include Subjenis in T as well as the document, SPM, and repair metadata.
-                `'${verifFlow.antrianSheet}'!A3:${antrianReadColumn(verifFlow)}`,
+                `'${verifFlow.antrianSheet}'!A3:${verifFlow.repairStatusColumn}`,
                 `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
+                `'${verifFlow.antrianSheet}'!${verifFlow.deadlineColumn}2:${verifFlow.repairStatusColumn}2`,
             ],
         );
+
+        const deadlineIndex = verifFlow.deadlineColumn.charCodeAt(0) - 65;
+        const repairStatusIndex = verifFlow.repairStatusColumn.charCodeAt(0) - 65;
+        const rawRows = (response.data.valueRanges[0].values || []).map(row => [...row]);
+        const writes = [];
+        const headers = response.data.valueRanges[2]?.values?.[0] || [];
+        [[verifFlow.deadlineColumn, "Deadline Perbaikan"], [verifFlow.repairStatusColumn, "Status Perbaikan"]]
+            .forEach(([column, label], index) => {
+                if (!filled(headers[index])) writes.push({range: `'${verifFlow.antrianSheet}'!${column}2`, values: [[label]]});
+            });
+        // Reconcile on reads too: SP2D can be filled directly in Sheets, outside this app.
+        rawRows.forEach((row, index) => {
+            if (!filled(row[0]) || !monitorPjkEligible(row)) return;
+            const deadline = pjkRepairDeadline(row[PJK_COLUMN.tanggalSp2d]);
+            if (deadline !== null && trimmed(row[deadlineIndex]) !== trimmed(deadline)) {
+                writes.push({range: `'${verifFlow.antrianSheet}'!${verifFlow.deadlineColumn}${index + 3}`, values: [[deadline]]});
+                row[deadlineIndex] = deadline;
+            }
+        });
+        if (writes.length) await writeRanges(sheets, spreadsheetId, writes, "RAW");
 
         const sourceIdByKey = new Map();
         for (const row of response.data.valueRanges[1].values || []) {
@@ -4119,11 +4179,12 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         // after sourceId rather than at its own S, so no index the screen already uses shifts.
         const width = PJK_COLUMN.tanggalSp2d + 1;
         const perbaikanAt = perbaikanIndex(verifFlow);
-        const rows = (response.data.valueRanges[0].values || [])
+        const rows = rawRows
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => {
                 const padded = Array.from({ length: width }, (_, i) => row[i] ?? "");
-                return [...padded, sourceId(padded), row[perbaikanAt] ?? "", row[subjenisIndex(verifFlow)] ?? ""];
+                return [...padded, sourceId(padded), row[perbaikanAt] ?? "", row[subjenisIndex(verifFlow)] ?? "",
+                    row[deadlineIndex] ?? "", row[repairStatusIndex] ?? ""];
             })
             .reverse();
 
@@ -4144,7 +4205,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             }
         }
 
-        res.json({ data: [informasi, sedangVerif, sudahVerif], pending: [...pendingHasilVerif.keys()] });
+        res.json({ data: [informasi, sedangVerif, sudahVerif, rows.filter(monitorPjkEligible)], pending: [...pendingHasilVerif.keys()] });
     } catch (error) {
         console.error("Error in /verifikasi/pengujian-pjk:", error);
         res.status(500).json({ error: "Failed to fetch data." });
@@ -4296,13 +4357,14 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
 
         const verifFlow = AJUAN_FLOWS.verif;
         const { pjk } = verifFlow;
+        await ensurePjkMonitorColumns(spreadsheetId);
 
         // The whole row, not just column A: the pre-update verdicts decide whether a PDF
         // is due, and the rest of the row fills the template
         const response = await readRange(
             sheets,
             spreadsheetId,
-            `'${verifFlow.antrianSheet}'!A:${antrianReadColumn(verifFlow)}`,
+            `'${verifFlow.antrianSheet}'!A:${verifFlow.repairStatusColumn}`,
         );
 
         const rows = response.data.values || [];
@@ -4311,6 +4373,10 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             return res.status(400).json({ error: "Keyword not found in column A" });
         }
         const previousRow = rows[rowIndex - 1] || [];
+        const repairReview = req.body.status_perbaikan;
+        if (repairReview !== undefined && (!monitorPjkEligible(previousRow) || !["OK", "Tolak"].includes(repairReview))) {
+            return res.status(400).json({message: "Penilaian perbaikan hanya tersedia untuk PJK yang sudah SP2D dengan status OK Catatan. Pilih OK atau Tolak."});
+        }
         const colorRequests = await preparePjkRowColors(spreadsheetId, previousRow, no_antri, req.body.rowColors);
 
         // Stamped by the system, not typed: the date a row first reached OK/OK Catatan on both
@@ -4325,8 +4391,16 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         // Only LS may reach SPM, so a posted maju_spm on any other jenis is ignored here
         // rather than trusted from the client
         const bolehMajuSpm = !!resolveJenis(previousRow[3])?.majuSpm;
-        const majuValue = bolehMajuSpm && maju_spm ? "yes" : "";
-        const sp2dValue = majuValue ? trimmed(tgl_sp2d) : "";
+        // Reviewing a PJK must not clear a date typed directly in Sheets. Older clients
+        // omit this flag and retain their existing update behavior.
+        const updateSp2d = req.body.update_sp2d !== false;
+        const majuValue = updateSp2d ? (bolehMajuSpm && maju_spm ? "yes" : "") : trimmed(previousRow[PJK_COLUMN.majuSpm]);
+        const sp2dValue = updateSp2d ? (majuValue ? trimmed(tgl_sp2d) : "") : trimmed(previousRow[PJK_COLUMN.tanggalSp2d]);
+        const updatedRow = [...previousRow];
+        updatedRow[PJK_COLUMN.substansi] = substansi;
+        updatedRow[PJK_COLUMN.kelengkapan] = kelengkapan;
+        if (bolehMajuSpm) updatedRow[PJK_COLUMN.tanggalSp2d] = sp2dValue;
+        const deadline = monitorPjkEligible(updatedRow) ? pjkRepairDeadline(updatedRow[PJK_COLUMN.tanggalSp2d]) : null;
 
         // Only a changed verdict or note is a new decision - opening a row and saving it untouched
         // must not mint another PDF revision, nor drop the satker's Tanggal Perbaikan
@@ -4342,10 +4416,10 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             [`${pjk.kelengkapan}${rowIndex}`, kelengkapan],
             [`${pjk.catatan}${rowIndex}`, catatan],
             selesaiValue === "" ? [`${pjk.mulaiVerif}${rowIndex}`, mulaiValue] : null,
-            bolehMajuSpm ? [`${pjk.majuSpm}${rowIndex}`, majuValue] : null,
+            bolehMajuSpm && updateSp2d ? [`${pjk.majuSpm}${rowIndex}`, majuValue] : null,
             // A date here would be coerced to a serial by USER_ENTERED, so only the
             // clearing case rides this batch; the date itself goes below as RAW
-            bolehMajuSpm && sp2dValue === "" ? [`${pjk.tanggalSp2d}${rowIndex}`, ""] : null,
+            bolehMajuSpm && updateSp2d && sp2dValue === "" ? [`${pjk.tanggalSp2d}${rowIndex}`, ""] : null,
             // Same rule as aksi-ajuan: this desk has just decided, so any earlier repair no longer
             // answers it - but a save that only ticks Maju SPM decides nothing. Only this sheet's
             // stamp; the bendahara's verdict on 'Write Antrian' is a separate complaint.
@@ -4363,10 +4437,14 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             }));
         }
         await writeRanges(sheets, spreadsheetId, updates.map(toWrite), "USER_ENTERED");
-        if (sp2dValue !== "") {
-            await writeRanges(sheets, spreadsheetId,
-                [toWrite([`${pjk.tanggalSp2d}${rowIndex}`, sp2dValue])], "RAW");
+        const rawUpdates = [];
+        if (updateSp2d && sp2dValue !== "") rawUpdates.push(toWrite([`${pjk.tanggalSp2d}${rowIndex}`, sp2dValue]));
+        const deadlineIndex = verifFlow.deadlineColumn.charCodeAt(0) - 65;
+        if (deadline !== null && trimmed(previousRow[deadlineIndex]) !== trimmed(deadline)) {
+            rawUpdates.push(toWrite([`${verifFlow.deadlineColumn}${rowIndex}`, deadline]));
         }
+        if (repairReview !== undefined) rawUpdates.push(toWrite([`${verifFlow.repairStatusColumn}${rowIndex}`, repairReview]));
+        if (rawUpdates.length) await writeRanges(sheets, spreadsheetId, rawUpdates, "RAW");
 
         if (documentFieldChanged) {
             const savedRow = [...previousRow];

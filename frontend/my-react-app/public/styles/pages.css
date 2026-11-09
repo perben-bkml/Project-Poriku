@@ -487,6 +487,35 @@
     margin: 0 0 14px;
 }
 
+.dashboard-realisasi-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    color: #41506B;
+}
+
+.dashboard-realisasi-filter select {
+    box-sizing: border-box;
+    flex: 1 1 220px;
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid #C7CDD7;
+    border-radius: 10px;
+    background-color: #FFFFFF;
+    color: #00204A;
+    font: inherit;
+}
+
+.dashboard-realisasi-filter select:focus-visible {
+    outline: 2px solid #00449C;
+    outline-offset: 2px;
+}
+
 .dashboard-realisasi-body {
     display: flex;
     align-items: center;

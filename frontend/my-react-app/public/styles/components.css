@@ -2644,10 +2644,100 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Inside the card, under its title and above the table, on the same 35px gutter the head and
    the table content already sit on */
 .bar-cari-pjk {
+    display: block;
+    container-type: inline-size;
     margin: 22px 0;
     /* 30px matches .wide-card-title's own left margin, so the bar starts level with the title */
     padding: 0 30px;
     /* Daftar-Pengajuan inherits this from .pengajuan-filter; here there is no wrapper to take
        it from, and the labels must read at the same size on both screens */
     font-size: 1.2rem;
+}
+
+/* Size the grid to the card, so it also adapts when the sidebar is opened or closed. */
+.pjk-filter-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 20px;
+}
+
+.pjk-filter-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 7px;
+}
+
+.pjk-filter-field label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #41506B;
+}
+
+.bar-cari-pjk .type-btn {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    color: #1A284B;
+    background-color: #FFFFFF;
+}
+
+.bar-cari-pjk .type-btn:focus-visible {
+    outline: 2px solid #00449C;
+    outline-offset: 2px;
+}
+
+.bar-cari-pjk .type-btn:disabled {
+    color: #7A8699;
+    background-color: #F1F4F8;
+    cursor: not-allowed;
+}
+
+.pjk-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.bar-cari-pjk .spm-button {
+    box-sizing: border-box;
+    width: auto;
+    height: 38px;
+    min-width: 92px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+
+.bar-cari-pjk .pjk-filter-reset {
+    color: #41506B;
+    background-color: #F1F4F8;
+    box-shadow: none;
+}
+
+.bar-cari-pjk .pjk-filter-reset:hover {
+    background-color: #E4E9F1;
+}
+
+@container (min-width: 1320px) {
+    .pjk-filter-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@container (max-width: 680px) {
+    .pjk-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 430px) {
+    .pjk-filter-fields { grid-template-columns: minmax(0, 1fr); }
+    .pjk-filter-actions .spm-button { flex: 1; }
+}
+
+@media (max-width: 640px) {
+    .bar-cari-pjk { padding: 0 16px; }
 }

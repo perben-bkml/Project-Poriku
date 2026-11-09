@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 
 // Column indices on 'Write Antrian Verif'; 18 is the source id the backend appends past R
-// Rows are already in hand, so both controls filter locally and cost no Sheets read
+// Rows are already in hand, so the filters run locally and cost no additional Sheets read
 const normalSatker = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 
 const DOK_VERIF = 15;
@@ -58,6 +58,11 @@ function PengujianPJK(props) {
     const [cariInput, setCariInput] = useState("");
     const [cariNomor, setCariNomor] = useState("");
     const [unitKerja, setUnitKerja] = useState("");
+    const [jenis, setJenis] = useState("");
+    const [subjenis, setSubjenis] = useState("");
+    const [substansiFilter, setSubstansiFilter] = useState("");
+    const [kelengkapanFilter, setKelengkapanFilter] = useState("");
+    const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
     async function fetchPjk({quiet = false} = {}) {
@@ -124,9 +129,13 @@ function PengujianPJK(props) {
         {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
             rows: sections[2].filter(row =>
                 (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
-                && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))),
+                && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))
+                && (!jenis || jenisValueFromLabel(row[3]) === jenis)
+                && (!subjenis || normalSatker(row[SUBJENIS]) === normalSatker(subjenis))
+                && (!substansiFilter || normalSatker(row[SUBSTANSI]) === normalSatker(substansiFilter))
+                && (!kelengkapanFilter || normalSatker(row[KELENGKAPAN]) === normalSatker(kelengkapanFilter))),
             empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
-    ], [sections, cariNomor, unitKerja]);
+    ], [sections, cariNomor, unitKerja, jenis, subjenis, substansiFilter, kelengkapanFilter]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];
 
@@ -159,22 +168,66 @@ function PengujianPJK(props) {
     const cariBar = active.cari ? (
         <form className="bar-cari bar-cari-pjk"
               onSubmit={event => (event.preventDefault(), setCariNomor(cariInput.trim()))}>
-            <label htmlFor="pjk-cari-spp">Cari Nomor SPP</label>
-            <input id="pjk-cari-spp" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
-                   value={cariInput} placeholder="mis. 00041"
-                   onChange={event => setCariInput(event.target.value)}/>
-            <label htmlFor="pjk-unit">Unit Kerja</label>
-            <select id="pjk-unit" className="type-btn" value={unitKerja}
-                    onChange={event => setUnitKerja(event.target.value)}>
-                <option value="">Semua Unit Kerja</option>
-                {userSatkerNames.slice(1).map(item => (
-                    <option key={item.value} value={item.title}>{item.title}</option>
-                ))}
-            </select>
-            <button className="spm-button" type="submit">Cari</button>
-            {(cariNomor || unitKerja) &&
-                <button className="spm-button" type="button"
-                        onClick={() => (setCariInput(""), setCariNomor(""), setUnitKerja(""))}>Reset</button>}
+            <div className="pjk-filter-fields">
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-cari-spp">Cari Nomor SPP</label>
+                    <input id="pjk-cari-spp" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
+                           value={cariInput} placeholder="mis. 00041"
+                           onChange={event => setCariInput(event.target.value)}/>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-jenis">Jenis</label>
+                    <select id="pjk-jenis" className="type-btn" value={jenis}
+                            onChange={event => { setJenis(event.target.value); setSubjenis(""); }}>
+                        <option value="">Semua Jenis</option>
+                        {jenisPengajuan.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-subjenis">Subjenis</label>
+                    <select id="pjk-subjenis" className="type-btn" value={subjenis}
+                            disabled={subjenisOptions.length === 0}
+                            onChange={event => setSubjenis(event.target.value)}>
+                        <option value="">Semua Subjenis</option>
+                        {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-unit">Unit Kerja</label>
+                    <select id="pjk-unit" className="type-btn" value={unitKerja}
+                            onChange={event => setUnitKerja(event.target.value)}>
+                        <option value="">Semua Unit Kerja</option>
+                        {userSatkerNames.slice(1).map(item => (
+                            <option key={item.value} value={item.title}>{item.title}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-substansi">Substansi</label>
+                    <select id="pjk-substansi" className="type-btn" value={substansiFilter}
+                            onChange={event => setSubstansiFilter(event.target.value)}>
+                        <option value="">Semua Status</option>
+                        {pjkStatusOptions.map(option => <option key={option.label} value={option.label}>{option.label}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-kelengkapan">Kelengkapan</label>
+                    <select id="pjk-kelengkapan" className="type-btn" value={kelengkapanFilter}
+                            onChange={event => setKelengkapanFilter(event.target.value)}>
+                        <option value="">Semua Status</option>
+                        {pjkKelengkapanOptions.map(option => <option key={option.label} value={option.label}>{option.label}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="pjk-filter-actions">
+                <button className="spm-button" type="submit">Cari</button>
+                {(cariNomor || unitKerja || jenis || subjenis || substansiFilter || kelengkapanFilter) &&
+                    <button className="spm-button pjk-filter-reset" type="button"
+                            onClick={() => {
+                                setCariInput(""); setCariNomor(""); setUnitKerja("");
+                                setJenis(""); setSubjenis(""); setSubstansiFilter(""); setKelengkapanFilter("");
+                            }}>Reset</button>}
+            </div>
         </form>
     ) : null;
 

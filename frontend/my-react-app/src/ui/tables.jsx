@@ -436,7 +436,7 @@ export function TableKelola(props) {
 
         // Handle multiple clicks (double and triple)
         const handleRowClick = () => {
-            if (tableType !== 'aksi-drpp') return;
+            if (tableType !== 'aksi-drpp' && tableType !== 'aksi-pjk') return;
 
             const newCount = clickCount + 1;
             setClickCount(newCount);
@@ -449,11 +449,11 @@ export function TableKelola(props) {
             // Set new timer to detect click pattern
             const timer = setTimeout(() => {
                 if (newCount === 2) {
-                    // Double click - set to red
-                    props.addColorData(props.rowIndex, "colored");
+                    // First mark: PJK green, DRPP red.
+                    props.addColorData(props.rowIndex, tableType === 'aksi-pjk' ? "pjk-green" : "colored");
                 } else if (newCount >= 3) {
-                    // Triple click - set to purple
-                    props.addColorData(props.rowIndex, "color-purple");
+                    // Second mark: PJK red, DRPP orange.
+                    props.addColorData(props.rowIndex, tableType === 'aksi-pjk' ? "pjk-red" : "color-purple");
                 }
                 setClickCount(0);
             }, 300); // 300ms window to detect multiple clicks
@@ -463,6 +463,11 @@ export function TableKelola(props) {
 
         // Determine background color based on color status
         const getBackgroundColor = () => {
+            if (tableType === 'aksi-pjk') {
+                if (getCheckData[0] === 'pjk-green') return '#D6F5E1';
+                if (getCheckData[0] === 'pjk-red') return '#FBE1DE';
+                return 'inherit';
+            }
             if (tableType !== 'aksi-drpp') return 'inherit';
             if (getCheckData[0] === 'colored') return '#F3B5B5'; // Light red
             if (getCheckData[0] === 'color-purple') return '#FFA500'; // Light orange
@@ -472,7 +477,7 @@ export function TableKelola(props) {
         return (
             <Fragment>
                 <TableRow onClick={handleRowClick}
-                    sx={tableType === 'aksi-drpp'
+                    sx={tableType === 'aksi-drpp' || tableType === 'aksi-pjk'
                         ? {backgroundColor: getBackgroundColor(), cursor: 'pointer'}
                         : gayaDaftar ? {'&:hover td': {backgroundColor: '#F7FAFF'}} : null}>
                     {tableType === "kelola" || tableType === "monitor"?
@@ -624,7 +629,7 @@ export function TableKelola(props) {
                             />
                     ))}
                 </TableBody>
-                { props.type === "aksi" &&
+                { (props.type === "aksi" || props.type === "aksi-pjk") &&
                 <TableFooter>
                     <TableRow>
                         {getFooterSums().map((value, colIndex) => (
@@ -706,7 +711,7 @@ TableKelola.propTypes = {
     aksiTarget: PropTypes.string,
     changeComponent: PropTypes.func,
     aksiData: PropTypes.func,
-    coloredRow: PropTypes.object,
+    coloredRow: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.string)),
     addColorData: PropTypes.func,
     filterActive: PropTypes.bool,
     filterColumns: PropTypes.arrayOf(PropTypes.number),

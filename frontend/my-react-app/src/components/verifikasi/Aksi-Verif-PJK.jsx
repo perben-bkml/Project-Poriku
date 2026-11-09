@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm } from "../bendahara/head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
-import Popup from "../../ui/Popup.jsx";
+import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 
 const FIELD = {
     no: 0, timestamp: 1, nama: 2, jenis: 3, nominal: 4, spp: 6,
@@ -22,6 +22,10 @@ function AksiVerifPJK(props) {
     const [isPopup, setIsPopup] = useState(false);
     const [tableData, setTableData] = useState([]);
     const [tandaMak, setTandaMak] = useState(null);
+    const [coloredRow, setColoredRow] = useState([]);
+    const [savedColors, setSavedColors] = useState([]);
+    const [colorRevision, setColorRevision] = useState("");
+    const [saveError, setSaveError] = useState("");
     const [pjkData, setPjkData] = useState({
         no_antri: "",
         mulai_verifikasi: "FALSE",
@@ -65,12 +69,16 @@ function AksiVerifPJK(props) {
                 const unitKerja = props.fulldata[FIELD.unitKerja];
                 const response = await apiClient.get('/bendahara/data-transaksi', {
                     params: sourceId
-                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup", unitKerja }
-                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif", unitKerja },
+                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup", unitKerja, pjkColors: true }
+                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif", unitKerja, pjkColors: true },
                 });
                 if (response.status === 200) {
                     setTableData(response.data.data || []);
                     setTandaMak(response.data.tandaMak || null);
+                    const colors = response.data.rowColors?.colors || [];
+                    setColoredRow(colors);
+                    setSavedColors(colors);
+                    setColorRevision(response.data.rowColors?.revision || "");
                 }
             } catch {
                 setTableData([]); // jenis without a table block
@@ -101,6 +109,14 @@ function AksiVerifPJK(props) {
         setIsPopup(!isPopup);
     }
 
+    function addColorData(rowIndex, value) {
+        setColoredRow(previous => {
+            const next = [...previous];
+            next[rowIndex] = previous[rowIndex]?.[0] === value ? [""] : [value];
+            return next;
+        });
+    }
+
     const infoTableData = [
         props.fulldata[FIELD.no],
         sourceId || "-",
@@ -117,16 +133,24 @@ function AksiVerifPJK(props) {
         try {
             handlePopup();
             setIsLoading(true);
-            const result = await apiClient.post('/verifikasi/aksi-pjk', pjkData);
+            setSaveError("");
+            const changes = coloredRow.flatMap((row, index) =>
+                (row?.[0] || "") === (savedColors[index]?.[0] || "") ? [] : [{index, color: row?.[0] || ""}]);
+            const result = await apiClient.post('/verifikasi/aksi-pjk', {
+                ...pjkData,
+                ...(changes.length ? {rowColors: {revision: colorRevision, changes}} : {}),
+            });
             if (result.status === 200) props.changeComponent("pengujian-PJK");
         } catch (error) {
             console.log("Failed sending Data.", error);
+            setSaveError(error.response?.data?.message || "Gagal menyimpan verifikasi. Silakan coba lagi.");
         }
         setIsLoading(false);
     }
 
     return (
         <div className="aksi-pengajuan-container">
+            {saveError && <PopupAlert severity="error" message={saveError}/>}
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Verifikasi PJK</h2>
                 <TableInfoAntri header={pjkInfoHeadData} body={infoTableData}/>
@@ -186,9 +210,12 @@ function AksiVerifPJK(props) {
             {isTableLoading || tableData.length > 0 ?
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
+                <p style={{margin: "0 30px 16px", color: "#5A6472", fontSize: "0.9rem"}}>
+                    Klik dua kali untuk hijau muda, tiga kali untuk merah muda. Ulangi untuk menghapus warna, lalu klik Simpan.
+                </p>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi" header={tableHeader} content={tableData} fullContent={tableData}
-                             tandaMak={tandaMak} />
+                <TableKelola type="aksi-pjk" header={tableHeader} content={tableData} fullContent={tableData}
+                             tandaMak={tandaMak} coloredRow={coloredRow} addColorData={addColorData} />
                 }
             </div> : null}
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}

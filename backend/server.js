@@ -13,6 +13,7 @@ import multer from 'multer';
 import stream from 'stream';
 import readXlsxFile from 'read-excel-file/node';
 import dns from 'node:dns/promises';
+import { createHash } from 'node:crypto';
 
 
 // Initialize tools
@@ -1834,6 +1835,95 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
 })
 
 
+// PJK annotations use cell formatting, independently of DRPP's markers in column W.
+const PJK_ROW_COLORS = {
+    "pjk-green": { red: 214 / 255, green: 245 / 255, blue: 225 / 255 },
+    "pjk-red": { red: 251 / 255, green: 225 / 255, blue: 222 / 255 },
+};
+const pjkRgbKey = (rgb) => rgb
+    ? [rgb.red, rgb.green, rgb.blue].map(value => Math.round((value || 0) * 255)).join(",") : "";
+
+async function readPjkRowColors(spreadsheetId, flow, startRow, endRow, tableData) {
+    const response = await withBackoff(() => sheets.spreadsheets.get({
+        spreadsheetId,
+        ranges: [`'${flow.tableSheet}'!A${startRow}:A${endRow}`],
+        includeGridData: true,
+        fields: "sheets(properties(sheetId),data(startRow,rowData(values(userEnteredFormat(backgroundColor,backgroundColorStyle)))))",
+    }));
+    const sheet = response.data.sheets?.[0];
+    if (!sheet) throw new Error("Sheet tabel PJK tidak ditemukan.");
+    const grid = sheet.data?.[0] || {};
+    const offset = startRow - 1 - (grid.startRow ?? startRow - 1);
+    const colors = tableData.map((_, index) => {
+        const format = grid.rowData?.[index + offset]?.values?.[0]?.userEnteredFormat;
+        const key = pjkRgbKey(format?.backgroundColorStyle?.rgbColor || format?.backgroundColor);
+        return [Object.keys(PJK_ROW_COLORS).find(color => pjkRgbKey(PJK_ROW_COLORS[color]) === key) || ""];
+    });
+    const revision = createHash("sha256").update(JSON.stringify({
+        rows: tableData.map(row => Array.from({length: flow.tableColumnCount}, (_, i) => String(row[i] ?? ""))),
+        colors,
+    })).digest("hex");
+    return { colors, revision, sheetId: sheet.properties.sheetId };
+}
+
+function pjkColorError(message, statusCode = 409) {
+    return Object.assign(new Error(message), {statusCode});
+}
+
+async function preparePjkRowColors(spreadsheetId, antrianRow, noAntri, payload) {
+    if (payload === undefined) return [];
+    if (!payload || !Array.isArray(payload.changes) || !payload.changes.length
+        || typeof payload.revision !== "string") {
+        throw pjkColorError("Data warna baris tidak valid.", 400);
+    }
+    const changes = payload.changes;
+    const seen = new Set();
+    for (const change of changes) {
+        if (!change || !Number.isInteger(change.index) || change.index < 0 || seen.has(change.index)
+            || (change.color !== "" && !Object.hasOwn(PJK_ROW_COLORS, change.color))) {
+            throw pjkColorError("Data warna baris tidak valid.", 400);
+        }
+        seen.add(change.index);
+    }
+
+    // Derive the table from the verified antrian row, never a client-supplied sheet/row offset.
+    let flow = AJUAN_FLOWS.verif;
+    let sourceId = noAntri;
+    if (resolveJenis(antrianRow[3])?.flow === "gup") {
+        flow = AJUAN_FLOWS.gup;
+        const original = await readRange(sheets, spreadsheetId, `'${flow.antrianSheet}'!A:C`);
+        const key = mirrorRowKey(antrianRow[1], antrianRow[2]);
+        const matches = (original.data.values || []).filter(row => mirrorRowKey(row[1], row[2]) === key);
+        if (matches.length !== 1) throw pjkColorError("Pengajuan asal tidak dapat dipastikan. Muat ulang tabel sebelum menyimpan warna.");
+        sourceId = matches[0][0];
+    }
+    const markers = await readRange(sheets, spreadsheetId, `'${flow.tableSheet}'!X:Y`);
+    const matches = (markers.data.values || []).map((row, index) => ({row, index}))
+        .filter(({row}) => row[0] === `TRANS_ID:${sourceId}`);
+    if (matches.length !== 1) throw pjkColorError("Tabel pengajuan berubah. Muat ulang sebelum menyimpan warna.");
+    const count = Number(matches[0].row[1]);
+    if (!Number.isInteger(count) || count < 1 || changes.some(change => change.index >= count)) {
+        throw pjkColorError("Jumlah baris tabel berubah. Muat ulang sebelum menyimpan warna.");
+    }
+    const startRow = matches[0].index + 2; // X/Y is on the header; colors belong to the following data rows.
+    const endRow = startRow + count - 1;
+    const values = await readRange(sheets, spreadsheetId,
+        `'${flow.tableSheet}'!A${startRow}:${getColumnLetter(flow.tableColumnCount - 1)}${endRow}`,
+        {valueRenderOption: "UNFORMATTED_VALUE", majorDimension: "ROWS"});
+    const data = values.data.values || [];
+    if (data.length !== count) throw pjkColorError("Data tabel berubah. Muat ulang sebelum menyimpan warna.");
+    const snapshot = await readPjkRowColors(spreadsheetId, flow, startRow, endRow, data);
+    if (snapshot.revision !== payload.revision) {
+        throw pjkColorError("Data atau warna tabel berubah sejak dibuka. Kembali lalu buka ulang pengajuan sebelum menyimpan.");
+    }
+    return changes.map(({index, color}) => ({repeatCell: {
+        range: {sheetId: snapshot.sheetId, startRowIndex: startRow - 1 + index,
+            endRowIndex: startRow + index, startColumnIndex: 0, endColumnIndex: flow.tableColumnCount},
+        cell: {userEnteredFormat: color ? {backgroundColorStyle: {rgbColor: PJK_ROW_COLORS[color]}} : {}},
+        fields: "userEnteredFormat.backgroundColor,userEnteredFormat.backgroundColorStyle",
+    }}));
+}
+
 // Find, get, and return existing data based on user input
 app.get("/bendahara/data-transaksi", async (req, res) => {
     try {
@@ -1885,12 +1975,17 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
             return row;
         })
 
+        const rowColors = req.query.pjkColors === "true"
+            ? await readPjkRowColors(spreadsheetId, flowConfig, keywordRow, endKeywordTableRow, keywordTableData)
+            : undefined;
+
         // Return back to only the grabbed table to frontend
         res.json({
             data: keywordTableData,
             keywordRowPos: keywordRow - 1,
             keywordEndRow: endKeywordTableRow,
             tandaMak: await tandaiMak(req, keywordTableData),
+            ...(rowColors ? {rowColors: {colors: rowColors.colors, revision: rowColors.revision}} : {}),
         })
     } catch (error) {
         console.error("Error in /bendahara/data-transaksi:", error);
@@ -4216,6 +4311,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             return res.status(400).json({ error: "Keyword not found in column A" });
         }
         const previousRow = rows[rowIndex - 1] || [];
+        const colorRequests = await preparePjkRowColors(spreadsheetId, previousRow, no_antri, req.body.rowColors);
 
         // Stamped by the system, not typed: the date a row first reached OK/OK Catatan on both
         // verdicts. previousRow already holds it, so keeping the original costs no extra read.
@@ -4261,6 +4357,11 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
             values: [[value ?? ""]],
         });
 
+        if (colorRequests.length) {
+            await withBackoff(() => sheets.spreadsheets.batchUpdate({
+                spreadsheetId, requestBody: {requests: colorRequests},
+            }));
+        }
         await writeRanges(sheets, spreadsheetId, updates.map(toWrite), "USER_ENTERED");
         if (sp2dValue !== "") {
             await writeRanges(sheets, spreadsheetId,
@@ -4297,6 +4398,9 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         res.status(200).json({ message: "Data successfully written." });
     } catch (error) {
         console.error("Error in /verifikasi/aksi-pjk:", error);
+        if (error.statusCode === 400 || error.statusCode === 409) {
+            return res.status(error.statusCode).json({message: error.message});
+        }
         res.status(500).json({ message: "Server error." });
     }
 })

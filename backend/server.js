@@ -914,6 +914,13 @@ function cariNomorAntrian(rows, cari) {
     });
 }
 
+// Filter before pagination so totals and date-filtered results use the same Jenis selection.
+function filterJenisAntrian(rows, jenisKey) {
+    if (!trimmed(jenisKey)) return rows;
+    const jenis = JENIS_PENGAJUAN[trimmed(jenisKey).toLowerCase()] || resolveJenis(jenisKey);
+    return jenis ? rows.filter(row => resolveJenis(row[ANTRIAN_JENIS_INDEX]) === jenis) : [];
+}
+
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
@@ -930,7 +937,7 @@ app.get("/bendahara/antrian", async (req, res) => {
             const dicari = normalizeSatker(unitKerja);
             filteredRows = filteredRows.filter(row => normalizeSatker(row[ANTRIAN_UNIT_KERJA_INDEX]) === dicari);
         }
-        filteredRows = cariNomorAntrian(filteredRows, cariNomor);
+        filteredRows = filterJenisAntrian(cariNomorAntrian(filteredRows, cariNomor), req.query.jenis);
         // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
         if (flow) {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
@@ -983,7 +990,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
         if (kategori) {
             allRows = allRows.filter(row => antrianKategori(row) === kategori);
         }
-        allRows = cariNomorAntrian(allRows, req.query.cariNomor);
+        allRows = filterJenisAntrian(cariNomorAntrian(allRows, req.query.cariNomor), req.query.jenis);
 
         // Filter rows whose timestamp matches the date prefix
         const filteredRows = sortAntrianLatestFirst(

@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -57,6 +57,8 @@ function toTableRow(data, pending, lastPage, readOnly) {
     // Lampiran (19) is the Bupot on a GUP/PTUP row and the PJK on every other jenis, whose
     // PJK index the server just copies from it. Same split Buat-Pengajuan.jsx makes.
     const isGup = data[20] === "gup";
+    // GUP KKP is listed in the GUP tab, but its values come from Write Antrian Verif
+    const isGupKkp = data[20] === "verif" && String(data[3] ?? "").trim().toUpperCase() === "GUP KKP";
     return {
         key: `${data[20]}-${data[0]}`,
         id: data[0],
@@ -64,11 +66,11 @@ function toTableRow(data, pending, lastPage, readOnly) {
         nominal: data[4],
         tglAjuan: data[1],
         unitKerja: data[11],
-        tglProses: data[6],
-        drpp: data[8],
+        tglProses: isGupKkp ? data[14] : data[6],
+        drpp: isGupKkp ? "" : data[8],
         status: data[7],
         spp: data[9],
-        spm: data[10],
+        spm: isGupKkp ? data[9] : data[10],
         pajak: data[12],
         anggaran: data[13],
         mulaiVerif: data[14],
@@ -111,6 +113,7 @@ function DaftarPengajuan(props){
     const [cariInput, setCariInput] = useState("")
     const [cariNomor, setCariNomor] = useState("")
     const [unitKerja, setUnitKerja] = useState("")
+    const [jenis, setJenis] = useState("");
     const [datePrefix, setDatePrefix] = useState("");
     const [kategori, setKategori] = useState(() => {
         const saved = localStorage.getItem(TAB_KEY);
@@ -141,6 +144,8 @@ function DaftarPengajuan(props){
     // Admins see every satker, so only they have anything to narrow. A "user" is already
     // pinned to its own unit kerja by the route.
     const bisaFilterUnit = String(user?.role ?? "").includes("admin");
+    const jenisOptions = jenisPengajuan.filter(item =>
+        (item.value.startsWith("ls-") ? "ls" : "gup") === kategori);
 
     function cariSubmit(event) {
         event.preventDefault();
@@ -158,6 +163,7 @@ function DaftarPengajuan(props){
         setCariInput("");
         setCariNomor("");
         setUnitKerja("");
+        setJenis("");
     }
 
     const applyResult = useCallback((result) => {
@@ -172,7 +178,7 @@ function DaftarPengajuan(props){
     // Every view is served from cache first and revalidated behind it, so switching back to a
     // tab or page costs no Sheets read - the route re-reads both antrian sheets on every call.
     const fetchAntrianData = useCallback(async (page, { quiet = false } = {}) => {
-        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}`;
+        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}|${jenis}`;
         // A quiet refresh only ever follows a change, and a delete shifts rows across pages
         if (quiet) cacheRef.current.clear();
         const cached = quiet ? null : cacheRef.current.get(key);
@@ -183,7 +189,7 @@ function DaftarPengajuan(props){
             setIsLoading(true);
         }
 
-        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja };
+        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja, jenis };
         try {
             const { data } = datePrefix
                 ? await apiClient.get('/bendahara/filter-date', { params: { ...params, datePrefix } })
@@ -214,7 +220,7 @@ function DaftarPengajuan(props){
         } finally {
             setIsLoading(false); // otherwise a failed fetch leaves the spinner up for good
         }
-    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, showAlert, applyResult]);
+    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, jenis, showAlert, applyResult]);
 
     useEffect(() => {
         fetchAntrianData(currentPage);
@@ -244,6 +250,7 @@ function DaftarPengajuan(props){
 
     const selectTab = useCallback((value) => {
         setKategori(value);
+        setJenis("");
         localStorage.setItem(TAB_KEY, value);
         setCurrentPage(1);
     }, []);
@@ -350,7 +357,7 @@ function DaftarPengajuan(props){
                            onChange={event => setCariInput(event.target.value)} />
                     {bisaFilterUnit &&
                         <>
-                            <label htmlFor="filter-unit">Unit Kerja</label>
+                            <label htmlFor="filter-unit" style={{paddingLeft: "15px"}}>Unit Kerja</label>
                             <select id="filter-unit" className="type-btn" value={unitKerja}
                                     onChange={event => gantiUnitKerja(event.target.value)}>
                                 <option value="">Semua Unit Kerja</option>
@@ -359,8 +366,16 @@ function DaftarPengajuan(props){
                                 ))}
                             </select>
                         </>}
+                    <label htmlFor="filter-jenis" style={{paddingLeft: "20px"}}>Jenis</label>
+                    <select id="filter-jenis" className="type-btn" value={jenis}
+                            onChange={event => { setCurrentPage(1); setJenis(event.target.value); }}>
+                        <option value="">Semua Jenis</option>
+                        {jenisOptions.map(item => (
+                            <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                    </select>
                     <button className="spm-button" type="submit">Cari</button>
-                    {(cariNomor || unitKerja) &&
+                    {(cariNomor || unitKerja || jenis) &&
                         <button className="spm-button" type="button" onClick={hapusCari}>Reset</button>}
                 </form>
             </div>

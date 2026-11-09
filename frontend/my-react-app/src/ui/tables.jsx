@@ -1242,11 +1242,11 @@ const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hid
                                         <EditIcon sx={{ fontSize: 21, color: "#D9A33B" }} />
                                     </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Hapus pengajuan" arrow>
+                                {!row.deleteLocked && <Tooltip title="Hapus pengajuan" arrow>
                                     <IconButton size="small" aria-label="Hapus pengajuan" onClick={() => onDelete(row)}>
                                         <DeleteForeverIcon sx={{ fontSize: 21, color: "#BD1404" }} />
                                     </IconButton>
-                                </Tooltip>
+                                </Tooltip>}
                             </>}
                     </div>
                 </td>

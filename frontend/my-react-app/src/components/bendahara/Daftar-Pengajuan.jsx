@@ -57,6 +57,8 @@ function toTableRow(data, pending, lastPage, readOnly) {
     // Lampiran (19) is the Bupot on a GUP/PTUP row and the PJK on every other jenis, whose
     // PJK index the server just copies from it. Same split Buat-Pengajuan.jsx makes.
     const isGup = data[20] === "gup";
+    const needsPjkCorrection = [data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN));
+    const statusLocked = LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]));
     // GUP KKP is listed in the GUP tab, but its values come from Write Antrian Verif
     const isGupKkp = data[20] === "verif" && String(data[3] ?? "").trim().toUpperCase() === "GUP KKP";
     return {
@@ -86,14 +88,15 @@ function toTableRow(data, pending, lastPage, readOnly) {
         hasilVerifPending: pending.has(String(data[24])),
         // An OK Catatan verdict leaves something for the bendahara to fix, so the row stays
         // editable however far its status has moved
-        locked: readOnly || LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]))
-            && (isGup || ![data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN))),
+        locked: readOnly || (statusLocked && !needsPjkCorrection),
+        deleteLocked: readOnly || statusLocked || needsPjkCorrection,
         // Shape Bendahara-Page's handleInvisibleComponent destructures
         passData: {
             lastPage, keyword: data[0], antriNum: data[0], antriName: data[2], antriType: data[3],
             antriSum: data[4], antriDate: data[5], createDate: data[1], accDate: data[6],
             status: data[7], fileLink: data[19], flow: data[20], pjkLink: data[21],
             spp: data[9], catatan: data[16], pjkCatatan: data[22], subjenis: data[28] || "",
+            editMode: needsPjkCorrection ? "pjk-correction" : "", correctionLink: data[29] || "",
         },
     };
 }

@@ -3,7 +3,7 @@ import * as math from "mathjs";
 import apiClient from "../../lib/apiClient";
 
 // Import Components
-import Popup from "../../ui/Popup.jsx";
+import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { columns, jenisPengajuan, subjenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
 
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
@@ -91,6 +91,9 @@ function BuatPengajuan(props) {
     // Marks the stored PJK for removal - applied, together with deleting the file itself,
     // when the edit is saved
     const [removePjk, setRemovePjk] = useState(false);
+    const [correctionError, setCorrectionError] = useState("");
+    const isPjkCorrection = props.type === "edit" && props.passedData?.[16] === "pjk-correction";
+    const correctionLink = props.passedData?.[17] || "";
 
     // Jenis Pengajuan drives the whole form shape in every mode. Anything other than
     // GUP/PTUP is a verifikasi flow, whether it is being created or reopened from the
@@ -103,9 +106,9 @@ function BuatPengajuan(props) {
     // Rows submitted before these jenis had a table have no block on the sheet. Editing one
     // must leave it that way rather than send a table the backend has nowhere to put.
     const [tabelAda, setTabelAda] = useState(true);
-    const nomorSppRequired = !isTabelPenuh && componentType !== "lihat";
+    const nomorSppRequired = !isTabelPenuh && componentType !== "lihat" && !isPjkCorrection;
     const canUploadPjk = true;
-    const showUploadGroup = componentType !== "lihat" && (isTabelPenuh || canUploadPjk);
+    const showUploadGroup = componentType !== "lihat" && !isPjkCorrection && (isTabelPenuh || canUploadPjk);
     // Which antrian/table sheet pair this pengajuan lives on
     const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
     // GUP/PTUP keep the Bupot on their own row and the PJK on the mirror row, which the
@@ -794,6 +797,10 @@ function BuatPengajuan(props) {
     // Handle Popups
     function handlePopup() {
         if (!isPopup) {
+            if (isPjkCorrection && !filePjk) {
+                setCorrectionError("Pilih berkas Perbaikan PJK terlebih dahulu.");
+                return;
+            }
             if (nomorSppRequired && nomorSpp.trim() === "") {
                 setSppError("Nomor SPP wajib diisi.");
                 sppRef.current?.focus();
@@ -913,6 +920,30 @@ function BuatPengajuan(props) {
     async function handleSubmitEdit(event){
         event.preventDefault();
         setIsPopup(false);
+
+        if (isPjkCorrection) {
+            if (!filePjk) {
+                setCorrectionError("Pilih berkas Perbaikan PJK terlebih dahulu.");
+                return;
+            }
+            const data = new FormData();
+            data.append("antriPosition", JSON.stringify(props.passedData[5]));
+            data.append("flow", rowFlow);
+            data.append("pjkCorrection", "true");
+            data.append("filePjk", filePjk);
+            setIsLoading(true);
+            setCorrectionError("");
+            try {
+                const response = await apiClient.patch('/bendahara/edit-table', data);
+                props.alertMessage(response.data.warning || response.data.message || "Perbaikan PJK berhasil diunggah.");
+                props.changeComponent("daftar-pengajuan");
+            } catch (error) {
+                setCorrectionError(error.response?.data?.message || "Gagal mengunggah Perbaikan PJK. Silakan coba lagi.");
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
 
         const finalNama = namaPengisi === "" ? props.passedData[1] : namaPengisi;
         const finalJumlah = jumlahAjuan === "" ? props.passedData[3] : jumlahAjuan;
@@ -1070,7 +1101,7 @@ function BuatPengajuan(props) {
                                                     onBlur={(input) => handleCellBlur(actualRowIndex, colIndex, input.target.value)}
                                                     onKeyDown={(event) => handleCellKeyDown(event, actualRowIndex, colIndex)}
                                                     onPaste={(event) => handlePaste(event, actualRowIndex, colIndex)}
-                                                    readOnly={componentType == "lihat"}
+                                                    readOnly={componentType == "lihat" || isPjkCorrection}
                                                 />
                                             </TableCell>
                                         ))}
@@ -1128,6 +1159,7 @@ function BuatPengajuan(props) {
         handleCellKeyDown,
         handlePaste,
         componentType,
+        isPjkCorrection,
         setPage,
         setRowsPerPage,
         setTargetReference,
@@ -1157,6 +1189,8 @@ function BuatPengajuan(props) {
             }
             <div className="pengajuan-content">
                 <form className="pengajuan-form" onSubmit={componentType === "buat" ? handleSubmit : handleSubmitEdit}>
+                    {correctionError && <PopupAlert severity="error" message={correctionError}/>}
+                    <fieldset className="pengajuan-fields" disabled={isPjkCorrection}>
                     <div className="pengajuan-form-textdata">
                         <label htmlFor="aju-name">Nama Pengisi Form:</label>
                         <input type="text" id="aju-name" name="nama-pengisi" value={namaPengisi}
@@ -1214,9 +1248,10 @@ function BuatPengajuan(props) {
                     </div>
                     {nomorSppRequired && sppError ?
                         <p id="aju-spp-error" className="pengajuan-form-error" role="alert">{sppError}</p> : null}
+                    </fieldset>
                     <br/>
-                    <div className="pengajuan-form-tabledata">
-                        <div className="pengajuan-form-tableinfo">
+                    <div className={`pengajuan-form-tabledata${isPjkCorrection ? " pengajuan-has-correction" : ""}`}>
+                        <fieldset className="pengajuan-fields pengajuan-form-tableinfo" disabled={isPjkCorrection}>
                             <p>Input Data Pengajuan</p>
                             {bisaAturBaris && <>
                             <label>Tentukan Jumlah Row Tabel:</label>
@@ -1225,7 +1260,7 @@ function BuatPengajuan(props) {
                                 readOnly={componentType === "lihat"} min="1" step="1"
                                 disabled={lockRow}
                             />
-                            <div className="table-lock" onClick={() => setLockRow(!lockRow)}>
+                            <div className="table-lock" onClick={() => !isPjkCorrection && setLockRow(!lockRow)}>
                                 {lockRow === false ? <LockOpenIcon fontSize={"medium"} /> : <LockIcon fontSize={"medium"} />}
                             </div>
                             </>}
@@ -1237,7 +1272,7 @@ function BuatPengajuan(props) {
                                             ? <span style={{textDecoration: "line-through"}}>Klik Disini</span>
                                             : <a href={pjkLink} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a>}
                                             {/* Replacing supersedes removing, so the control hides once a new file is picked */}
-                                            {componentType === "edit" && !filePjk ?
+                                            {componentType === "edit" && !isPjkCorrection && !filePjk ?
                                                 <DeleteForeverIcon
                                                     titleAccess={removePjk ? "Batalkan hapus PJK" : "Hapus PJK"}
                                                     sx={{fontSize: 20, marginLeft: "6px", verticalAlign: "middle", cursor: "pointer",
@@ -1247,7 +1282,10 @@ function BuatPengajuan(props) {
                                         </p> : null}
                                     {removePjk ? <p style={{color: "#BD1404"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
                                 </div> : null}
-                        </div>
+                        </fieldset>
+                        {isPjkCorrection && <div className="pengajuan-correction-upload">
+                            <UploadButton title="Perbaikan PJK" onFileSelect={setFilePjk} accept="application/pdf" maxSizeMb={100}/>
+                        </div>}
                         {showUploadGroup &&
                             <div className="upload-btn-group">
                                 {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
@@ -1256,8 +1294,13 @@ function BuatPengajuan(props) {
                                 {canUploadPjk && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
                             </div>
                         }
-                        {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}
+                        <fieldset className="pengajuan-fields" disabled={isPjkCorrection}>
+                            {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}
+                        </fieldset>
                     </div>
+                    {correctionLink && <p className="pengajuan-correction-link">
+                        Perbaikan PJK terakhir: <a href={correctionLink} target="_blank" rel="noopener noreferrer">Lihat Dokumen</a>
+                    </p>}
                     {componentType === "buat" ?
                     <div className="form-submit">
                         <SubmitButton value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>

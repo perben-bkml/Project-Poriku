@@ -1233,6 +1233,7 @@ const AJUAN_FLOWS = {
         subjenisColumn: "T",
         deadlineColumn: "U",
         repairStatusColumn: "V",
+        repairUploadColumn: "W",
         // canonical index ('Write Antrian' layout) -> column on this sheet
         antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
@@ -1253,7 +1254,7 @@ const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
 // Derived from the letter, like PJK_COLUMN, so the two cannot drift.
 const perbaikanIndex = (flowConfig) => flowConfig.perbaikanColumn.charCodeAt(0) - 65;
 const subjenisIndex = (flowConfig) => flowConfig.subjenisColumn ? flowConfig.subjenisColumn.charCodeAt(0) - 65 : -1;
-const antrianReadColumn = (flowConfig) => flowConfig.subjenisColumn || flowConfig.perbaikanColumn;
+const antrianReadColumn = (flowConfig) => flowConfig.repairUploadColumn || flowConfig.subjenisColumn || flowConfig.perbaikanColumn;
 const STATUS_DIPERBAIKI = "Telah Diperbaiki";
 
 // The four verdict columns share one rule: a real negative answer, not a blank and not a
@@ -1275,10 +1276,11 @@ const STATUS_SUDAH_MAJU = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
 const STATUS_SUDAH_MAJU_VERIF = ["Siap Maju SPM", "Sudah SP2D"];
 const PJK_STATUS_INDEX = 5; // column F
 
+const pjkNeedsCorrection = row => [row[PJK_COLUMN.substansi], row[PJK_COLUMN.kelengkapan]]
+    .some(value => trimmed(value).toLowerCase() === "ok catatan");
 const monitorPjkEligible = (row) =>
     (trimmed(row[PJK_STATUS_INDEX]).toLowerCase() === "sudah sp2d" || filled(row[PJK_COLUMN.tanggalSp2d]))
-    && [row[PJK_COLUMN.substansi], row[PJK_COLUMN.kelengkapan]]
-        .some(value => trimmed(value).toLowerCase() === "ok catatan");
+    && pjkNeedsCorrection(row);
 
 // Calendar arithmetic in UTC avoids shifting a date through local/DST time zones.
 // Preserve ISO or Indonesian day-first spelling, including its separator and padding.
@@ -1303,7 +1305,7 @@ async function ensurePjkMonitorColumns(spreadsheetId) {
     }));
     const sheet = response.data.sheets?.find(item => item.properties.title === flow.antrianSheet);
     if (!sheet) throw new Error("Sheet antrian verifikasi tidak ditemukan.");
-    const required = flow.repairStatusColumn.charCodeAt(0) - 64;
+    const required = flow.repairUploadColumn.charCodeAt(0) - 64;
     const count = sheet.properties.gridProperties.columnCount;
     if (count < required) {
         await withBackoff(() => sheets.spreadsheets.batchUpdate({spreadsheetId, requestBody: {requests: [
@@ -1332,6 +1334,8 @@ function toCanonicalAntrianRow(row, flowConfig) {
         canonical[target] = row?.[source] ?? "";
     }
     canonical[ANTRIAN_SUBJENIS_INDEX] = row?.[subjenisIndex(flowConfig)] ?? "";
+    canonical[ANTRIAN_CORRECTION_LINK_INDEX] = row?.[flowConfig.repairUploadColumn.charCodeAt(0) - 65] ?? "";
+    canonical[ANTRIAN_REPAIR_STATUS_INDEX] = row?.[flowConfig.repairStatusColumn.charCodeAt(0) - 65] ?? "";
     return canonical;
 }
 
@@ -1355,6 +1359,8 @@ const ANTRIAN_SUBSTANSI_INDEX = ANTRIAN_ROW_WIDTH + 5;
 const ANTRIAN_KELENGKAPAN_INDEX = ANTRIAN_ROW_WIDTH + 6;
 const ANTRIAN_PERBAIKAN_INDEX = ANTRIAN_ROW_WIDTH + 7;
 const ANTRIAN_SUBJENIS_INDEX = ANTRIAN_ROW_WIDTH + 8;
+const ANTRIAN_CORRECTION_LINK_INDEX = ANTRIAN_ROW_WIDTH + 9;
+const ANTRIAN_REPAIR_STATUS_INDEX = ANTRIAN_ROW_WIDTH + 10;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1422,6 +1428,7 @@ function sortAntrianLatestFirst(rows) {
 // on 'Write Antrian Verif', so those are dropped here - the 'Write Antrian' original is
 // the authoritative one and carries the columns the mirror does not have.
 async function fetchMergedAntrianRows(spreadsheetId) {
+    await ensurePjkMonitorColumns(spreadsheetId);
     const flows = [AJUAN_FLOWS.gup, AJUAN_FLOWS.verif];
     const response = await readRanges(
         sheets,
@@ -1474,6 +1481,8 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         row[ANTRIAN_HASIL_VERIF_ID_INDEX] = mirror?.[0] || "";
         row[ANTRIAN_SUBSTANSI_INDEX] = mirror?.[ANTRIAN_SUBSTANSI_INDEX] || "";
         row[ANTRIAN_KELENGKAPAN_INDEX] = mirror?.[ANTRIAN_KELENGKAPAN_INDEX] || "";
+        row[ANTRIAN_CORRECTION_LINK_INDEX] = mirror?.[ANTRIAN_CORRECTION_LINK_INDEX] || "";
+        row[ANTRIAN_REPAIR_STATUS_INDEX] = mirror?.[ANTRIAN_REPAIR_STATUS_INDEX] || "";
         if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
     }
     return merged;
@@ -2032,8 +2041,99 @@ app.get("/bendahara/data-transaksi", async (req, res) => {
     }
 })
 
+const ajuanEditError = (message, statusCode = 409) => Object.assign(new Error(message), {statusCode});
+
+async function loadAjuanEditContext(req, spreadsheetId, flow, id) {
+    if (!filled(id)) throw ajuanEditError("Nomor pengajuan wajib diisi.", 400);
+    await ensurePjkMonitorColumns(spreadsheetId);
+    const sourceResponse = await readRange(sheets, spreadsheetId, `'${flow.antrianSheet}'!A3:${antrianReadColumn(flow)}`);
+    const matches = (sourceResponse.data.values || []).map((raw, index) => ({raw, row: index + 3}))
+        .filter(({raw}) => String(raw[0]) === String(id));
+    if (matches.length !== 1) throw ajuanEditError("Pengajuan tidak dapat dipastikan. Muat ulang daftar pengajuan.");
+    const source = matches[0];
+    const canonical = toCanonicalAntrianRow(source.raw, flow);
+    const unitKerja = canonical[ANTRIAN_UNIT_KERJA_INDEX];
+    if (req.viewer.role === "user" && (!filled(unitKerja) || normalizeSatker(unitKerja) !== normalizeSatker(req.viewer.name))) {
+        throw ajuanEditError("Akses pengajuan ditolak.", 403);
+    }
+    let target = flow.key === "verif" ? source : null;
+    if (flow.key === "gup") {
+        const verif = AJUAN_FLOWS.verif;
+        const response = await readRange(sheets, spreadsheetId, `'${verif.antrianSheet}'!A:${antrianReadColumn(verif)}`);
+        const rawRows = response.data.values || [];
+        const mirrors = findMirrorAntrianMatches(rawRows, source.raw);
+        if (mirrors.length > 1) throw ajuanEditError("Baris PJK pengajuan ini tidak dapat dipastikan. Hubungi admin.");
+        if (mirrors.length === 1) {
+            target = {row: mirrors[0].row, raw: rawRows[mirrors[0].row - 1]};
+            if (resolveJenis(target.raw[3])?.flow !== "gup"
+                || normalizeSatker(target.raw[8]) !== normalizeSatker(unitKerja)) {
+                throw ajuanEditError("Baris PJK tidak sesuai dengan pengajuan asal. Hubungi admin.");
+            }
+        }
+    }
+    const lockedStatuses = flow.key === "gup"
+        ? ["Sudah Diterbitkan DRPP", ...STATUS_SUDAH_MAJU]
+        : [...STATUS_SUDAH_VERIFIKASI, ...STATUS_SUDAH_MAJU_VERIF];
+    return {spreadsheetId, flow, id, sourceResponse, source, canonical, unitKerja, target,
+        needsCorrection: !!target && pjkNeedsCorrection(target.raw),
+        locked: lockedStatuses.some(status => trimmed(status).toLowerCase() === trimmed(canonical[7]).toLowerCase())};
+}
+
+async function savePjkCorrection(req, res, context) {
+    const allowed = new Set(["antriPosition", "flow", "pjkCorrection", "year"]);
+    if (Object.keys(req.body).some(key => !allowed.has(key)) || req.files?.file?.length) {
+        throw ajuanEditError("Pengajuan OK Catatan hanya dapat diperbaiki dengan mengunggah PJK baru. Data pengajuan tidak boleh diubah.", 403);
+    }
+    const file = req.files?.filePjk?.[0];
+    if (!file || file.mimetype !== "application/pdf") throw ajuanEditError("Unggah berkas Perbaikan PJK dalam format PDF.", 400);
+    if (!await requireGajiDriveAuth(req, res)) return;
+    if (!driveFolderIdVerifPjk) throw ajuanEditError("Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin.", 503);
+    const verif = AJUAN_FLOWS.verif;
+    const target = context.target.raw;
+    const name = buildPjkFileName(context.unitKerja,
+        jenisDenganSubjenis(target[3], target[subjenisIndex(verif)]),
+        context.flow.key === "gup" ? context.id : formatNomorSpp(target[PJK_COLUMN.spp]), context.canonical[4])
+        .replace(/\.pdf$/i, "_Perbaikan PJK.pdf");
+    const link = await uploadToDriveFolder(file, driveFolderIdVerifPjk, name);
+    let fresh;
+    try {
+        // Drive uploads can take time; resolve row positions again before writing V/W.
+        fresh = await loadAjuanEditContext(req, context.spreadsheetId, context.flow, context.id);
+        if (!fresh.needsCorrection || String(fresh.target.raw[0]) !== String(target[0])) {
+            throw ajuanEditError("Status PJK berubah. Muat ulang pengajuan sebelum mengunggah perbaikan.");
+        }
+    } catch (error) {
+        await deleteDriveFiles([link]).catch(() => []);
+        throw error;
+    }
+    const oldLink = trimmed(fresh.target.raw[verif.repairUploadColumn.charCodeAt(0) - 65]);
+    await writeRanges(sheets, context.spreadsheetId, [{
+        range: `'${verif.antrianSheet}'!${verif.repairStatusColumn}${fresh.target.row}:${verif.repairUploadColumn}${fresh.target.row}`,
+        values: [["Sudah Upload", link]],
+    }], "RAW");
+    // The original PJK (O) is retained. Only a superseded correction file may be removed.
+    const failed = oldLink && oldLink !== link && oldLink !== trimmed(fresh.target.raw[14])
+        ? await deleteDriveFiles([oldLink]) : [];
+    return res.status(200).json({message: "Perbaikan PJK berhasil diunggah.", correctionLink: link,
+        ...(failed.length ? {warning: "Berkas tersimpan, tetapi perbaikan PJK sebelumnya gagal dihapus dari Drive."} : {})});
+}
+
 // Patch/Updates table data based on edited data from user
 app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
+    const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
+    const flowConfig = getAjuanFlow(req.body.flow);
+    let editContext;
+    try {
+        if (req.body.flow && !["gup", "verif"].includes(req.body.flow)) throw ajuanEditError("Alur pengajuan tidak valid.", 400);
+        const id = JSON.parse(req.body.antriPosition);
+        editContext = await loadAjuanEditContext(req, spreadsheetId, flowConfig, id);
+        if (editContext.needsCorrection) return await savePjkCorrection(req, res, editContext);
+        if (req.body.pjkCorrection === "true") throw ajuanEditError("Status PJK berubah. Muat ulang daftar pengajuan.");
+        if (editContext.locked) throw ajuanEditError("Pengajuan ini tidak dapat diubah pada status saat ini.", 403);
+    } catch (error) {
+        return res.status(error.statusCode || (error instanceof SyntaxError ? 400 : 500))
+            .json({message: error.message || "Gagal memproses perubahan pengajuan."});
+    }
     //Extracting each part from formData
     const textdata = JSON.parse(req.body.textdata);
     const tabledata = JSON.parse(req.body.tabledata);
@@ -2041,8 +2141,6 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
     const antriPosition = JSON.parse(req.body.antriPosition);
     const lastTableEndRow = JSON.parse(req.body.lastTableEndRow);
 
-    const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
-    const flowConfig = getAjuanFlow(req.body.flow);
     // LS Pegawai and LS Platform submit no table at all, so the whole table half of
     // this route has to be skippable
     const hasTable = Array.isArray(tabledata) && tabledata.length > 0;
@@ -2084,11 +2182,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         // The whole row, not just A - the mirror is matched on the timestamp and nama this row
         // still holds, and the lampiran is the only handle on the file it currently points at.
         // Both are about to be overwritten.
-        const antriResponse = await readRange(
-            sheets,
-            spreadsheetId,
-            `'${flowConfig.antrianSheet}'!A3:${antrianReadColumn(flowConfig)}`,
-        );
+        const antriResponse = editContext.sourceResponse;
 
         const matchResult = antriResponse.data.values || [];
         let antriRow = null;
@@ -2408,6 +2502,10 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const flowConfig = getAjuanFlow(req.query.flow);
+        const editContext = await loadAjuanEditContext(req, spreadsheetId, flowConfig, delKeyword);
+        if (editContext.needsCorrection || editContext.locked) {
+            return res.status(403).json({message: "Pengajuan ini tidak dapat dihapus. Pengajuan OK Catatan hanya boleh mengunggah perbaikan PJK."});
+        }
         // Finding keyword range with data from X & Y columns on the flow's table sheet, and
         // the full row on its antrian sheet - D carries the Jenis, which says whether a table
         // exists, and the lampiran is the only handle on the uploaded file. For GUP/PTUP the
@@ -2550,7 +2648,7 @@ app.delete("/bendahara/delete-ajuan", async (req, res) => {
 
     } catch (error) {
         console.error("Error in /bendahara/delete-ajuan:", error);
-        res.status(500).json({ message: "Server error." });
+        res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : "Server error." });
     }
 })
 
@@ -4139,9 +4237,9 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                `'${verifFlow.antrianSheet}'!A3:${verifFlow.repairStatusColumn}`,
+                `'${verifFlow.antrianSheet}'!A3:${verifFlow.repairUploadColumn}`,
                 `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
-                `'${verifFlow.antrianSheet}'!${verifFlow.deadlineColumn}2:${verifFlow.repairStatusColumn}2`,
+                `'${verifFlow.antrianSheet}'!${verifFlow.deadlineColumn}2:${verifFlow.repairUploadColumn}2`,
             ],
         );
 
@@ -4150,7 +4248,8 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         const rawRows = (response.data.valueRanges[0].values || []).map(row => [...row]);
         const writes = [];
         const headers = response.data.valueRanges[2]?.values?.[0] || [];
-        [[verifFlow.deadlineColumn, "Deadline Perbaikan"], [verifFlow.repairStatusColumn, "Status Perbaikan"]]
+        [[verifFlow.deadlineColumn, "Deadline Perbaikan"], [verifFlow.repairStatusColumn, "Status Perbaikan"],
+            [verifFlow.repairUploadColumn, "Perbaikan PJK"]]
             .forEach(([column, label], index) => {
                 if (!filled(headers[index])) writes.push({range: `'${verifFlow.antrianSheet}'!${column}2`, values: [[label]]});
             });
@@ -4184,7 +4283,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             .map(row => {
                 const padded = Array.from({ length: width }, (_, i) => row[i] ?? "");
                 return [...padded, sourceId(padded), row[perbaikanAt] ?? "", row[subjenisIndex(verifFlow)] ?? "",
-                    row[deadlineIndex] ?? "", row[repairStatusIndex] ?? ""];
+                    row[deadlineIndex] ?? "", row[repairStatusIndex] ?? "", row[verifFlow.repairUploadColumn.charCodeAt(0) - 65] ?? ""];
             })
             .reverse();
 
@@ -4364,7 +4463,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         const response = await readRange(
             sheets,
             spreadsheetId,
-            `'${verifFlow.antrianSheet}'!A:${verifFlow.repairStatusColumn}`,
+            `'${verifFlow.antrianSheet}'!A:${verifFlow.repairUploadColumn}`,
         );
 
         const rows = response.data.values || [];

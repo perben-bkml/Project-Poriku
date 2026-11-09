@@ -1106,6 +1106,37 @@
     font-size: 1.2rem;
 }
 
+.pengajuan-fields {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.pengajuan-correction-upload {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+.pengajuan-form-tabledata.pengajuan-has-correction {
+    grid-template-rows: auto auto 1fr;
+}
+
+.pengajuan-correction-upload .verif-btn {
+    width: auto;
+    padding: 0 20px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.pengajuan-correction-link {
+    margin: 12px 35px;
+    color: #41506B;
+}
+
 .pengajuan-form-textdata label {
     display: flex;
     align-items: center;

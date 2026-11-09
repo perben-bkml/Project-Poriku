@@ -15,6 +15,7 @@ const FIELD = {
     sourceId: 18,
     subjenis: 20,
     deadline: 21, repairStatus: 22,
+    correctionLink: 23,
 };
 
 function AksiVerifPJK(props) {
@@ -217,6 +218,8 @@ function AksiVerifPJK(props) {
                 </div>}
 
                 <div className="lampiran-aksi-pengajuan">
+                    {props.fulldata[FIELD.correctionLink] && <p>Perbaikan PJK: <a
+                        href={props.fulldata[FIELD.correctionLink]} target="_blank" rel="noopener noreferrer">Lihat Dokumen Perbaikan</a></p>}
                     <p>Lampiran: <span className={"padd-span-bend"}/>{ pjkData.lampiran ?
                         <a href={pjkData.lampiran} target={"_blank"} rel="noopener noreferrer">Klik disini</a> : <a>-</a> }
                     </p>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, PJK_OVERDUE_STATUS, pjkMonitorStatusOptions, daftarStatusStyle } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 import { PopupAlert } from "../../ui/Popup.jsx";
@@ -17,6 +17,9 @@ const SOURCE_ID = 18;
 // Appended after sourceId (18) and Tanggal Perbaikan (19); not the raw sheet's T index.
 const SUBJENIS = 20;
 const DEADLINE = 21, REPAIR_STATUS = 22;
+// Appended after the correction link (23), evaluated with the server's Jakarta date.
+const REPAIR_OVERDUE = 24;
+const monitorRepairStatus = row => row[REPAIR_OVERDUE] === true ? PJK_OVERDUE_STATUS : pjkRepairStatusLabel(row[REPAIR_STATUS]);
 const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, SUBJENIS, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
@@ -107,7 +110,7 @@ function PengujianPJK(props) {
 
     // The plain text of a cell, so the table and the Excel export cannot drift apart
     const cellText = (row, index) => {
-        if (index === REPAIR_STATUS) return pjkRepairStatusLabel(row[index]);
+        if (index === REPAIR_STATUS) return monitorRepairStatus(row);
         if (index === SPP) return formatNomorSpp(row[index]);
         if (index === SOURCE_ID) return row[index] || "-";
         if (index === DOK_VERIF) return pending.has(String(row[0])) ? "Sedang dibuat" : (row[index] || "-");
@@ -153,6 +156,20 @@ function PengujianPJK(props) {
     }, [sections, cariNomor, unitKerja, jenis, subjenis, substansiFilter, kelengkapanFilter]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];
+    const monitorSummary = active.title === "Monitor PJK" ? (
+        <section className="pjk-repair-summary" aria-label="Ringkasan Status Perbaikan sesuai filter">
+            <p>Ringkasan Status Perbaikan (sesuai filter)</p>
+            <div className="pjk-repair-counters">
+                {pjkMonitorStatusOptions.map(label => {
+                    const style = daftarStatusStyle(label);
+                    const count = active.rows.filter(row => monitorRepairStatus(row) === label).length;
+                    return <div key={label} className="pjk-repair-counter" style={{backgroundColor: style.bg, color: style.fg}}>
+                        <span>{label}</span><strong>{isLoading ? "—" : count}</strong>
+                    </div>;
+                })}
+            </div>
+        </section>
+    ) : null;
 
     async function unduhTabel() {
         setIsExporting(true);
@@ -285,11 +302,12 @@ function PengujianPJK(props) {
                         {aksi}
                     </div>
                     {cariBar}
+                    {monitorSummary}
                     <p className='kelola-empty'>{active.empty}</p>
                 </div>
             ) : (
                 <WideTableCard key={active.title} title={active.title} feature="PJK" actions={aksi}
-                    toolbar={cariBar}
+                    toolbar={<>{cariBar}{monitorSummary}</>}
                     aksiLabel="Verif" aksiTarget="aksi-verif-PJK"
                     tableHead={active.head}
                     tableContent={project(active.rows, active.columns)}

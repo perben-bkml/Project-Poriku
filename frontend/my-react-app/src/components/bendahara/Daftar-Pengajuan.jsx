@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN, pjkRepairStatusLabel } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN, pjkRepairStatusLabel, PJK_OVERDUE_STATUS } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -96,7 +96,7 @@ function toTableRow(data, pending, lastPage, readOnly) {
         substansi: data[25],
         kelengkapan: data[26],
         deadlinePerbaikan: data[31],
-        statusPerbaikan: pjkRepairStatusLabel(data[30]),
+        statusPerbaikan: data[32] === true ? PJK_OVERDUE_STATUS : pjkRepairStatusLabel(data[30]),
         isGup,
         bupot: isGup ? data[19] : "",
         pjk: data[21] || (isGup ? "" : data[19]),

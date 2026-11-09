@@ -1302,6 +1302,15 @@ function pjkRepairDeadline(value) {
     return date.toISOString().slice(0, 10);
 }
 
+function isPjkRepairOverdue(deadline, serverDate) {
+    const iso = toIsoDate(deadline);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const [year, month, day] = iso.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1
+        && date.getUTCDate() === day && serverDate > iso;
+}
+
 async function ensurePjkMonitorColumns(spreadsheetId) {
     const flow = AJUAN_FLOWS.verif;
     const response = await withBackoff(() => sheets.spreadsheets.get({
@@ -1367,6 +1376,7 @@ const ANTRIAN_SUBJENIS_INDEX = ANTRIAN_ROW_WIDTH + 8;
 const ANTRIAN_CORRECTION_LINK_INDEX = ANTRIAN_ROW_WIDTH + 9;
 const ANTRIAN_REPAIR_STATUS_INDEX = ANTRIAN_ROW_WIDTH + 10;
 const ANTRIAN_REPAIR_DEADLINE_INDEX = ANTRIAN_ROW_WIDTH + 11;
+const ANTRIAN_REPAIR_OVERDUE_INDEX = ANTRIAN_ROW_WIDTH + 12;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1491,6 +1501,10 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         row[ANTRIAN_REPAIR_STATUS_INDEX] = mirror?.[ANTRIAN_REPAIR_STATUS_INDEX] || "";
         row[ANTRIAN_REPAIR_DEADLINE_INDEX] = mirror?.[ANTRIAN_REPAIR_DEADLINE_INDEX] || "";
         if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
+    }
+    const serverDate = getFormattedDate().fullDateFormat;
+    for (const row of merged) {
+        row[ANTRIAN_REPAIR_OVERDUE_INDEX] = isPjkRepairOverdue(row[ANTRIAN_REPAIR_DEADLINE_INDEX], serverDate);
     }
     return merged;
 }
@@ -4285,12 +4299,14 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         // after sourceId rather than at its own S, so no index the screen already uses shifts.
         const width = PJK_COLUMN.tanggalSp2d + 1;
         const perbaikanAt = perbaikanIndex(verifFlow);
+        const serverDate = getFormattedDate().fullDateFormat;
         const rows = rawRows
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => {
                 const padded = Array.from({ length: width }, (_, i) => row[i] ?? "");
                 return [...padded, sourceId(padded), row[perbaikanAt] ?? "", row[subjenisIndex(verifFlow)] ?? "",
-                    row[deadlineIndex] ?? "", row[repairStatusIndex] ?? "", row[verifFlow.repairUploadColumn.charCodeAt(0) - 65] ?? ""];
+                    row[deadlineIndex] ?? "", row[repairStatusIndex] ?? "", row[verifFlow.repairUploadColumn.charCodeAt(0) - 65] ?? "",
+                    isPjkRepairOverdue(row[deadlineIndex], serverDate)];
             })
             .reverse();
 

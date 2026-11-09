@@ -124,6 +124,8 @@ const pjkKelengkapanOptions = [
 
 export const monitorPjkHead = ["Deadline Perbaikan", "Status Perbaikan"];
 export const pjkRepairOptions = ["OK", "Tolak"];
+export const PJK_OVERDUE_STATUS = "Lewat Batas Deadline";
+export const pjkMonitorStatusOptions = ["Belum Diperbaiki", "Sudah Diperbaiki", "Perbaikan Ditolak", "Sudah OK", PJK_OVERDUE_STATUS];
 export const isMonitorPjkRow = row =>
     (String(row[5] ?? "").trim().toLowerCase() === "sudah sp2d" || String(row[17] ?? "").trim() !== "")
     && [row[9], row[10]].some(value => String(value ?? "").trim().toLowerCase() === "ok catatan");
@@ -178,6 +180,7 @@ const DAFTAR_STATUS_STYLE = {
     "sudah diperbaiki":             { bg: "#DCE9FF", fg: "#00449C" },
     "perbaikan ditolak":            { bg: "#FBE1DE", fg: "#BD1404" },
     "sudah ok":                     { bg: "#D6F5E1", fg: "#0F7A3D" },
+    "lewat batas deadline":         { bg: "#BD1404", fg: "#FFFFFF" },
     // PJK verdicts (Substansi/Kelengkapan) and the bendahara's Pajak/Anggaran columns,
     // which share the pill treatment now that TableKelola renders them the same way
     "ok":                           { bg: "#D6F5E1", fg: "#0F7A3D" },

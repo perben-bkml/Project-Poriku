@@ -927,6 +927,14 @@ function filterJenisAntrian(rows, jenisKey, subjenis) {
         : filtered;
 }
 
+function filterKategoriAntrian(rows, kategori) {
+    if (!kategori) return rows;
+    return kategori === "perbaikan-pjk"
+        ? rows.filter(row => [row[ANTRIAN_SUBSTANSI_INDEX], row[ANTRIAN_KELENGKAPAN_INDEX]]
+            .some(value => trimmed(value).toLowerCase() === "ok catatan"))
+        : rows.filter(row => antrianKategori(row) === kategori);
+}
+
 app.get("/bendahara/antrian", async (req, res) => {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
@@ -949,9 +957,7 @@ app.get("/bendahara/antrian", async (req, res) => {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
         }
         // kategori is the daftar's tab split, counted over every row rather than a page
-        if (kategori) {
-            filteredRows = filteredRows.filter(row => antrianKategori(row) === kategori);
-        }
+        filteredRows = filterKategoriAntrian(filteredRows, kategori);
         // Latest first. The two sheets each number their own rows, so the timestamp is
         // the only ordering the merged list can share.
         filteredRows = sortAntrianLatestFirst(filteredRows);
@@ -993,9 +999,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
             const dicari = normalizeSatker(req.query.unitKerja);
             allRows = allRows.filter(row => normalizeSatker(row[ANTRIAN_UNIT_KERJA_INDEX]) === dicari);
         }
-        if (kategori) {
-            allRows = allRows.filter(row => antrianKategori(row) === kategori);
-        }
+        allRows = filterKategoriAntrian(allRows, kategori);
         allRows = filterJenisAntrian(cariNomorAntrian(allRows, req.query.cariNomor), req.query.jenis, req.query.subjenis);
 
         // Filter rows whose timestamp matches the date prefix
@@ -1336,6 +1340,7 @@ function toCanonicalAntrianRow(row, flowConfig) {
     canonical[ANTRIAN_SUBJENIS_INDEX] = row?.[subjenisIndex(flowConfig)] ?? "";
     canonical[ANTRIAN_CORRECTION_LINK_INDEX] = row?.[flowConfig.repairUploadColumn.charCodeAt(0) - 65] ?? "";
     canonical[ANTRIAN_REPAIR_STATUS_INDEX] = row?.[flowConfig.repairStatusColumn.charCodeAt(0) - 65] ?? "";
+    canonical[ANTRIAN_REPAIR_DEADLINE_INDEX] = row?.[flowConfig.deadlineColumn.charCodeAt(0) - 65] ?? "";
     return canonical;
 }
 
@@ -1361,6 +1366,7 @@ const ANTRIAN_PERBAIKAN_INDEX = ANTRIAN_ROW_WIDTH + 7;
 const ANTRIAN_SUBJENIS_INDEX = ANTRIAN_ROW_WIDTH + 8;
 const ANTRIAN_CORRECTION_LINK_INDEX = ANTRIAN_ROW_WIDTH + 9;
 const ANTRIAN_REPAIR_STATUS_INDEX = ANTRIAN_ROW_WIDTH + 10;
+const ANTRIAN_REPAIR_DEADLINE_INDEX = ANTRIAN_ROW_WIDTH + 11;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1483,6 +1489,7 @@ async function fetchMergedAntrianRows(spreadsheetId) {
         row[ANTRIAN_KELENGKAPAN_INDEX] = mirror?.[ANTRIAN_KELENGKAPAN_INDEX] || "";
         row[ANTRIAN_CORRECTION_LINK_INDEX] = mirror?.[ANTRIAN_CORRECTION_LINK_INDEX] || "";
         row[ANTRIAN_REPAIR_STATUS_INDEX] = mirror?.[ANTRIAN_REPAIR_STATUS_INDEX] || "";
+        row[ANTRIAN_REPAIR_DEADLINE_INDEX] = mirror?.[ANTRIAN_REPAIR_DEADLINE_INDEX] || "";
         if (antrianStatusRank(mirror?.[7]) > antrianStatusRank(row[7])) row[7] = mirror[7];
     }
     return merged;

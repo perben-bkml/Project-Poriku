@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, daftarStatusStyle } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 import { PopupAlert } from "../../ui/Popup.jsx";
@@ -115,11 +115,6 @@ function PengujianPJK(props) {
     };
 
     const project = (rows, columns) => rows.map(row => columns.map(index => {
-        if (index === REPAIR_STATUS) {
-            const label = cellText(row, index);
-            const style = daftarStatusStyle(label);
-            return <span key={index} className="dp-status" style={{backgroundColor: style.bg, color: style.fg}}>{label}</span>;
-        }
         if (index === DOK_VERIF) {
             if (pending.has(String(row[0]))) return <span key={index} style={{color: '#8A6100'}}>Sedang dibuat…</span>;
             return row[index]

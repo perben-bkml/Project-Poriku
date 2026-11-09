@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN, pjkRepairStatusLabel } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -36,7 +36,21 @@ const EXTRA_COLUMNS = {
         { label: "Kelengkapan", field: "kelengkapan", text: true },
         { label: "SPP", field: "spp" },
     ],
+    "perbaikan-pjk": [],
 };
+
+const CORRECTION_COLUMNS = [
+    { label: "No.", field: "id" },
+    { label: "Jenis", field: "jenis" },
+    { label: "Nominal", field: "nominal", numeric: true },
+    { label: "Substansi", field: "substansi" },
+    { label: "Kelengkapan", field: "kelengkapan" },
+    { label: "DRPP", field: "drpp" },
+    { label: "SPP", field: "spp" },
+    { label: "SPM", field: "spm" },
+    { label: "Deadline Perbaikan", field: "deadlinePerbaikan" },
+    { label: "Status Perbaikan", field: "statusPerbaikan" },
+];
 
 // The verifikasi sheet has no Ketersediaan Anggaran column, so it is blank on every LS row
 const HIDDEN_DETAIL = { gup: [], ls: ["anggaran"] };
@@ -49,6 +63,7 @@ const NO_COLUMN = [];
 const TABS = [
     { kategori: "gup", label: "GUP/PTUP" },
     { kategori: "ls", label: "LS (Langsung)" },
+    { kategori: "perbaikan-pjk", label: "Perlu Perbaikan PJK" },
 ];
 
 // Canonical 'Write Antrian' indices. 20+ are appended server-side past ANTRIAN_ROW_WIDTH,
@@ -80,6 +95,8 @@ function toTableRow(data, pending, lastPage, readOnly) {
         catatan: data[16],
         substansi: data[25],
         kelengkapan: data[26],
+        deadlinePerbaikan: data[31],
+        statusPerbaikan: pjkRepairStatusLabel(data[30]),
         isGup,
         bupot: isGup ? data[19] : "",
         pjk: data[21] || (isGup ? "" : data[19]),
@@ -149,7 +166,7 @@ function DaftarPengajuan(props){
     // pinned to its own unit kerja by the route.
     const bisaFilterUnit = String(user?.role ?? "").includes("admin");
     const jenisOptions = jenisPengajuan.filter(item =>
-        (item.value.startsWith("ls-") ? "ls" : "gup") === kategori);
+        kategori === "perbaikan-pjk" || (item.value.startsWith("ls-") ? "ls" : "gup") === kategori);
     const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     function cariSubmit(event) {
@@ -357,7 +374,7 @@ function DaftarPengajuan(props){
                 </form>
                 <form className="bar-cari" onSubmit={cariSubmit}>
                     <label htmlFor="cari-nomor">
-                        Cari {kategori === "gup" ? "Nomor SPM" : "Nomor SPP"}
+                        Cari {kategori === "perbaikan-pjk" ? "Nomor SPM / SPP" : kategori === "gup" ? "Nomor SPM" : "Nomor SPP"}
                     </label>
                     <input id="cari-nomor" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
                            value={cariInput} placeholder={kategori === "gup" ? "mis. 00123" : "mis. 00041"}
@@ -406,6 +423,7 @@ function DaftarPengajuan(props){
             </div>
             <TableDaftarPengajuan
                 rows={rows}
+                summaryColumns={kategori === "perbaikan-pjk" ? CORRECTION_COLUMNS : undefined}
                 jenisColumns={isAdmin ? UNIT_KERJA_COLUMN : NO_COLUMN}
                 extraColumns={EXTRA_COLUMNS[kategori]}
                 hiddenDetail={HIDDEN_DETAIL[kategori]}

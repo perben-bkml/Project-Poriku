@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, jenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -62,7 +62,7 @@ function toTableRow(data, pending, lastPage, readOnly) {
     return {
         key: `${data[20]}-${data[0]}`,
         id: data[0],
-        jenis: String(data[3] ?? "").toUpperCase(),
+        jenis: formatJenisPengajuan(data[3], data[28]).toUpperCase(),
         nominal: data[4],
         tglAjuan: data[1],
         unitKerja: data[11],
@@ -93,7 +93,7 @@ function toTableRow(data, pending, lastPage, readOnly) {
             lastPage, keyword: data[0], antriNum: data[0], antriName: data[2], antriType: data[3],
             antriSum: data[4], antriDate: data[5], createDate: data[1], accDate: data[6],
             status: data[7], fileLink: data[19], flow: data[20], pjkLink: data[21],
-            spp: data[9], catatan: data[16], pjkCatatan: data[22],
+            spp: data[9], catatan: data[16], pjkCatatan: data[22], subjenis: data[28] || "",
         },
     };
 }
@@ -114,6 +114,7 @@ function DaftarPengajuan(props){
     const [cariNomor, setCariNomor] = useState("")
     const [unitKerja, setUnitKerja] = useState("")
     const [jenis, setJenis] = useState("");
+    const [subjenis, setSubjenis] = useState("");
     const [datePrefix, setDatePrefix] = useState("");
     const [kategori, setKategori] = useState(() => {
         const saved = localStorage.getItem(TAB_KEY);
@@ -146,6 +147,7 @@ function DaftarPengajuan(props){
     const bisaFilterUnit = String(user?.role ?? "").includes("admin");
     const jenisOptions = jenisPengajuan.filter(item =>
         (item.value.startsWith("ls-") ? "ls" : "gup") === kategori);
+    const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     function cariSubmit(event) {
         event.preventDefault();
@@ -164,6 +166,7 @@ function DaftarPengajuan(props){
         setCariNomor("");
         setUnitKerja("");
         setJenis("");
+        setSubjenis("");
     }
 
     const applyResult = useCallback((result) => {
@@ -178,7 +181,7 @@ function DaftarPengajuan(props){
     // Every view is served from cache first and revalidated behind it, so switching back to a
     // tab or page costs no Sheets read - the route re-reads both antrian sheets on every call.
     const fetchAntrianData = useCallback(async (page, { quiet = false } = {}) => {
-        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}|${jenis}`;
+        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}|${jenis}|${subjenis}`;
         // A quiet refresh only ever follows a change, and a delete shifts rows across pages
         if (quiet) cacheRef.current.clear();
         const cached = quiet ? null : cacheRef.current.get(key);
@@ -189,7 +192,7 @@ function DaftarPengajuan(props){
             setIsLoading(true);
         }
 
-        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja, jenis };
+        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja, jenis, subjenis };
         try {
             const { data } = datePrefix
                 ? await apiClient.get('/bendahara/filter-date', { params: { ...params, datePrefix } })
@@ -220,7 +223,7 @@ function DaftarPengajuan(props){
         } finally {
             setIsLoading(false); // otherwise a failed fetch leaves the spinner up for good
         }
-    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, jenis, showAlert, applyResult]);
+    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, jenis, subjenis, showAlert, applyResult]);
 
     useEffect(() => {
         fetchAntrianData(currentPage);
@@ -251,6 +254,7 @@ function DaftarPengajuan(props){
     const selectTab = useCallback((value) => {
         setKategori(value);
         setJenis("");
+        setSubjenis("");
         localStorage.setItem(TAB_KEY, value);
         setCurrentPage(1);
     }, []);
@@ -368,14 +372,22 @@ function DaftarPengajuan(props){
                         </>}
                     <label htmlFor="filter-jenis" style={{paddingLeft: "20px"}}>Jenis</label>
                     <select id="filter-jenis" className="type-btn" value={jenis}
-                            onChange={event => { setCurrentPage(1); setJenis(event.target.value); }}>
+                            onChange={event => { setCurrentPage(1); setJenis(event.target.value); setSubjenis(""); }}>
                         <option value="">Semua Jenis</option>
                         {jenisOptions.map(item => (
                             <option key={item.value} value={item.value}>{item.label}</option>
                         ))}
                     </select>
+                    {subjenisOptions.length > 0 && <>
+                        <label htmlFor="filter-subjenis">Subjenis</label>
+                        <select id="filter-subjenis" className="type-btn" value={subjenis}
+                                onChange={event => { setCurrentPage(1); setSubjenis(event.target.value); }}>
+                            <option value="">Semua Subjenis</option>
+                            {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                    </>}
                     <button className="spm-button" type="submit">Cari</button>
-                    {(cariNomor || unitKerja || jenis) &&
+                    {(cariNomor || unitKerja || jenis || subjenis) &&
                         <button className="spm-button" type="button" onClick={hapusCari}>Reset</button>}
                 </form>
             </div>

@@ -915,10 +915,15 @@ function cariNomorAntrian(rows, cari) {
 }
 
 // Filter before pagination so totals and date-filtered results use the same Jenis selection.
-function filterJenisAntrian(rows, jenisKey) {
-    if (!trimmed(jenisKey)) return rows;
-    const jenis = JENIS_PENGAJUAN[trimmed(jenisKey).toLowerCase()] || resolveJenis(jenisKey);
-    return jenis ? rows.filter(row => resolveJenis(row[ANTRIAN_JENIS_INDEX]) === jenis) : [];
+function filterJenisAntrian(rows, jenisKey, subjenis) {
+    let filtered = rows;
+    if (trimmed(jenisKey)) {
+        const jenis = JENIS_PENGAJUAN[trimmed(jenisKey).toLowerCase()] || resolveJenis(jenisKey);
+        filtered = jenis ? rows.filter(row => resolveJenis(row[ANTRIAN_JENIS_INDEX]) === jenis) : [];
+    }
+    return trimmed(subjenis)
+        ? filtered.filter(row => trimmed(row[ANTRIAN_SUBJENIS_INDEX]) === trimmed(subjenis))
+        : filtered;
 }
 
 app.get("/bendahara/antrian", async (req, res) => {
@@ -937,7 +942,7 @@ app.get("/bendahara/antrian", async (req, res) => {
             const dicari = normalizeSatker(unitKerja);
             filteredRows = filteredRows.filter(row => normalizeSatker(row[ANTRIAN_UNIT_KERJA_INDEX]) === dicari);
         }
-        filteredRows = filterJenisAntrian(cariNomorAntrian(filteredRows, cariNomor), req.query.jenis);
+        filteredRows = filterJenisAntrian(cariNomorAntrian(filteredRows, cariNomor), req.query.jenis, req.query.subjenis);
         // flow="gup" narrows to GUP/PTUP, the only jenis on 'Write Antrian'
         if (flow) {
             filteredRows = filteredRows.filter(row => row[ANTRIAN_FLOW_INDEX] === flow);
@@ -990,7 +995,7 @@ app.get("/bendahara/filter-date", async (req, res) => {
         if (kategori) {
             allRows = allRows.filter(row => antrianKategori(row) === kategori);
         }
-        allRows = filterJenisAntrian(cariNomorAntrian(allRows, req.query.cariNomor), req.query.jenis);
+        allRows = filterJenisAntrian(cariNomorAntrian(allRows, req.query.cariNomor), req.query.jenis, req.query.subjenis);
 
         // Filter rows whose timestamp matches the date prefix
         const filteredRows = sortAntrianLatestFirst(
@@ -1224,6 +1229,7 @@ const AJUAN_FLOWS = {
         },
         // Past the PJK columns, which already run beyond antrianLastColumn
         perbaikanColumn: "S",
+        subjenisColumn: "T",
         // canonical index ('Write Antrian' layout) -> column on this sheet
         antrianMap: { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 7: 5, 9: 6, 10: 7, 11: 8, 14: 11, 15: 12, 16: 13, 19: 14 },
     },
@@ -1243,6 +1249,8 @@ const PJK_VERIFIED_VALUES = ["OK", "OK Catatan"];
 // filled cell means "the satker saved a change since the last verification decision on this row".
 // Derived from the letter, like PJK_COLUMN, so the two cannot drift.
 const perbaikanIndex = (flowConfig) => flowConfig.perbaikanColumn.charCodeAt(0) - 65;
+const subjenisIndex = (flowConfig) => flowConfig.subjenisColumn ? flowConfig.subjenisColumn.charCodeAt(0) - 65 : -1;
+const antrianReadColumn = (flowConfig) => flowConfig.subjenisColumn || flowConfig.perbaikanColumn;
 const STATUS_DIPERBAIKI = "Telah Diperbaiki";
 
 // The four verdict columns share one rule: a real negative answer, not a blank and not a
@@ -1283,6 +1291,7 @@ function toCanonicalAntrianRow(row, flowConfig) {
     for (const [target, source] of Object.entries(flowConfig.antrianMap)) {
         canonical[target] = row?.[source] ?? "";
     }
+    canonical[ANTRIAN_SUBJENIS_INDEX] = row?.[subjenisIndex(flowConfig)] ?? "";
     return canonical;
 }
 
@@ -1305,6 +1314,7 @@ const ANTRIAN_HASIL_VERIF_ID_INDEX = ANTRIAN_ROW_WIDTH + 4;
 const ANTRIAN_SUBSTANSI_INDEX = ANTRIAN_ROW_WIDTH + 5;
 const ANTRIAN_KELENGKAPAN_INDEX = ANTRIAN_ROW_WIDTH + 6;
 const ANTRIAN_PERBAIKAN_INDEX = ANTRIAN_ROW_WIDTH + 7;
+const ANTRIAN_SUBJENIS_INDEX = ANTRIAN_ROW_WIDTH + 8;
 
 // The daftar groups by jenis, not by flow: GUP KKP runs the verifikasi flow but the
 // bendahara files it alongside GUP/PTUP, so ANTRIAN_FLOW_INDEX cannot answer this.
@@ -1376,8 +1386,8 @@ async function fetchMergedAntrianRows(spreadsheetId) {
     const response = await readRanges(
         sheets,
         spreadsheetId,
-        // Through Tanggal Perbaikan, the furthest column either sheet carries - still one request
-        flows.map(flow => `'${flow.antrianSheet}'!A3:${flow.perbaikanColumn}`),
+        // Include the appended Subjenis on verif without changing the gup range or any indices.
+        flows.map(flow => `'${flow.antrianSheet}'!A3:${antrianReadColumn(flow)}`),
     );
 
     // The mirrors are dropped from the list itself, but they hold the only copy of the PJK
@@ -1437,11 +1447,30 @@ const JENIS_PENGAJUAN = {
     "gup": { sheetValue: "gup", verifValue: "GUP", flow: "gup", hasTable: true },
     "ptup": { sheetValue: "ptup", verifValue: "PTUP", flow: "gup", hasTable: true },
     "gup-kkp": { sheetValue: "GUP KKP", flow: "verif", hasTable: true, majuSpm: true },
+    "ls-banyak-penerima": { sheetValue: "LS Banyak Penerima", flow: "verif", hasTable: true, majuSpm: true },
     "ls-bendahara": { sheetValue: "LS Bendahara", flow: "verif", hasTable: true, majuSpm: true },
     "ls-kontraktual": { sheetValue: "LS Kontraktual", flow: "verif", hasTable: true, majuSpm: true },
     "ls-pegawai": { sheetValue: "LS Pegawai", flow: "verif", hasTable: true, majuSpm: true },
     "ls-platform": { sheetValue: "LS Platform Pembayaran Pemerintah", flow: "verif", hasTable: true, majuSpm: true },
 };
+
+// Twin of subjenisPengajuan in the frontend. Validate the parent/child pair before writing T.
+const SUBJENIS_PENGAJUAN = {
+    "ls-bendahara": ["Perjalanan Dinas Jabatan", "Perjalanan Dinas Pindah", "Honorarium Kegiatan", "Honorarium Tim"],
+    "ls-kontraktual": ["SBSN", "RM", "PLN"],
+    "ls-pegawai": ["Gaji Induk PNS", "Gaji Induk PPPK", "Uang Makan PNS", "Uang Makan PPPK",
+        "Tunkin PNS", "Tunkin TNI", "Tunkin PPPK", "Gaji Susulan"],
+    "ls-banyak-penerima": ["E-Katalog", "Honor PPNPN"],
+};
+
+function validasiSubjenis(jenisKey, value, allowBlank = false) {
+    const options = SUBJENIS_PENGAJUAN[jenisKey] || [];
+    const subjenis = trimmed(value);
+    if (!subjenis) return options.length && !allowBlank ? "Subjenis pengajuan wajib diisi." : "";
+    return options.includes(subjenis) ? "" : "Subjenis pengajuan tidak sesuai dengan jenis pengajuan.";
+}
+
+const jenisDenganSubjenis = (jenis, subjenis) => [jenis, subjenis].map(trimmed).filter(Boolean).join(" - ");
 
 // Nomor SPP is stored zero padded to 5 digits. Anything not purely numeric is left alone
 // rather than mangled, and the sheet write must stay RAW to keep the leading zeros.
@@ -1592,6 +1621,9 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
             if (!jenis) {
                 return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
             }
+            const subjenis = trimmed(req.body.subjenis);
+            const subjenisError = validasiSubjenis(jenisSlug, subjenis);
+            if (subjenisError) return res.status(400).json({ message: subjenisError });
             if (jenis.flow === "verif" && trimmed(nomorSpp) === "") {
                 return res.status(400).json({ message: "Nomor SPP wajib diisi." });
             }
@@ -1647,7 +1679,7 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 if (pjkFile) {
                     const pjkName = buildPjkFileName(
                         req.viewer?.name,
-                        jenis.verifValue || jenis.sheetValue,
+                        jenisDenganSubjenis(jenis.verifValue || jenis.sheetValue, subjenis),
                         jenis.flow === "gup" ? newIdCounter : formatNomorSpp(nomorSpp),
                         jumlahAjuan
                     );
@@ -1670,6 +1702,9 @@ app.post("/bendahara/buat-ajuan", handleAjuanUpload, async (req, res) => {
                 jenis.flow === "gup" ? fileLink : pjkLink,
                 nomorSpp
             );
+            if (flow.subjenisColumn) {
+                data.push({ range: `'${flow.antrianSheet}'!${flow.subjenisColumn}${startAntrianRow}`, values: [[subjenis]] });
+            }
 
             if (mirrorFlow) {
                 const mirrorRows = allRequest.data.valueRanges[3].values || [];
@@ -1895,23 +1930,13 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         const bupotFile = req.files?.file?.[0];
         const pjkFile = req.files?.filePjk?.[0];
 
-        // Removing a PJK deletes the file too, so it needs the same Drive access as uploading
-        if (bupotFile || pjkFile || removePjk) {
-            // Dedicated uploader account, not the shared /auth/google token
-            if (!await requireGajiDriveAuth(req, res)) return;
-            if (pjkFile && !driveFolderIdVerifPjk) {
-                console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
-                return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
-            }
-            if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
-        }
-
         // Setting antrian data range
         textdata.unshift(getFormattedDate().fullDateTimeFormat);
 
         // The form works in jenis slugs, the sheet stores labels. They only coincide for
         // GUP/PTUP, so writing the slug straight through would corrupt every other jenis.
-        const editJenis = JENIS_PENGAJUAN[String(textdata[2] ?? "").trim()];
+        const editJenisKey = String(textdata[2] ?? "").trim();
+        const editJenis = JENIS_PENGAJUAN[editJenisKey];
         if (!editJenis || editJenis.flow !== flowConfig.key) {
             return res.status(400).json({ message: "Jenis pengajuan tidak dikenal." });
         }
@@ -1928,7 +1953,7 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
         const antriResponse = await readRange(
             sheets,
             spreadsheetId,
-            `'${flowConfig.antrianSheet}'!A3:${flowConfig.perbaikanColumn}`,
+            `'${flowConfig.antrianSheet}'!A3:${antrianReadColumn(flowConfig)}`,
         );
 
         const matchResult = antriResponse.data.values || [];
@@ -1951,10 +1976,27 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
             return res.status(400).json({ error: "Keyword not found" });
         }
 
+        const storedSubjenis = trimmed(currentAntrianValues[subjenisIndex(flowConfig)]);
+        const subjenis = req.body.subjenis === undefined ? storedSubjenis : trimmed(req.body.subjenis);
+        // Legacy parent-only records remain editable; never invent a historical subcategory.
+        const legacySubjenis = !storedSubjenis && resolveJenis(currentAntrianValues[3]) === editJenis;
+        const subjenisError = validasiSubjenis(editJenisKey, subjenis, legacySubjenis);
+        if (subjenisError) return res.status(400).json({ message: subjenisError });
+
+        // Validate the parent/subjenis pair before any Drive writes or removal.
+        if (bupotFile || pjkFile || removePjk) {
+            if (!await requireGajiDriveAuth(req, res)) return;
+            if (pjkFile && !driveFolderIdVerifPjk) {
+                console.error("DRIVE_FOLDER_ID_VERIF_PJK belum diatur - upload dibatalkan.");
+                return res.status(503).json({ message: "Folder penyimpanan PJK belum dikonfigurasi. Hubungi admin." });
+            }
+            if (bupotFile) fileLink = await uploadToDriveFolder(bupotFile, driveFolderId);
+        }
+
         if (pjkFile) {
             const pjkName = buildPjkFileName(
                 req.viewer?.name,
-                editJenis.verifValue || editJenis.sheetValue,
+                jenisDenganSubjenis(editJenis.verifValue || editJenis.sheetValue, subjenis),
                 flowConfig.key === "gup" ? currentAntrianValues[0] : formatNomorSpp(req.body.nomorSpp),
                 textdata[3]
             );
@@ -2046,6 +2088,9 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
                 values: [antrianValues]
             }
         ];
+        if (flowConfig.subjenisColumn) {
+            batchDataUpdates.push({ range: `'${flowConfig.antrianSheet}'!${flowConfig.subjenisColumn}${antriRow}`, values: [[subjenis]] });
+        }
 
         if (flowConfig.pjk && req.body.nomorSpp !== undefined) {
             batchDataUpdates.push({
@@ -3959,10 +4004,8 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                // Through Tanggal Perbaikan, not antrianLastColumn: Dok. Verifikasi, the SPM
-                // columns and the repair stamp all sit past the columns the antrian write path
-                // knows about
-                `'${verifFlow.antrianSheet}'!A3:${verifFlow.perbaikanColumn}`,
+                // Include Subjenis in T as well as the document, SPM, and repair metadata.
+                `'${verifFlow.antrianSheet}'!A3:${antrianReadColumn(verifFlow)}`,
                 `'${AJUAN_FLOWS.gup.antrianSheet}'!A:C`,
             ],
         );
@@ -3985,7 +4028,7 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
             .filter(row => String(row?.[0] ?? "").trim() !== "")
             .map(row => {
                 const padded = Array.from({ length: width }, (_, i) => row[i] ?? "");
-                return [...padded, sourceId(padded), row[perbaikanAt] ?? ""];
+                return [...padded, sourceId(padded), row[perbaikanAt] ?? "", row[subjenisIndex(verifFlow)] ?? ""];
             })
             .reverse();
 
@@ -4072,7 +4115,7 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
 
     const placeholders = {
         TimestampPengajuan: row[1],
-        JenisPengajuan: row[3],
+        JenisPengajuan: jenisDenganSubjenis(row[3], row[subjenisIndex(AJUAN_FLOWS.verif)]),
         UnitKerja: row[8],
         NoSPP: noSpp,
         NoID: noId,
@@ -4092,7 +4135,7 @@ async function generateHasilVerifPdf({ spreadsheetId, rowIndex, row, sourceId, o
         nextHasilVerifSequence(row[0]),
         driveVerif.files.copy({ fileId: templateDocId, fields: "id", supportsAllDrives: true }),
     ]);
-    const fileName = `${safePart(operator)}_${stamp}_${safePart(row[3])}_${safePart(noSpp || noId)}_#${sequence}`;
+    const fileName = `${safePart(operator)}_${stamp}_${safePart(placeholders.JenisPengajuan)}_${safePart(noSpp || noId)}_#${sequence}`;
     const newDocId = copyResponse.data.id;
 
     try {
@@ -4164,7 +4207,7 @@ app.post("/verifikasi/aksi-pjk", async (req, res) => {
         const response = await readRange(
             sheets,
             spreadsheetId,
-            `'${verifFlow.antrianSheet}'!A:${verifFlow.antrianLastColumn}`,
+            `'${verifFlow.antrianSheet}'!A:${antrianReadColumn(verifFlow)}`,
         );
 
         const rows = response.data.values || [];

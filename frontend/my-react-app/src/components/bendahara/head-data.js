@@ -46,6 +46,7 @@ const columns2 = [
 const jenisPengajuan = [
     { value: "gup", label: "GUP" },
     { value: "gup-kkp", label: "GUP KKP" },
+    { value: "ls-banyak-penerima", label: "LS Banyak Penerima" },
     { value: "ls-bendahara", label: "LS Bendahara" },
     { value: "ls-kontraktual", label: "LS Kontraktual" },
     { value: "ls-pegawai", label: "LS Pegawai" },
@@ -53,16 +54,28 @@ const jenisPengajuan = [
     { value: "ptup", label: "PTUP" },
 ];
 
+// Labels stored separately in Write Antrian Verif column T; parent Jenis stays in D.
+export const subjenisPengajuan = {
+    "ls-bendahara": ["Perjalanan Dinas Jabatan", "Perjalanan Dinas Pindah", "Honorarium Kegiatan", "Honorarium Tim"],
+    "ls-kontraktual": ["SBSN", "RM", "PLN"],
+    "ls-pegawai": ["Gaji Induk PNS", "Gaji Induk PPPK", "Uang Makan PNS", "Uang Makan PPPK",
+        "Tunkin PNS", "Tunkin TNI", "Tunkin PPPK", "Gaji Susulan"],
+    "ls-banyak-penerima": ["E-Katalog", "Honor PPNPN"],
+};
+
+export const formatJenisPengajuan = (jenis, subjenis) => [jenis, subjenis]
+    .map(value => String(value ?? "").trim()).filter(Boolean).join(" - ");
+
 // GUP/PTUP keep the full table and the Request Tanggal input. Everything else is a
 // verifikasi flow with a one row table cropped from the full one, except jenisBanyakBaris, which
 // keep that narrow shape but let the user add rows. Nothing is tableless any more; rows
 // created before that changed simply have no block on the sheet.
 const jenisTabelPenuh = ["gup", "ptup"];
 const jenisTanpaTabel = [];
-const jenisBanyakBaris = ["gup-kkp", "ls-pegawai", "ls-platform"];
+const jenisBanyakBaris = ["gup-kkp", "ls-banyak-penerima", "ls-pegawai", "ls-platform"];
 
 // Jenis the verifikator may push on to SPM. Twin of majuSpm in JENIS_PENGAJUAN.
-const jenisMajuSpm = new Set(["gup-kkp", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);
+const jenisMajuSpm = new Set(["gup-kkp", "ls-banyak-penerima", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);
 const ringkasColumns = [0, 1, 2, 4];
 const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
 
@@ -88,9 +101,9 @@ const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Sat
 
 //For Pengujian-PJK.jsx & Aksi-Verif-PJK.jsx
 // ID GUP is the 'Write Antrian' id a GUP/PTUP mirror row came from, blank for every other jenis
-const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
+const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Subjenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
 const pjkHeadDataMulai = [...pjkHeadData, "Tgl. Mulai Verifikasi"];
-const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
+const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Subjenis", "Tgl. Antri", "Satker", "Nominal"];
 
 // Mirrors the backend: 5 digit zero padding, non-numeric values left as they are.
 // Rows written before the padding existed still display padded.

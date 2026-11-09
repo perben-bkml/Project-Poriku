@@ -13,6 +13,7 @@ const FIELD = {
     dokVerif: 15, majuSpm: 16, tanggalSp2d: 17,
     // Appended by the backend past R: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
     sourceId: 18,
+    subjenis: 20,
 };
 
 function AksiVerifPJK(props) {
@@ -106,6 +107,7 @@ function AksiVerifPJK(props) {
         <b key="spp">{formatNomorSpp(props.fulldata[FIELD.spp])}</b>,
         props.fulldata[FIELD.nama],
         props.fulldata[FIELD.jenis],
+        props.fulldata[FIELD.subjenis] || "",
         props.fulldata[FIELD.timestamp],
         props.fulldata[FIELD.unitKerja],
         props.fulldata[FIELD.nominal],

@@ -13,7 +13,9 @@ const normalSatker = (value) => String(value ?? "").trim().replace(/\s+/g, " ").
 const DOK_VERIF = 15;
 const TANGGAL_SP2D = 17;
 const SOURCE_ID = 18;
-const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, 4, 8, 9, 10];
+// Appended after sourceId (18) and Tanggal Perbaikan (19); not the raw sheet's T index.
+const SUBJENIS = 20;
+const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, SUBJENIS, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
 const NOMINAL = 4;
@@ -30,7 +32,7 @@ const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
 const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
 const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
 const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
-const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 20, 16, 24, 13, 13, 46, 60];
+const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 60];
 
 // Generation takes 6-8s; the cap stops a wedged job polling forever
 const POLL_INTERVAL_MS = 2000;
@@ -133,7 +135,7 @@ function PengujianPJK(props) {
         try {
             const baris = active.rows.map(row => [
                 ...active.columns.map(index =>
-                    index === NOMINAL ? selAngka(row[index]) : selTeks(cellText(row, index), index === SPP)),
+                    index === NOMINAL ? selAngka(row[index]) : {...selTeks(cellText(row, index), index === SPP), wrap: index === 3 || index === SUBJENIS}),
                 {...selTeks(row[CATATAN]), wrap: true},
             ]);
             const now = new Date();

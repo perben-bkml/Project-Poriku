@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 
 // Import Components
 import Popup from "../../ui/Popup.jsx";
-import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
+import { columns, jenisPengajuan, subjenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
 
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
@@ -56,6 +56,7 @@ function BuatPengajuan(props) {
             : jenisValueFromLabel(props.passedData[2]) || "gup"
     ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
+    const [subjenis, setSubjenis] = useState(() => props.type === "buat" ? "" : props.passedData?.[15] || "");
     const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
     const [sppError, setSppError] = useState("");
     const sppRef = useRef(null);
@@ -121,6 +122,8 @@ function BuatPengajuan(props) {
 
     // All jenis are available to all users.
     const jenisOptions = jenisPengajuan;
+    const subjenisOptions = subjenisPengajuan[ajuan] || [];
+    const subjenisRequired = subjenisOptions.length > 0 && (isBuat || !!props.passedData?.[15]);
 
     // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
     // left over from a reopened row can outlive the switch to composing. Snap it back to a
@@ -199,12 +202,13 @@ function BuatPengajuan(props) {
     useEffect(() => {
         const newComponentType = props.type;
         setComponentType(newComponentType);
+        setSubjenis(newComponentType === "buat" ? "" : props.passedData?.[15] || "");
 
         // LS Pegawai and LS Platform never wrote a table block, so there is nothing to fetch
         if (newComponentType !== "buat" && !isTanpaTabel) {
             fetchAntrianTable();
         }
-    }, [props.type, isTanpaTabel]);
+    }, [props.type, isTanpaTabel, props.passedData]);
 
 
     // Resize on change so the number spinner and table stay in sync without waiting for blur.
@@ -835,6 +839,7 @@ function BuatPengajuan(props) {
         formData.append('textdata', JSON.stringify(inputArray));
         formData.append('tabledata', JSON.stringify(sendTable));
         formData.append('userdata', user.name);
+        formData.append('subjenis', subjenis);
 
         // Set loading state
         setIsLoading(true);
@@ -953,6 +958,7 @@ function BuatPengajuan(props) {
         formData.append('antriPosition', JSON.stringify(antriPosition));
         formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
         formData.append('flow', rowFlow);
+        formData.append('subjenis', subjenis);
         if (!isTabelPenuh) {
             formData.append('nomorSpp', nomorSpp);
         }
@@ -1160,7 +1166,7 @@ function BuatPengajuan(props) {
                             required/>
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
-                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)}>
+                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => { setAjuan(e.target.value); setSubjenis(""); }}>
                             {jenisOptions.map((jenis) => (
                                 <option key={jenis.value} value={jenis.value}>{jenis.label}</option>
                             ))}
@@ -1174,6 +1180,15 @@ function BuatPengajuan(props) {
                                 : <option value={ajuan}>{String(props.passedData[2]).toUpperCase()}</option>}
                         </select>))
                         }
+                        {subjenisOptions.length > 0 && <>
+                            <label htmlFor="aju-subjenis">Subjenis Pengajuan:</label>
+                            <select id="aju-subjenis" name="subjenis" value={subjenis}
+                                    onChange={event => setSubjenis(event.target.value)}
+                                    disabled={componentType === "lihat"} required={subjenisRequired}>
+                                <option value="">{componentType === "buat" ? "Pilih Subjenis Pengajuan" : "Belum ditentukan"}</option>
+                                {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                        </>}
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
                         <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan"
                             value={jumlahAjuan}

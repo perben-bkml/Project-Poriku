@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, PJK_OVERDUE_STATUS, pjkMonitorStatusOptions, daftarStatusStyle } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, PJK_OVERDUE_STATUS, pjkMonitorStatusOptions, daftarStatusStyle, buktiSetorLabel } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
 import { PopupAlert } from "../../ui/Popup.jsx";
@@ -28,6 +28,9 @@ const SUBSTANSI = 9, KELENGKAPAN = 10;
 const UNIT_KERJA = 8;
 // Same column N used by Aksi-Verif-PJK's catatan field; already included in the API rows.
 const CATATAN = 13;
+const SPM = 7;
+// Virtual table column resolved from the shared Pembayaran BP lookup, not a sheet index.
+const BUKTI_SETOR = 25;
 
 // Informasi Pengajuan has nothing verified yet, so it is the one section without the link
 const DOK_HEAD = "Dok. Verifikasi";
@@ -35,9 +38,9 @@ const INFO_DOK_COLUMNS = [...INFO_COLUMNS, DOK_VERIF];
 const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
 
 const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
-const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
-const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
-const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 60];
+const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT), BUKTI_SETOR];
+const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD, "Bukti Setor Pajak"];
+const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 46, 60];
 const MONITOR_COLUMNS = [...SUDAH_COLUMNS, DEADLINE, REPAIR_STATUS];
 const MONITOR_HEAD = [...SUDAH_HEAD, ...monitorPjkHead];
 const MONITOR_LEBAR = [...SUDAH_LEBAR.slice(0, -1), 20, 24, 60];
@@ -71,6 +74,8 @@ function PengujianPJK(props) {
     const [substansiFilter, setSubstansiFilter] = useState("");
     const [kelengkapanFilter, setKelengkapanFilter] = useState("");
     const [loadError, setLoadError] = useState("");
+    const [buktiSetor, setBuktiSetor] = useState({});
+    const [buktiSetorError, setBuktiSetorError] = useState("");
     const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
@@ -78,7 +83,19 @@ function PengujianPJK(props) {
         try {
             setLoadError("");
             if (!quiet) setIsLoading(true);
-            const response = await apiClient.get('/verifikasi/pengujian-pjk');
+            const [pjkResult, taxResult] = await Promise.allSettled([
+                apiClient.get('/verifikasi/pengujian-pjk'),
+                apiClient.get('/bendahara/pembayaran-bp/bukti-setor', {params: {includeEmpty: true}}),
+            ]);
+            if (taxResult.status === "fulfilled") {
+                setBuktiSetor(taxResult.value.data.data || {});
+                setBuktiSetorError("");
+            } else {
+                setBuktiSetor({});
+                setBuktiSetorError("Bukti Setor Pajak gagal dimuat. Klik Muat Ulang untuk mencoba lagi.");
+            }
+            if (pjkResult.status === "rejected") throw pjkResult.reason;
+            const response = pjkResult.value;
             if (response.status === 200) {
                 setSections(response.data.data);
                 setPending(new Set((response.data.pending || []).map(String)));
@@ -108,8 +125,15 @@ function PengujianPJK(props) {
         return () => clearInterval(timer);
     }, [pending]);
 
+    const buktiSetorEntries = row => [...new Set(String(row[SPM] ?? "").split(/[,&]/).map(value => value.trim()).filter(Boolean))]
+        .map(spm => ({spm, entry: buktiSetor[spmKey(spm)]})).filter(item => item.entry)
+        .map(({spm, entry}) => ({spm, entry, url: entry.url || "",
+            label: entry.tidakPerlu ? "Tidak Perlu (Non Pajak)" : buktiSetorLabel(entry)}));
+
     // The plain text of a cell, so the table and the Excel export cannot drift apart
     const cellText = (row, index) => {
+        if (index === BUKTI_SETOR) return buktiSetorEntries(row)
+            .map(item => item.url || `${/[,&]/.test(String(row[SPM] ?? "")) ? `SPM ${item.spm}: ` : ""}${item.label}`).join('\n');
         if (index === REPAIR_STATUS) return monitorRepairStatus(row);
         if (index === SPP) return formatNomorSpp(row[index]);
         if (index === SOURCE_ID) return row[index] || "-";
@@ -118,6 +142,19 @@ function PengujianPJK(props) {
     };
 
     const project = (rows, columns) => rows.map(row => columns.map(index => {
+        if (index === BUKTI_SETOR) {
+            const entries = buktiSetorEntries(row);
+            const multiple = /[,&]/.test(String(row[SPM] ?? ""));
+            if (!multiple && entries[0]?.url) return <a key={index} href={entries[0].url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>;
+            return entries.length ? <span key={index}>{entries.map(({spm, url, label, entry}, at) => {
+                const style = daftarStatusStyle(entry.tidakPerlu || entry.ada ? "sudah" : "belum");
+                return <span key={spm}>
+                    {at > 0 ? ", " : ""}{multiple ? `SPM ${spm}: ` : ""}
+                    {url ? <a href={url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>
+                        : <span className="dp-status" style={{backgroundColor: style.bg, color: style.fg}}>{label}</span>}
+                </span>;
+            })}</span> : <span key={index}/>;
+        }
         if (index === DOK_VERIF) {
             if (pending.has(String(row[0]))) return <span key={index} style={{color: '#8A6100'}}>Sedang dibuat…</span>;
             return row[index]
@@ -176,7 +213,7 @@ function PengujianPJK(props) {
         try {
             const baris = active.rows.map(row => [
                 ...active.columns.map(index =>
-                    index === NOMINAL ? selAngka(row[index]) : {...selTeks(cellText(row, index), index === SPP), wrap: index === 3 || index === SUBJENIS}),
+                    index === NOMINAL ? selAngka(row[index]) : {...selTeks(cellText(row, index), index === SPP), wrap: index === 3 || index === SUBJENIS || index === BUKTI_SETOR}),
                 {...selTeks(row[CATATAN]), wrap: true},
             ]);
             const now = new Date();
@@ -281,6 +318,7 @@ function PengujianPJK(props) {
     return (
         <div className='kelola-container'>
             {loadError && <PopupAlert severity="error" message={loadError}/>}
+            {buktiSetorError && <PopupAlert severity="warning" message={buktiSetorError}/>}
             <div className='kelola-tabs' role='tablist'>
                 {tables.map(table => {
                     const isActive = table.title === active.title;

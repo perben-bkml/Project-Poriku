@@ -14,6 +14,7 @@ import stream from 'stream';
 import readXlsxFile from 'read-excel-file/node';
 import dns from 'node:dns/promises';
 import { createHash } from 'node:crypto';
+import { pjkSpmFromSpp, missingPjkSpmWrites } from './lib/pjkSpm.js';
 
 
 // Initialize tools
@@ -1220,6 +1221,7 @@ const AJUAN_FLOWS = {
         hasRequestTanggal: false,
         pjk: {
             spp: "G",
+            spm: "H",
             substansi: "J",
             kelengkapan: "K",
             mulaiVerif: "L",
@@ -1594,6 +1596,8 @@ function buildAntrianWrites(flowConfig, rowNumber, values, unitKerja, lampiranLi
             range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spp}${rowNumber}`,
             values: [[formatNomorSpp(nomorSpp)]],
         });
+        const spm = pjkSpmFromSpp(nomorSpp);
+        if (spm) writes.push({range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spm}${rowNumber}`, values: [[spm]]});
     }
     return writes;
 }
@@ -2346,6 +2350,10 @@ app.patch("/bendahara/edit-table", handleAjuanUpload, async (req, res) => {
                 range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spp}${antriRow}`,
                 values: [[formatNomorSpp(req.body.nomorSpp)]]
             });
+            const spm = pjkSpmFromSpp(req.body.nomorSpp);
+            if (!filled(currentAntrianValues[PJK_COLUMN.spm]) && spm) {
+                batchDataUpdates.push({range: `'${flowConfig.antrianSheet}'!${flowConfig.pjk.spm}${antriRow}`, values: [[spm]]});
+            }
         }
 
         if (hasTable) {
@@ -2906,6 +2914,9 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         // GUP/PTUP keep their Nomor SPP only on 'Write Antrian', so the mirror the PJK
         // screen reads shows it blank without this
         if (mirrorMatch) rawCells.push(cellAt(verifSheet, pjk.spp, mirrorMatch.row, formatNomorSpp(spp)));
+        if (mirrorMatch && !filled(mirrorMatch.canonical[10]) && pjkSpmFromSpp(spp)) {
+            rawCells.push(cellAt(verifSheet, pjk.spm, mirrorMatch.row, pjkSpmFromSpp(spp)));
+        }
         // Only when Buat DRPP was part of this save; an unrelated save carries no
         // documentData and would otherwise clear these
         if (monitoringDrppData) {
@@ -4267,7 +4278,12 @@ app.get("/verifikasi/pengujian-pjk", async (req, res) => {
         const deadlineIndex = verifFlow.deadlineColumn.charCodeAt(0) - 65;
         const repairStatusIndex = verifFlow.repairStatusColumn.charCodeAt(0) - 65;
         const rawRows = (response.data.valueRanges[0].values || []).map(row => [...row]);
-        const writes = [];
+        const writes = missingPjkSpmWrites(rawRows, {
+            sheet: verifFlow.antrianSheet, sppColumn: verifFlow.pjk.spp, spmColumn: verifFlow.pjk.spm,
+        });
+        rawRows.forEach(row => {
+            if (filled(row[0]) && !filled(row[PJK_COLUMN.spm])) row[PJK_COLUMN.spm] = pjkSpmFromSpp(row[PJK_COLUMN.spp]);
+        });
         const headers = response.data.valueRanges[2]?.values?.[0] || [];
         [[verifFlow.deadlineColumn, "Deadline Perbaikan"], [verifFlow.repairStatusColumn, "Status Perbaikan"],
             [verifFlow.repairUploadColumn, "Perbaikan PJK"]]
@@ -8497,13 +8513,14 @@ app.get("/bendahara/pembayaran-bp/bukti-setor", async (req, res) => {
             () => readPembayaranBpRecords(spreadsheetId, sheetName), PEMBAYARAN_BP_SEARCH_TTL_MS);
 
         const wanted = spmDigits(req.query.spm);
+        const includeEmpty = req.query.includeEmpty === "true";
         const data = {};
         for (const record of records) {
             const spm = spmDigits(record.nomorSpm);
-            if (!spm || data[spm] || (wanted && spm !== wanted)) continue;
+            if (!spm || data[spm]?.ada || data[spm]?.tidakPerlu || (wanted && spm !== wanted)) continue;
             const ada = Boolean(record.buktiBayarDepositPajak.nama);
             const tidakPerlu = normalizeSatker(record.statusPajak) === STATUS_PAJAK_TANPA_DEPOSIT;
-            if (ada || tidakPerlu) data[spm] = { ada, tidakPerlu, url: record.buktiBayarDepositPajak.url };
+            if (ada || tidakPerlu || includeEmpty) data[spm] = { ada, tidakPerlu, url: record.buktiBayarDepositPajak.url };
         }
 
         return res.status(200).json({ data });

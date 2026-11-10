@@ -54,10 +54,7 @@ function Login () {
                 localStorage.setItem('poriku-auth-token', response.data.token);
                 setScreenLoading(false)
                 setIsAuthenticated(true)
-                setUser({
-                    name: response.data.data[0],
-                    role: response.data.data[1],
-                })
+                setUser(response.data.user)
                 navigate("/home")
             }
         } catch (error) {

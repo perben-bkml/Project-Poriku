@@ -357,7 +357,7 @@ app.use((req, res, next) => {
     if (
         viewer.role !== MASTER_ROLE &&
         !rolesForRoute(req.method, path).includes(viewer.role) &&
-        !(path.startsWith('/layanan-gaji') && viewer.username === 'bendahara-pengeluaran')
+        !(path.startsWith('/layanan-gaji') && (viewer.id === 'bendahara-pengeluaran' || viewer.username === 'bendahara-pengeluaran'))
     ) {
         return res.status(403).json({ message: "Akses ditolak." });
     }
@@ -848,7 +848,13 @@ app.post("/login-auth", async (req, res) => {
         // Return the token in the body so the frontend can store it in localStorage and
         // send it as Authorization: Bearer on subsequent requests (Safari/iOS ITP fix).
         // The cookie path remains for backward compat with Chrome/desktop.
-        res.json({data: sendData, token, message: "Login Success!"})
+        const user = {
+            id: userData[0].id,
+            username: userData[0].username,
+            name: userData[0].name,
+            role: userData[0].role,
+        };
+        res.json({data: sendData, user, token, message: "Login Success!"})
     } catch (error) {
         console.log("Error sending data to DB.", error)
         res.status(500).json({error: "Can't write data to DB."})
@@ -892,6 +898,7 @@ app.get("/check-auth", (req, res) => {
         console.log("Token expires at:", new Date(decoded.exp * 1000));
         res.status(200).json({ 
             user: {
+                id: decoded.id,
                 name: decoded.name,
                 // The login id, which the DRPP hold on Bendahara-Page.jsx matches on
                 username: decoded.username,

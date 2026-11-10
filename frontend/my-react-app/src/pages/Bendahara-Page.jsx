@@ -107,7 +107,7 @@ function BendaharaPage(props) {
 
 
     const canOpen = (menu) => {
-        if (menu === "layanan-gaji" && user.username === "bendahara-pengeluaran") return true;
+        if (menu === "layanan-gaji" && (user.id === "bendahara-pengeluaran" || user.username === "bendahara-pengeluaran")) return true;
         return !(DRPP_MENUS.includes(menu) && tanpaDrpp(user.username))
             && (user.role === "master admin" || (MENU_ROLES[menu] || []).includes(user.role));
     };

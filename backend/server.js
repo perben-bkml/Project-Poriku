@@ -13,7 +13,9 @@ import multer from 'multer';
 import stream from 'stream';
 import readXlsxFile from 'read-excel-file/node';
 import dns from 'node:dns/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
+import {AKSI_BP_LOG_SHEET, AKSI_BP_LOG_HEAD, aksiBpError, aksiBpSource,
+    aksiLegacyGroups, parseAksiBpLog, planAksiBp, aksiBpLogRequests, aksiBpMoveLog} from './lib/aksiPembayaranBp.js';
 import { pjkSpmFromSpp, missingPjkSpmWrites } from './lib/pjkSpm.js';
 import {SPM_DETAIL_VERSION, anggaranSpmSnapshot, pilihLingkupSpm, parseSpmDetailQuery,
     bacaRincianSpm, spmDetailError} from './lib/anggaranSpm.js';
@@ -110,8 +112,8 @@ const safePart = (value) => String(value ?? "").replace(/[\\/]/g, "-").trim();
 const readRange = (client, spreadsheetId, range, options = {}) =>
     withBackoff(async () => client.spreadsheets.values.get({ spreadsheetId, range, ...options }));
 
-const readRanges = (client, spreadsheetId, ranges) =>
-    withBackoff(async () => client.spreadsheets.values.batchGet({ spreadsheetId, ranges }));
+const readRanges = (client, spreadsheetId, ranges, options = {}) =>
+    withBackoff(async () => client.spreadsheets.values.batchGet({ spreadsheetId, ranges, ...options }));
 
 const writeRange = (client, spreadsheetId, range, values, valueInputOption = "RAW") =>
     withBackoff(async () => client.spreadsheets.values.update({
@@ -232,6 +234,7 @@ const ROUTE_ROLES = {
     "GET /bendahara/batas-gup": ADMIN,
     "PUT /bendahara/batas-gup": ADMIN,
     "POST /bendahara/aksi-ajuan": ADMIN,
+    "POST /bendahara/aksi-ajuan/pembayaran-bp-preview": ADMIN,
     "GET /bendahara/get-ajuan": ADMIN,
     "GET /bendahara/monitoring-drpp": ADMIN,
     "GET /bendahara/cek-drpp": ADMIN,
@@ -2822,7 +2825,7 @@ app.get("/bendahara/kelola-ajuan", async (req, res) => {
 })
 
 //Aksi-Pengajuan Handler
-app.post("/bendahara/aksi-ajuan", async (req, res) => {
+async function saveAksiPengajuan(req, res) {
     try {
         const spreadsheetId = getSpreadsheetId(req, 'AJUAN');
         const {updatedAntriData, monitoringDrppData, documentData, tanggalSp2d, drppProcess} = req.body
@@ -2831,6 +2834,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         }
 
         const {no_antri, ajuan_verifikasi, tgl_verifikasi, status_pajak, sedia_anggaran, tgl_setuju, drpp, spp, spm, catatan} = updatedAntriData;
+        if (!trimmed(no_antri)) throw aksiBpError('Identitas pengajuan wajib diisi.');
 
         //Handling Write Antrian Sheet update with backoff
         // A:N so the pre-update satker (L) and pajak/anggaran status (M/N) are
@@ -2840,10 +2844,10 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             sheets,
             spreadsheetId,
             [
-                // Through Q: the pre-update satker (L), pajak/anggaran (M/N) and Catatan (Q) all
-                // feed the checks below, and widening the range costs nothing
-                "'Write Antrian'!A:Q",
+                // Through R: also retain the pre-save SP2D date for contribution adoption.
+                "'Write Antrian'!A:R",
                 `'${AJUAN_FLOWS.verif.antrianSheet}'!A:${AJUAN_FLOWS.verif.antrianLastColumn}`,
+                ...(monitoringDrppData ? ["'Monitoring DRPP'!B:I"] : []),
             ],
         );
 
@@ -2852,8 +2856,8 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         let rowIndex = null;
 
         // Find the matching row based on no_antri
-        for (let i = 0; i < allRows.length; i++) {
-            if (allRows[i][0] === no_antri) { // Matching row found
+        for (let i = 2; i < allRows.length; i++) {
+            if (trimmed(allRows[i][0]) === trimmed(no_antri)) { // Matching row found
                 rowIndex = i + 1; // Convert to 1-based index
                 break;
             }
@@ -2861,6 +2865,22 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         if (!rowIndex) {
             return res.status(400).json({ error: "Keyword not found in column A" });
+        }
+
+        let preparedBp=null;
+        if (documentData !== undefined) {
+            if (!monitoringDrppData || String(monitoringDrppData.trans_id).trim()!==String(no_antri).trim())
+                throw aksiBpError('Identitas rincian DRPP tidak sesuai dengan pengajuan.');
+            preparedBp=await prepareAksiPembayaranBp(req,allRows[rowIndex-1],getAntrianResponse.data.valueRanges[2]?.values || []);
+            if (preparedBp.plan) {
+                const {plan}=preparedBp, token=req.body.bpPreviewToken;
+                const changed=plan.changes.length>0 || plan.registrations.length>0;
+                if (token && token!==plan.token && changed || !token && plan.additions.length) {
+                    const error=aksiBpError('Data Pembayaran BP berubah atau Nomor SPM sudah ada. Periksa penambahan nominal dan konfirmasi kembali.',409);
+                    error.code='BP_CONFIRMATION_REQUIRED';error.preview=publicAksiBpPreview(preparedBp);throw error;
+                }
+                await registerAksiBpContributions(preparedBp);
+            }
         }
 
         const ajuanVerifikasiValue = ajuan_verifikasi === "TRUE" ? getFormattedDate().fullDateFormat : "";
@@ -2882,9 +2902,9 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             [`'Write Antrian'!M${rowIndex}`, status_pajak],
             [`'Write Antrian'!N${rowIndex}`, sedia_anggaran],
             [`'Write Antrian'!G${rowIndex}`, tgl_setuju],
-            [`'Write Antrian'!I${rowIndex}`, drpp],
-            [`'Write Antrian'!J${rowIndex}`, spp],
-            [`'Write Antrian'!K${rowIndex}`, spm],
+            monitoringDrppData ? [`'Write Antrian'!I${rowIndex}`, drpp] : null,
+            monitoringDrppData ? [`'Write Antrian'!J${rowIndex}`, spp] : null,
+            monitoringDrppData ? [`'Write Antrian'!K${rowIndex}`, spm] : null,
             [`'Write Antrian'!Q${rowIndex}`, catatan],
             tgl_verifikasi === "" ? [`'Write Antrian'!O${rowIndex}`, ajuanVerifikasiValue]  : null, // Condition for column O
             // Cleared whenever the verdict moves, including back to OK, so Tanggal Perbaikan keeps
@@ -2919,9 +2939,10 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         const rawCells = [];
         // GUP/PTUP keep their Nomor SPP only on 'Write Antrian', so the mirror the PJK
         // screen reads shows it blank without this
-        if (mirrorMatch) rawCells.push(cellAt(verifSheet, pjk.spp, mirrorMatch.row, formatNomorSpp(spp)));
-        if (mirrorMatch && !filled(mirrorMatch.canonical[10]) && pjkSpmFromSpp(spp)) {
-            rawCells.push(cellAt(verifSheet, pjk.spm, mirrorMatch.row, pjkSpmFromSpp(spp)));
+        const effectiveSpp=monitoringDrppData ? spp : previousAntrianRow[9];
+        if (mirrorMatch) rawCells.push(cellAt(verifSheet, pjk.spp, mirrorMatch.row, formatNomorSpp(effectiveSpp)));
+        if (mirrorMatch && !filled(mirrorMatch.canonical[10]) && pjkSpmFromSpp(effectiveSpp)) {
+            rawCells.push(cellAt(verifSheet, pjk.spm, mirrorMatch.row, pjkSpmFromSpp(effectiveSpp)));
         }
         // Only when Buat DRPP was part of this save; an unrelated save carries no
         // documentData and would otherwise clear these
@@ -2942,7 +2963,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
 
         // Handling Monitoring DRPP Sheet update
         if (monitoringDrppData) {
-            const {trans_id, satker, jenis} = monitoringDrppData;
+            const trans_id=no_antri, satker=allRows[rowIndex-1][11], jenis=allRows[rowIndex-1][3];
 
             // Straight from the grid, so the three stay aligned and a row the admin
             // emptied or removed simply is not there. Unticking Buat DRPP means none.
@@ -2954,9 +2975,7 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             const spmDrppArray = drppRows.map(row => trimmed(row.spp));
 
             // Apply backoff for getting monitoring data
-            const getMonitoringResponse = await readRange(sheets, spreadsheetId, "'Monitoring DRPP'!B:I");
-
-            const monitoringRows = getMonitoringResponse.data.values || [];
+            const monitoringRows = getAntrianResponse.data.valueRanges[2]?.values || [];
             let existingStartRow = null;
             let existingRowCount = 0;
             let existingColumnCData = [];
@@ -3085,25 +3104,13 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
             }
         }
 
-        // Record the transaction on Pembayaran BP. Isolated like the notification below:
-        // the aksi is already saved, so a failure here is reported, not retried.
-        let warning = null;
-        if (documentData) {
-            const antrianRow = allRows[rowIndex - 1] || [];
-            try {
-                warning = await syncPembayaranBpFromAksi(req, {
-                    tanggalSp2d,
-                    rows: drppProcess === false ? [] : documentData,
-                    jenisSlug: antrianRow[3],
-                    satker: antrianRow[11],
-                    // K before this save: an SPM it no longer carries loses its row
-                    previousSpm: antrianRow[10],
-                });
-            } catch (error) {
-                console.error("Gagal mencatat ke Pembayaran BP (aksi-ajuan):", error);
-                warning = error?.message || "Transaksi gagal dicatat di Pembayaran BP.";
-            }
-            if (warning) warning = `Aksi tersimpan, tetapi ${warning}`;
+        // Source writes succeeded. Financial amounts and their contribution log now commit
+        // together, while the workbook lock still covers this entire action.
+        let warning=null;
+        if (preparedBp) {
+            try {warning=await syncPembayaranBpFromAksi(preparedBp);}
+            catch(error) {console.error('Gagal mencatat ke Pembayaran BP (aksi-ajuan):',error);warning=error.message || 'Transaksi gagal dicatat di Pembayaran BP.';}
+            if (warning) warning=`Aksi tersimpan, tetapi ${warning}`;
         }
 
         // Notify the satker. Isolated: the sheet update already succeeded, so a
@@ -3138,10 +3145,24 @@ app.post("/bendahara/aksi-ajuan", async (req, res) => {
         res.json({ message: "Data updated successfully!", warning });
 
     } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({message:error.message,code:error.code,preview:error.preview});
         console.error("Error in /bendahara/aksi-ajuan:", error);
         res.status(500).json({ error: "Failed to update data." });
     }
-})
+}
+
+app.post('/bendahara/aksi-ajuan',async(req,res)=>{
+    try {
+        const bpId=getSpreadsheetId(req,'PEMBAYARAN_BP');
+        if (req.body.documentData!==undefined && bpId) await queuePembayaranBpFinance(bpId,()=>saveAksiPengajuan(req,res));
+        else await saveAksiPengajuan(req,res);
+    } catch(error) {
+        console.error('Gagal mengunci penyimpanan aksi:',error.code || error.message);
+        if (!res.headersSent) res.status(503).json({message:'Penyimpanan sedang diproses. Coba lagi; nominal tidak ditambahkan ulang.'});
+    }
+});
+
+
 
 //Fetch monitoring data for Aksi-Pengajuan
 app.get("/bendahara/get-ajuan", async (req, res) => {
@@ -3157,15 +3178,11 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
         const sheetResponse = await readRange(sheets, spreadsheetId, range);
 
         const rows = sheetResponse.data.values || [];
-        if (rows.length === 0) {
-            return res.status(404).json({ error: "No data found" });
-        }
-
         let matchedRows = [];
         let found = false; // Flag to check if we found trans_id
 
         for (const row of rows) {
-            const rowTransId = row[0]?.trim(); // Convert to string and trim spaces
+            const rowTransId = trimmed(row[0]);
 
             if (rowTransId === trans_id.toString()) {
                 found = true; // Start collecting rows
@@ -3178,16 +3195,32 @@ app.get("/bendahara/get-ajuan", async (req, res) => {
                     drpp: row[3] || "",
                     nominal: row[5] || "",
                     spp: row[4] || "",
-                    spm: spm !== "" ? row[4] : "",
+                    spm: "", // Resolved against actual SPM below, never inferred from SPP alone.
                 });
             }
         }
 
-        if (matchedRows.length === 0) {
-            return res.status(404).json({ error: "No matching data found" });
+        // Monitoring stores SPP, which need not equal SPM. Restore the saved per-DRPP
+        // mapping rather than silently changing SPM on an untouched reopened form.
+        const numbers=[...new Set(String(spm || '').split(/[,&]/).map(trimmed).filter(Boolean))];
+        const bpId=getSpreadsheetId(req,'PEMBAYARAN_BP');
+        let details=[];
+        if (numbers.length && bpId) {
+            const snapshot=await readAksiBpSnapshot(bpId,pembayaranBpSheetName(req));
+            const source=aksiBpSource(getRequestYear(req),spreadsheetId,trans_id);
+            details=snapshot.log.filter(r=>r.source===source && r.sheetId===snapshot.sheetId).flatMap(r=>r.details);
         }
-
-        return res.status(200).json({ data: matchedRows });
+        if (!matchedRows.length) matchedRows=details.filter(d=>d.nominal!==undefined).map(d=>({...d}));
+        if (!matchedRows.length) return res.status(404).json({error:'No matching data found'});
+        matchedRows=matchedRows.map(row=>{
+            const index=details.findIndex(d=>d.drpp===trimmed(row.drpp) && d.spp===trimmed(row.spp));
+            const saved=index>=0 ? details.splice(index,1)[0].spm : null;
+            const resolved=saved ?? (numbers.length===1 ? numbers[0] : numbers.find(n=>spmDigits(n)===spmDigits(row.spp)) || '');
+            return {...row,spm:resolved,spmUnresolved:Boolean(numbers.length && !resolved)};
+        });
+        matchedRows.push(...details.filter(d=>!d.drpp && d.nominal!==undefined).map(d=>({...d,spmUnresolved:false})));
+        return res.status(200).json({data:matchedRows,warning:matchedRows.some(r=>r.spmUnresolved)
+            ? 'Nomor SPM beberapa DRPP belum dapat dipastikan. Isi Nomor SPM yang sesuai sebelum menyimpan.' : ''});
 
     } catch (error) {
         console.error("Error in /bendahara/get-ajuan:", error);
@@ -7952,9 +7985,6 @@ const PEMBAYARAN_BP_FIELD_AT = new Map(PEMBAYARAN_BP_FIELDS.map(field => [column
 // template row's values; edit steps around them so whatever a human put there survives.
 const PEMBAYARAN_BP_RUNS_CREATE = [["C", "F"], ["H", "J"], ["L", "Q"], ["S", "S"], ["U", "U"]];
 const PEMBAYARAN_BP_RUNS_EDIT = [["C", "F"], ["H", "H"], ["M", "Q"], ["S", "S"], ["U", "U"]];
-// Only the columns an aksi owns. Refreshing an existing row must leave the berkas,
-// the statuses and the Keterangan an admin filled in afterwards untouched.
-const PEMBAYARAN_BP_RUNS_SYNC = [["C", "F"], ["H", "H"]];
 
 // Inverse of toDateInputValue. Writing the serial rather than "26-01-2026" keeps the
 // value a real date whatever the spreadsheet's locale does with text.
@@ -8207,6 +8237,14 @@ function queuePembayaranBpWrite(spreadsheetId, task) {
     return next;
 }
 
+// Financial read/modify/write operations also coordinate across backend instances.
+// The other consumers of the existing in-process queue keep their original behavior.
+const queuePembayaranBpFinance=(spreadsheetId,task)=>queuePembayaranBpWrite(spreadsheetId,()=>sql.begin(async db=>{
+    await db`SET LOCAL lock_timeout='20s'`;
+    await db`SELECT pg_advisory_xact_lock(8871,hashtext(${spreadsheetId}))`;
+    return task();
+}));
+
 // Only files in the app's own folder: older links point at file drop attachments it
 // did not create and does not own.
 async function deleteOwnedDriveFiles(urls, folderId) {
@@ -8251,6 +8289,7 @@ async function loadPembayaranBpRow(req, res, spreadsheetId, sheetName, rowNumber
         return null;
     }
     return {
+        nomorSpm:at(2),
         links: {
             buktiBayar: { nama: at(11), url: String(cells[11]?.hyperlink ?? "").trim() },
             buktiBayarDepositPajak: { nama: at(17), url: String(cells[17]?.hyperlink ?? "").trim() },
@@ -8327,88 +8366,165 @@ const PEMBAYARAN_BP_JENIS_AJUAN = { gup: "GUP", ptup: "GTUP NIHIL" };
 function groupAksiRowsBySpm(rows) {
     const groups = new Map();
     for (const row of rows || []) {
+        if (trimmed(row?.spm) && !/^\d+\s*[AT]?$/i.test(trimmed(row.spm)))
+            return {error:'Isi satu Nomor SPM pada setiap baris rincian DRPP.'};
         const spm = spmDigits(row?.spm);
         if (!spm) continue;
+        const raw=String(row?.nominal ?? '').trim().replace(/^Rp\s*/i,'');
+        if (raw && !/^(?:\d+|\d{1,3}(?:\.\d{3})+|\d{1,3}(?:,\d{3})+)$/.test(raw))
+            return {error:`Nominal "${row?.nominal}" harus berupa rupiah bulat yang tidak negatif.`};
         const nominal = parseRupiah(row?.nominal);
-        if (Number.isNaN(nominal)) return { error: `Nominal "${row?.nominal}" bukan angka.` };
+        if (!Number.isSafeInteger(nominal) || nominal<0) return { error: `Nominal "${row?.nominal}" harus berupa rupiah bulat yang tidak negatif.` };
         groups.set(spm, (groups.get(spm) || 0) + nominal);
+        if (!Number.isSafeInteger(groups.get(spm))) return {error:'Total nominal SPM melebihi batas ketelitian aplikasi.'};
     }
     return { groups };
 }
 
-// Records the aksi on the Pembayaran BP sheet, and drops the rows of any SPM the aksi
-// no longer carries. Returns a warning to show the admin, or null when everything
-// landed - never throws, the aksi itself is already saved.
-async function syncPembayaranBpFromAksi(req, { tanggalSp2d, rows, jenisSlug, satker, previousSpm }) {
-    const spreadsheetId = getSpreadsheetId(req, 'PEMBAYARAN_BP');
-    if (!spreadsheetId) return "Spreadsheet Pembayaran BP untuk tahun ini belum dikonfigurasi.";
+// Fresh values for preview/save. The hidden log is in the same workbook so a financial
+// update and its recorded contribution can commit in one Sheets batch.
+async function readAksiBpSnapshot(spreadsheetId,sheetName) {
+    const info=await withBackoff(()=>sheets.spreadsheets.get({spreadsheetId,fields:'sheets.properties(sheetId,title)'}));
+    const properties=(info.data.sheets || []).map(s=>s.properties);
+    const payment=properties.find(s=>s.title===sheetName);
+    if (!payment) throw aksiBpError(`Tab "${sheetName}" tidak ditemukan.`,409);
+    const tracking=properties.find(s=>s.title===AKSI_BP_LOG_SHEET);
+    const ranges=[`'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:H`,...(tracking ? [`'${AKSI_BP_LOG_SHEET}'!A:E`] : [])];
+    const response=await readRanges(sheets,spreadsheetId,ranges,{valueRenderOption:'UNFORMATTED_VALUE'});
+    const values=response.data.valueRanges[0].values || [];
+    const trackingValues=tracking ? response.data.valueRanges[1].values || [] : [];
+    const payments=values.flatMap((row,i)=>spmDigits(row[1]) ? [{row:i+PEMBAYARAN_BP_FIRST_ROW,
+        spm:spmDigits(row[1]),nominal:parseRupiah(row[5]),va:String(row[3] ?? '').trim()}] : []);
+    let appendRow=PEMBAYARAN_BP_FIRST_ROW;
+    values.forEach((row,i)=>{if (filled(row[0]) || filled(row[1])) appendRow=i+PEMBAYARAN_BP_FIRST_ROW+1;});
+    return {sheetId:payment.sheetId,trackingId:tracking?.sheetId ?? null,
+        log:parseAksiBpLog(trackingValues,tracking?.sheetId),logNextRow:Math.max(2,trackingValues.length+1),
+        payments,appendRow,sheetIds:new Set(properties.map(s=>s.sheetId))};
+}
 
-    const { groups, error } = groupAksiRowsBySpm(rows);
-    if (error) return `${error} Transaksi tidak dicatat di Pembayaran BP.`;
+const publicAksiBpPreview=prepared=>({token:prepared.plan?.token || null,
+    additions:prepared.plan?.additions || [],warning:prepared.warning || ''});
 
-    // Whatever the antrian claimed before this save and no longer does
-    const dropped = String(previousSpm || "").split(",").map(spmDigits)
-        .filter(spm => spm && !groups.has(spm));
-    if (groups.size === 0 && dropped.length === 0) return null;
-    if (groups.size > 0 && !String(tanggalSp2d || "").trim()) {
-        return "Tanggal SP2D belum diisi, transaksi tidak dicatat di Pembayaran BP.";
+async function prepareAksiPembayaranBp(req,sourceRow,monitoringRows) {
+    const rows=req.body.drppProcess===false ? [] : req.body.documentData;
+    if (!Array.isArray(rows)) throw aksiBpError('Rincian DRPP belum dimuat. Muat ulang sebelum menyimpan.');
+    if (rows.some(row=>!row || typeof row!=='object')) throw aksiBpError('Rincian DRPP tidak valid.');
+    if (rows.some(row=>row.spmUnresolved && !trimmed(row.spm))) throw aksiBpError('Isi Nomor SPM pada rincian DRPP yang belum dapat dipastikan sebelum menyimpan.');
+    const {groups,error}=groupAksiRowsBySpm(rows);
+    if (error) throw aksiBpError(error);
+    const tanggalSp2d=trimmed(req.body.tanggalSp2d);
+    if (groups.size && !tanggalSp2d) return {warning:'Tanggal SP2D belum diisi, transaksi tidak dicatat di Pembayaran BP.'};
+    if (groups.size && !periodDate(tanggalSp2d)) throw aksiBpError('Tanggal SP2D tidak valid.');
+    const spreadsheetId=getSpreadsheetId(req,'PEMBAYARAN_BP');
+    if (!spreadsheetId) return {warning:'Spreadsheet Pembayaran BP untuk tahun ini belum dikonfigurasi.'};
+    const sheetName=pembayaranBpSheetName(req), snapshot=await readAksiBpSnapshot(spreadsheetId,sheetName);
+    const source=aksiBpSource(getRequestYear(req),getSpreadsheetId(req,'AJUAN'),sourceRow[0]);
+    const own=snapshot.log.filter(r=>r.source===source && r.sheetId===snapshot.sheetId);
+    const oldSpms=String(sourceRow[10] || '').split(/[,&]/).map(spmDigits).filter(Boolean);
+    let legacy=new Map();
+    if (oldSpms.some(spm=>!own.some(r=>r.spm===spm) && snapshot.payments.some(p=>p.spm===spm))) {
+        const oldRows=monitoringRows.filter(row=>String(row[0]).trim()===String(sourceRow[0]).trim())
+            .map(row=>({spp:row[4],nominal:row[5]}));
+        legacy=aksiLegacyGroups(sourceRow[10],Boolean(toIsoDate(sourceRow[17])),oldRows,parseRupiah);
     }
-
-    const jenis = PEMBAYARAN_BP_JENIS_AJUAN[String(jenisSlug || "").trim().toLowerCase()];
-    if (groups.size > 0 && !jenis) return `Jenis "${jenisSlug}" tidak dikenal di Pembayaran BP.`;
-
-    const sheetName = pembayaranBpSheetName(req);
-    const options = await pembayaranBpFormOptions(spreadsheetId, sheetName);
-    const unitKerja = aksiUnitKerja(satker);
-    const va = options.va.find(item => normalizeSatker(item.unitKerja) === normalizeSatker(unitKerja));
-    if (groups.size > 0 && !va) return `Unit Kerja "${satker}" tidak punya VA di Pembayaran BP.`;
-
-    const sheetId = await pembayaranBpSheetId(spreadsheetId, sheetName);
-
-    await queuePembayaranBpWrite(spreadsheetId, async () => {
-        // C answers where an append goes (the No formula counts it), D which SPM are
-        // already there - one read for both
-        const existing = await readRange(sheets, spreadsheetId, `'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:D`);
-        const values = existing.data.values || [];
-        const rowOf = new Map();
-        values.forEach((row, index) => {
-            const spm = spmDigits(row?.[1]);
-            if (spm && !rowOf.has(spm)) rowOf.set(spm, PEMBAYARAN_BP_FIRST_ROW + index);
-        });
-        let appendRow = PEMBAYARAN_BP_FIRST_ROW + values.filter(row => trimmed(row?.[0]) !== "").length;
-
-        const requests = [];
-        for (const [spm, nilaiSp2d] of groups) {
-            const built = pembayaranBpCells({
-                tanggalSp2d, nomorSpm: spm, jenis, va: va.kode, nilaiSp2d: String(nilaiSp2d),
-                statusBayarPenerima: PEMBAYARAN_BP_STATUS_BARU,
-            }, { buktiBayar: {}, buktiBayarDepositPajak: {} }, options);
-            if (!built.ok) throw new Error(built.message);
-
-            const known = rowOf.get(spm);
-            if (known) {
-                requests.push(...pembayaranBpWriteRequests(sheetId, known, PEMBAYARAN_BP_RUNS_SYNC, built.cells));
-            } else {
-                if (appendRow > PEMBAYARAN_BP_FIRST_ROW) requests.push(...pembayaranBpCopyRow(sheetId, PEMBAYARAN_BP_FIRST_ROW, appendRow));
-                requests.push(...pembayaranBpWriteRequests(sheetId, appendRow, PEMBAYARAN_BP_RUNS_CREATE, built.cells));
-                appendRow++;
-            }
+    const details=new Map();
+    for (const row of rows) {
+        const key=spmDigits(row.spm);
+        if (!key) continue;
+        if (!details.has(key)) details.set(key,[]);
+        details.get(key).push({drpp:trimmed(row.drpp),spp:trimmed(row.spp),spm:trimmed(row.spm),nominal:trimmed(row.nominal)});
+    }
+    const plan=planAksiBp({source,sheetId:snapshot.sheetId,groups,legacy,payments:snapshot.payments,
+        log:snapshot.log,logNextRow:snapshot.logNextRow,tanggalSp2d,details});
+    const options=plan.changes.some(row=>!row.row || row.nominal>row.previous)
+        ? await pembayaranBpFormOptions(spreadsheetId,sheetName) : null;
+    const jenis=PEMBAYARAN_BP_JENIS_AJUAN[String(sourceRow[3] || '').trim().toLowerCase()];
+    const unitKerja=aksiUnitKerja(sourceRow[11]);
+    const va=options?.va.find(item=>normalizeSatker(item.unitKerja)===normalizeSatker(unitKerja));
+    const changes=plan.changes.map(change=>{
+        if (change.row) {
+            const known=snapshot.payments.find(p=>p.row===change.row);
+            if (change.nominal>change.previous && (!va || known.va!==String(va.raw).trim()))
+                throw aksiBpError(`SPM ${change.spm.padStart(5,'0')} di Pembayaran BP memiliki Unit Kerja/VA berbeda. Periksa data terlebih dahulu.`,409);
+            return change;
         }
-
-        // Last and bottom up: No spills from SEQUENCE, so rows are removed rather than
-        // blanked, and every request above still points at the row it was built for.
-        dropped.map(spm => rowOf.get(spm)).filter(Boolean).sort((a, b) => b - a)
-            .forEach(row => requests.push({ deleteDimension: {
-                range: { sheetId, dimension: "ROWS", startIndex: row - 1, endIndex: row },
-            }}));
-
-        if (requests.length === 0) return;
-        await withBackoff(() => sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } }));
-        forgetPembayaranBpRows(spreadsheetId, sheetName);
+        if (!jenis || !va) throw aksiBpError('Jenis atau VA Unit Kerja tidak ditemukan pada pilihan Pembayaran BP.');
+        const built=pembayaranBpCells({tanggalSp2d,nomorSpm:change.spm,jenis,va:va.kode,nilaiSp2d:String(change.nominal),
+            statusBayarPenerima:PEMBAYARAN_BP_STATUS_BARU},{buktiBayar:{},buktiBayarDepositPajak:{}},options);
+        if (!built.ok) throw aksiBpError(built.message);
+        return {...change,cells:built.cells};
     });
+    return {spreadsheetId,sheetName,snapshot,source,plan:{...plan,changes},warning:null};
+}
 
+// Persist zero/legacy contributions before the source sheets change. A failure after
+// saving the antrian cannot make the retry mistake a never-applied amount for a legacy one.
+async function registerAksiBpContributions(prepared) {
+    if (!prepared.plan?.registrations.length) return;
+    const {snapshot,plan,spreadsheetId}=prepared;
+    const requests=[];
+    if (snapshot.trackingId===null) {
+        let id;
+        do {id=randomInt(1,2147483647);} while(snapshot.sheetIds.has(id));
+        snapshot.trackingId=id;
+        requests.push({addSheet:{properties:{sheetId:id,title:AKSI_BP_LOG_SHEET,hidden:true}}});
+        requests.push({updateCells:{range:{sheetId:id,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:5},
+            rows:[{values:AKSI_BP_LOG_HEAD.map(head=>({userEnteredValue:{stringValue:head}}))}],fields:'userEnteredValue'}});
+    }
+    requests.push(...aksiBpLogRequests(snapshot.trackingId,plan.registrations));
+    try {
+        await withBackoff(()=>sheets.spreadsheets.batchUpdate({spreadsheetId,requestBody:{requests}}));
+    } catch(error) {
+        const current=await readAksiBpSnapshot(spreadsheetId,prepared.sheetName);
+        if (!plan.registrations.every(r=>current.log.some(v=>v.source===r.source && v.sheetId===r.sheetId && v.spm===r.spm && v.nominal===r.nominal))) throw error;
+        snapshot.trackingId=current.trackingId;
+    }
+}
+
+async function syncPembayaranBpFromAksi(prepared) {
+    if (!prepared.plan) return prepared.warning;
+    const {spreadsheetId,sheetName,snapshot,plan}=prepared;
+    const requests=[];
+    let appendRow=snapshot.appendRow;
+    for (const change of plan.changes) {
+        if (change.row) requests.push({updateCells:{range:{sheetId:snapshot.sheetId,startRowIndex:change.row-1,endRowIndex:change.row,
+            startColumnIndex:7,endColumnIndex:8},rows:[{values:[{userEnteredValue:{numberValue:change.nominal}}]}],fields:'userEnteredValue'}});
+        else {
+            if (appendRow>PEMBAYARAN_BP_FIRST_ROW) requests.push(...pembayaranBpCopyRow(snapshot.sheetId,PEMBAYARAN_BP_FIRST_ROW,appendRow));
+            requests.push(...pembayaranBpWriteRequests(snapshot.sheetId,appendRow,PEMBAYARAN_BP_RUNS_CREATE,change.cells));
+            appendRow++;
+        }
+    }
+    requests.push(...aksiBpLogRequests(snapshot.trackingId,plan.contributions));
+    if (!requests.length) return null;
+    try {
+        await withBackoff(()=>sheets.spreadsheets.batchUpdate({spreadsheetId,requestBody:{requests}}));
+    } catch(error) {
+        const current=await readAksiBpSnapshot(spreadsheetId,sheetName);
+        const recorded=plan.contributions.every(r=>current.log.some(v=>v.source===r.source && v.sheetId===r.sheetId && v.spm===r.spm && v.nominal===r.nominal && JSON.stringify(v.details)===JSON.stringify(r.details)));
+        const amounts=plan.changes.every(r=>current.payments.filter(v=>v.spm===r.spm).length===1 && current.payments.find(v=>v.spm===r.spm).nominal===r.nominal);
+        if (!recorded || !amounts) throw error;
+    } finally {forgetPembayaranBpRows(spreadsheetId,sheetName);}
     return null;
 }
+
+app.post('/bendahara/aksi-ajuan/pembayaran-bp-preview',async(req,res)=>{
+    try {
+        if (!trimmed(req.body.transId)) throw aksiBpError('Identitas pengajuan wajib diisi.');
+        const sourceId=getSpreadsheetId(req,'AJUAN');
+        const response=await readRanges(sheets,sourceId,["'Write Antrian'!A:R","'Monitoring DRPP'!B:I"]);
+        const source=(response.data.valueRanges[0].values || []).slice(2)
+            .find(row=>String(row[0]).trim()===String(req.body.transId || '').trim());
+        if (!source) throw aksiBpError('Pengajuan tidak ditemukan. Muat ulang halaman.',404);
+        const load=()=>prepareAksiPembayaranBp(req,source,response.data.valueRanges[1].values || []);
+        const bpId=getSpreadsheetId(req,'PEMBAYARAN_BP');
+        const prepared=bpId ? await queuePembayaranBpFinance(bpId,load) : await load();
+        res.json(publicAksiBpPreview(prepared));
+    } catch(error) {
+        if (!error.statusCode) console.error('Preview Pembayaran BP:',error.code || error.message);
+        res.status(error.statusCode || 500).json({message:error.statusCode ? error.message : 'Gagal memeriksa SPM di Pembayaran BP. Coba lagi sebelum menyimpan.'});
+    }
+});
 
 // Looking up a handful of numbers in a row should not re-read the sheet each time
 const PEMBAYARAN_BP_SEARCH_TTL_MS = 60 * 1000;
@@ -8719,7 +8835,7 @@ app.post("/bendahara/pembayaran-bp", handlePembayaranBpUpload, async (req, res) 
 
         const sheetId = await pembayaranBpSheetId(spreadsheetId, sheetName);
 
-        const targetRow = await queuePembayaranBpWrite(spreadsheetId, async () => {
+        const targetRow = await queuePembayaranBpFinance(spreadsheetId, async () => {
             // The No formula counts column C, so the first row without one is ours
             const column = await readRange(sheets, spreadsheetId, `'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:C`);
             const filled = (column.data.values || []).length;
@@ -8754,23 +8870,21 @@ app.delete("/bendahara/pembayaran-bp", async (req, res) => {
             return res.status(400).json({ message: "Baris tidak valid." });
         }
 
-        const target = await loadPembayaranBpRow(req, res, spreadsheetId, sheetName, rowNumber, {
-            no: String(req.query.expectedNo ?? "").trim(),
-            nomorSpm: String(req.query.expectedNomorSpm ?? "").trim(),
+        const target=await queuePembayaranBpFinance(spreadsheetId,async()=>{
+            const current=await loadPembayaranBpRow(req,res,spreadsheetId,sheetName,rowNumber,{
+                no:String(req.query.expectedNo ?? '').trim(),nomorSpm:String(req.query.expectedNomorSpm ?? '').trim(),
+            });
+            if (!current) return null;
+            const snapshot=await readAksiBpSnapshot(spreadsheetId,sheetName);
+            const spm=spmDigits(current.nomorSpm);
+            const reset=snapshot.payments.filter(p=>p.spm===spm).length===1 ? aksiBpMoveLog(snapshot,spm) : [];
+            // A dimension deletion must not be replayed after an ambiguous network failure.
+            await sheets.spreadsheets.batchUpdate({spreadsheetId,requestBody:{requests:[
+                ...reset,{deleteDimension:{range:{sheetId:snapshot.sheetId,dimension:'ROWS',startIndex:rowNumber-1,endIndex:rowNumber}}},
+            ]}});
+            return current;
         });
         if (!target) return;
-
-        const sheetId = await pembayaranBpSheetId(spreadsheetId, sheetName);
-        await queuePembayaranBpWrite(spreadsheetId, () => withBackoff(() => sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: { requests: [{
-                // Removed, not blanked: No spills from SEQUENCE, so a leftover blank row
-                // would shift every number out of step. startIndex is 0-based.
-                deleteDimension: {
-                    range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber },
-                },
-            }]},
-        })));
 
         forgetPembayaranBpRows(spreadsheetId, sheetName);
 
@@ -8780,6 +8894,7 @@ app.delete("/bendahara/pembayaran-bp", async (req, res) => {
 
         return res.status(200).json({ message: "Data berhasil dihapus." });
     } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({message:error.message});
         console.error("Error in DELETE /bendahara/pembayaran-bp:", error);
         return res.status(500).json({ message: "Gagal menghapus data Pembayaran BP." });
     }
@@ -8800,27 +8915,29 @@ app.patch("/bendahara/pembayaran-bp", handlePembayaranBpUpload, async (req, res)
         const dry = pembayaranBpCells(req.body, { buktiBayar: {}, buktiBayarDepositPajak: {} }, options);
         if (!dry.ok) return res.status(400).json({ message: dry.message });
 
-        // Link cells come back too, so an edit without a new file keeps them
-        const target = await loadPembayaranBpRow(req, res, spreadsheetId, sheetName, rowNumber, {
-            no: String(req.body.expectedNo ?? "").trim(),
-            nomorSpm: String(req.body.expectedNomorSpm ?? "").trim(),
+        const saved=await queuePembayaranBpFinance(spreadsheetId,async()=>{
+            const target=await loadPembayaranBpRow(req,res,spreadsheetId,sheetName,rowNumber,{
+                no:String(req.body.expectedNo ?? '').trim(),nomorSpm:String(req.body.expectedNomorSpm ?? '').trim(),
+            });
+            if (!target) return false;
+            const oldSpm=spmDigits(target.nomorSpm),newSpm=spmDigits(paddedNomorSpm(dry));
+            const move=oldSpm!==newSpm ? aksiBpMoveLog(await readAksiBpSnapshot(spreadsheetId,sheetName),oldSpm,newSpm) : [];
+            const links=await pembayaranBpLinks(req,res,paddedNomorSpm(dry),target.links);
+            if (!links) return false;
+            const built=pembayaranBpCells(req.body,links,options);
+            if (!built.ok) {res.status(400).json({message:built.message});return false;}
+            const sheetId=await pembayaranBpSheetId(spreadsheetId,sheetName);
+            await withBackoff(()=>sheets.spreadsheets.batchUpdate({spreadsheetId,requestBody:{requests:[
+                ...pembayaranBpWriteRequests(sheetId,rowNumber,PEMBAYARAN_BP_RUNS_EDIT,built.cells),...move,
+            ]}}));
+            return true;
         });
-        if (!target) return;
-
-        const links = await pembayaranBpLinks(req, res, paddedNomorSpm(dry), target.links);
-        if (!links) return;
-        const built = pembayaranBpCells(req.body, links, options);
-        if (!built.ok) return res.status(400).json({ message: built.message });
-
-        const sheetId = await pembayaranBpSheetId(spreadsheetId, sheetName);
-        await withBackoff(() => sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: { requests: pembayaranBpWriteRequests(sheetId, rowNumber, PEMBAYARAN_BP_RUNS_EDIT, built.cells) },
-        }));
+        if (!saved) return;
         forgetPembayaranBpRows(spreadsheetId, sheetName);
 
         return res.status(200).json({ message: "Data berhasil diperbarui.", rowNumber });
     } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({message:error.message});
         console.error("Error in PATCH /bendahara/pembayaran-bp:", error);
         return res.status(500).json({ message: "Gagal memperbarui data Pembayaran BP." });
     }

@@ -1807,6 +1807,14 @@ input[type="number"]::-webkit-inner-spin-button {
     transform: scale(1.1, 1.1);
 }
 
+.aksi-pengajuan-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.aksi-pengajuan-fields:disabled { opacity: .7; }
+.aksi-bp-confirm { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.aksi-bp-confirm-title { color: #88500a; }
+.aksi-bp-confirm-note { font-size: 13px; font-weight: 400; line-height: 1.6; }
+.aksi-bp-confirm-items { display: flex; flex-direction: column; gap: 10px; max-height: 40vh; overflow: auto; }
+.aksi-bp-confirm-item { display: flex; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid #e8cf9f; border-radius: 8px; background: #fff8e9; color: #594524; text-align: left; font-size: 12px; font-weight: 400; line-height: 1.6; }
+
 .aksi-content-label {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

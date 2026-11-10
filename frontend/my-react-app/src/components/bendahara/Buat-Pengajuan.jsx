@@ -57,6 +57,8 @@ function BuatPengajuan(props) {
     ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
     const [subjenis, setSubjenis] = useState(() => props.type === "buat" ? "" : props.passedData?.[15] || "");
+    const [subjenisError, setSubjenisError] = useState("");
+    const subjenisRef = useRef(null);
     const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
     const [sppError, setSppError] = useState("");
     const sppRef = useRef(null);
@@ -126,7 +128,7 @@ function BuatPengajuan(props) {
     // All jenis are available to all users.
     const jenisOptions = jenisPengajuan;
     const subjenisOptions = subjenisPengajuan[ajuan] || [];
-    const subjenisRequired = subjenisOptions.length > 0 && (isBuat || !!props.passedData?.[15]);
+    const subjenisRequired = subjenisOptions.length > 0 && componentType !== "lihat" && !isPjkCorrection;
 
     // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
     // left over from a reopened row can outlive the switch to composing. Snap it back to a
@@ -206,6 +208,7 @@ function BuatPengajuan(props) {
         const newComponentType = props.type;
         setComponentType(newComponentType);
         setSubjenis(newComponentType === "buat" ? "" : props.passedData?.[15] || "");
+        setSubjenisError("");
 
         // LS Pegawai and LS Platform never wrote a table block, so there is nothing to fetch
         if (newComponentType !== "buat" && !isTanpaTabel) {
@@ -794,9 +797,17 @@ function BuatPengajuan(props) {
         return totals;
     }, [tableData, summableColumns, calculateColumnTotal]);
 
+    function validateSubjenis() {
+        if (!subjenisRequired || subjenisOptions.includes(subjenis)) return true;
+        setSubjenisError("Subjenis pengajuan wajib dipilih.");
+        subjenisRef.current?.focus();
+        return false;
+    }
+
     // Handle Popups
     function handlePopup() {
         if (!isPopup) {
+            if (!validateSubjenis()) return;
             if (isPjkCorrection && !filePjk) {
                 setCorrectionError("Pilih berkas Perbaikan PJK terlebih dahulu.");
                 return;
@@ -824,6 +835,7 @@ function BuatPengajuan(props) {
     async function handleSubmit(event){
         event.preventDefault();
         setIsPopup(false);
+        if (!validateSubjenis()) return;
 
         // Grabbing input & select tag values from useState
         const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan, nomorSpp];
@@ -920,6 +932,7 @@ function BuatPengajuan(props) {
     async function handleSubmitEdit(event){
         event.preventDefault();
         setIsPopup(false);
+        if (!validateSubjenis()) return;
 
         if (isPjkCorrection) {
             if (!filePjk) {
@@ -1200,7 +1213,7 @@ function BuatPengajuan(props) {
                             required/>
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
-                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => { setAjuan(e.target.value); setSubjenis(""); }}>
+                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => { setAjuan(e.target.value); setSubjenis(""); setSubjenisError(""); }}>
                             {jenisOptions.map((jenis) => (
                                 <option key={jenis.value} value={jenis.value}>{jenis.label}</option>
                             ))}
@@ -1215,11 +1228,13 @@ function BuatPengajuan(props) {
                         </select>))
                         }
                         {subjenisOptions.length > 0 && <>
-                            <label htmlFor="aju-subjenis">Subjenis Pengajuan:</label>
-                            <select id="aju-subjenis" name="subjenis" value={subjenis}
-                                    onChange={event => setSubjenis(event.target.value)}
+                            <label htmlFor="aju-subjenis">Subjenis Pengajuan{subjenisRequired ? " (wajib)" : ""}:</label>
+                            <select id="aju-subjenis" name="subjenis" value={subjenis} ref={subjenisRef}
+                                    onChange={event => {setSubjenis(event.target.value);setSubjenisError("");}}
+                                    aria-invalid={subjenisError ? "true" : undefined}
+                                    aria-describedby={subjenisError ? "aju-subjenis-error" : undefined}
                                     disabled={componentType === "lihat"} required={subjenisRequired}>
-                                <option value="">{componentType === "buat" ? "Pilih Subjenis Pengajuan" : "Belum ditentukan"}</option>
+                                <option value="">{subjenisRequired ? "Pilih Subjenis Pengajuan" : "Belum ditentukan"}</option>
                                 {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
                             </select>
                         </>}
@@ -1246,6 +1261,7 @@ function BuatPengajuan(props) {
                             onChange={(e)=>setTanggalAjuan(e.target.value)}/>
                         </>}
                     </div>
+                    {subjenisRequired && subjenisError && <p id="aju-subjenis-error" className="pengajuan-form-error" role="alert">{subjenisError}</p>}
                     {nomorSppRequired && sppError ?
                         <p id="aju-spp-error" className="pengajuan-form-error" role="alert">{sppError}</p> : null}
                     </fieldset>

@@ -42,7 +42,7 @@ export function NewNavbar(){
             <div className="notif-wrapper">
                 <div className={`navbar-notification ${isNotificationActive ? 'notif-red' : 'notif-white'}`} onClick={notifOnClick}>
                     {isNotificationActive ?
-                        <NotificationsActiveIcon fontSize='large' sx={{color: '#FA3E3E'}}/> :
+                        <NotificationsActiveIcon fontSize='large' sx={{color: 'var(--theme-ink-fa3e3e, #FA3E3E)'}}/> :
                         <NotificationsIcon fontSize='large' sx={{color: 'white', opacity: isLoading ? 0.5 : 1}} />
                     }
                 </div>

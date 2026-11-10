@@ -71,7 +71,7 @@ function LihatAntrian() {
                 </div>
             {isLoading ? <LoadingAnimate /> :
             <div className="dp-scroll">
-                <TableContainer sx={{ backgroundColor: "#fdfdfd" }}>
+                <TableContainer sx={{ backgroundColor: "var(--theme-surface, #fdfdfd)" }}>
                     <Table>
                         <TableHead>
                             <TableRow>
@@ -83,7 +83,7 @@ function LihatAntrian() {
                         </TableHead>
                         <TableBody>
                             {antrianData.map((rows, rowIndex) => (
-                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: '#F7FAFF'}}}>
+                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: 'var(--theme-fill-f7faff, #F7FAFF)'}}}>
                                     {rows.map((cells, cellIndex) => (
                                         <TableCell key={cellIndex} sx={{...BODY_CELL, ...kolomGaya(columns2[cellIndex]?.label)}}>
                                             {cellIndex === 0 && String(cells ?? "").trim()

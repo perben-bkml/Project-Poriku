@@ -233,7 +233,7 @@ function AksiVerifPJK(props) {
             {isTableLoading || tableData.length > 0 ?
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
-                <p style={{margin: "0 30px 16px", color: "#5A6472", fontSize: "0.9rem"}}>
+                <p style={{margin: "0 30px 16px", color: "var(--theme-text, #5A6472)", fontSize: "0.9rem"}}>
                     Klik dua kali untuk hijau muda, tiga kali untuk merah muda. Ulangi untuk menghapus warna, lalu klik Simpan.
                 </p>
                 {isTableLoading ? <LoadingAnimate /> :

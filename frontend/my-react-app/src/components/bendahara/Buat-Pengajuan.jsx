@@ -1076,12 +1076,12 @@ function BuatPengajuan(props) {
     const TableComponent = useMemo(() => {
         return (
             <React.Fragment>
-                <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
+                <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid var(--theme-border, rgb(236, 236, 236))"}}>
                     <Table stickyHeader aria-label="sticky table">
                         <TableHead className="table-head">
                             <TableRow className="table-row">
                                 {activeColumns.map((colIndex) => (
-                                    <TableCell className="table-cell head-data" key={columns[colIndex].id} sx={{fontWeight: "bold", minWidth: columns[colIndex].minWidth, backgroundColor: "#00449C", color: "white", border: "none"}} align="center">{ringkasLabels[colIndex] && !isTabelPenuh ? ringkasLabels[colIndex] : columns[colIndex].label}</TableCell>
+                                    <TableCell className="table-cell head-data" key={columns[colIndex].id} sx={{fontWeight: "bold", minWidth: columns[colIndex].minWidth, backgroundColor: "var(--theme-table-header, #00449C)", color: "white", border: "none"}} align="center">{ringkasLabels[colIndex] && !isTabelPenuh ? ringkasLabels[colIndex] : columns[colIndex].label}</TableCell>
                                 ))}
                             </TableRow>
                         </TableHead>
@@ -1292,11 +1292,11 @@ function BuatPengajuan(props) {
                                                 <DeleteForeverIcon
                                                     titleAccess={removePjk ? "Batalkan hapus PJK" : "Hapus PJK"}
                                                     sx={{fontSize: 20, marginLeft: "6px", verticalAlign: "middle", cursor: "pointer",
-                                                        color: removePjk ? "#6c757d" : "#BD1404"}}
+                                                        color: removePjk ? "var(--theme-muted, #6c757d)" : "var(--theme-ink-bd1404, #BD1404)"}}
                                                     onClick={() => setRemovePjk(!removePjk)}/>
                                                 : null}
                                         </p> : null}
-                                    {removePjk ? <p style={{color: "#BD1404"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
+                                    {removePjk ? <p style={{color: "var(--theme-ink-bd1404, #BD1404)"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
                                 </div> : null}
                         </fieldset>
                         {isPjkCorrection && <div className="pengajuan-correction-upload">

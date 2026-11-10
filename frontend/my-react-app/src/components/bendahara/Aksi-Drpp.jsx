@@ -44,11 +44,11 @@ export default function AksiDrpp(props) {
 
     //Select options
     const options = [
-        { value: 'Belum', label: 'Belum', color: "#C7B6A7", textcolor: "#5E4C3B" },
-        { value: 'Sudah', label: 'Sudah', color: "#9FFFC3", textcolor: "#0F9043" },
-        { value: 'Ada Masalah', label: 'Ada Masalah', color: "#EB2727", textcolor: "#EEC6C6" },
-        { value: 'Tidak Ada Pajak', label: 'Tidak Ada Pajak', color: "white", textcolor: "black" },
-        { value: 'Pajak Manual', label: 'Pajak Manual', color: "#3D3630", textcolor: "#C7B6A7" },
+        { value: 'Belum', label: 'Belum', color: "var(--theme-fill-c7b6a7, #C7B6A7)", textcolor: "var(--theme-ink-5e4c3b, #5E4C3B)" },
+        { value: 'Sudah', label: 'Sudah', color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)" },
+        { value: 'Ada Masalah', label: 'Ada Masalah', color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)" },
+        { value: 'Tidak Ada Pajak', label: 'Tidak Ada Pajak', color: "var(--theme-surface, white)", textcolor: "var(--theme-text, black)" },
+        { value: 'Pajak Manual', label: 'Pajak Manual', color: "var(--theme-surface-raised, #3D3630)", textcolor: "var(--theme-ink-c7b6a7, #C7B6A7)" },
     ]
 
     async function fetchAntrianTable() {

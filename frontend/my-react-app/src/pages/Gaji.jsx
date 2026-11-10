@@ -115,7 +115,7 @@ export default function Gaji() {
             <div className='gaji-table slide-down'>
                 {isLoading ? <LoadingAnimate /> :
                     <div className="lihat-antri-table">
-                        <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+                        <TableContainer sx={{ margin: "auto", marginTop:"10px", marginBottom:"10px", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"}}>
                             <Table>
                                 <TableHead>
                                     <TableRow sx={{ backgroundColor: "#00449C" }}>

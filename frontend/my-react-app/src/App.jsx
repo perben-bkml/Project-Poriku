@@ -15,6 +15,7 @@ import InputFormGaji from './pages/Input-Form-Gaji.jsx'
 import { AuthProvider } from './lib/AuthContext'
 import { BackgroundTaskProvider } from './lib/BackgroundTasks'
 import ProtectedRoute from './lib/ProtectedRoute'
+import AppTheme from './lib/AppTheme.jsx'
 
 function App() {
 
@@ -24,6 +25,7 @@ function App() {
       <AuthProvider>
         <BackgroundTaskProvider>
         <BrowserRouter>
+          <AppTheme>
           <Routes>
             {/* Public Route */}
             <Route exact path="/" element={<Landing />} />
@@ -42,6 +44,7 @@ function App() {
                 <VerifikasiPage menu="Verifikasi"/>
               </ProtectedRoute>} />
           </Routes>
+          </AppTheme>
         </BrowserRouter>
         </BackgroundTaskProvider>
       </AuthProvider>

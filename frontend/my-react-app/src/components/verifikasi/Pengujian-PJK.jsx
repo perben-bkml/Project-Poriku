@@ -156,7 +156,7 @@ function PengujianPJK(props) {
             })}</span> : <span key={index}/>;
         }
         if (index === DOK_VERIF) {
-            if (pending.has(String(row[0]))) return <span key={index} style={{color: '#8A6100'}}>Sedang dibuat…</span>;
+            if (pending.has(String(row[0]))) return <span key={index} style={{color: 'var(--theme-ink-8a6100, #8A6100)'}}>Sedang dibuat…</span>;
             return row[index]
                 ? <a key={index} href={row[index]} target="_blank" rel="noopener noreferrer">Lihat Dokumen</a>
                 : "-";

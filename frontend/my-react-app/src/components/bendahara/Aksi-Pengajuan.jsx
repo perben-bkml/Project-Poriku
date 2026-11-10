@@ -46,17 +46,17 @@ function AksiPengajuan(props) {
 
     //Options Data
     const optionPajak = [
-        {label: "", color: "white", textcolor: "white"},
-        {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
-        {label: "Belum ada bukti potong", color: "#C7B6A7", textcolor: "#5E4C3B"},
-        {label: "Belum ada faktur pajak", color: "#3D3630", textcolor: "#C7B6A7"},
-        {label: "Jenis pajak salah", color: "#F3B5B5", textcolor: "#8B0808"}, 
-        {label: "Perhitungan Salah", color: "#EB2727", textcolor: "#EEC6C6"},]
+        {label: "", color: "var(--theme-surface, white)", textcolor: "white"},
+        {label: "OK", color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)"},
+        {label: "Belum ada bukti potong", color: "var(--theme-fill-c7b6a7, #C7B6A7)", textcolor: "var(--theme-ink-5e4c3b, #5E4C3B)"},
+        {label: "Belum ada faktur pajak", color: "var(--theme-surface-raised, #3D3630)", textcolor: "var(--theme-ink-c7b6a7, #C7B6A7)"},
+        {label: "Jenis pajak salah", color: "var(--theme-fill-f3b5b5, #F3B5B5)", textcolor: "var(--theme-ink-8b0808, #8B0808)"},
+        {label: "Perhitungan Salah", color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)"},]
 
     const optionAnggaran = [
-        {label: "", color: "white", textcolor: "white"},
-        {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
-        {label: "Pagu Minus", color: "#EB2727", textcolor: "#EEC6C6"},
+        {label: "", color: "var(--theme-surface, white)", textcolor: "white"},
+        {label: "OK", color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)"},
+        {label: "Pagu Minus", color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)"},
     ]
 
     async function fetchAntrianTable() {

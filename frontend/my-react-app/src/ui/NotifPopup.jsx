@@ -129,11 +129,11 @@ export function NotifPopup({ notifData, isLoading, currentPage, maxAllowedPage, 
             </div>
             <div className="notif-popup-body">
                 {isLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--theme-text, #666)' }}>
                         Loading notifications...
                     </div>
                 ) : notifData.length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--theme-text, #666)' }}>
                         No new notifications
                     </div>
                 ) : (

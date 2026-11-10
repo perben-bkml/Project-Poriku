@@ -6815,8 +6815,6 @@ function indeksMak(units) {
     return { pemilik, node };
 }
 
-const pemilikSetiapMak = (units) => indeksMak(units).pemilik;
-
 // Takes the UNFILTERED tree: deciding that a MAK belongs to nobody means looking in every
 // unit, so scoping to one satker before this runs would report a unit's own MAK as missing.
 function klasifikasiBelanja(units, agregat) {

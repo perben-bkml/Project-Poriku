@@ -2750,19 +2750,16 @@ textarea.fg-input {
 .anggaran-period { min-width: 0; color: #243347; }
 .anggaran-period *, .anggaran-period *::before, .anggaran-period *::after { box-sizing: border-box; }
 .anggaran-period .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.anggaran-period-filter { margin: 8px 30px 22px; border: 1px solid #dce4ef; border-radius: 12px; }
-.anggaran-period-filter { padding: 20px; background: #f7f9fc; }
+.anggaran-period-filter { margin: 8px 30px 22px; border: 1px solid #dce4ef; border-radius: 12px; padding: 20px; background: #f7f9fc; }
 .anggaran-period-topline, .anggaran-period-result-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
 .anggaran-period-topline > div, .anggaran-period-result-heading > div { min-width: 0; flex: 1 1 280px; }
-.anggaran-period h3, .anggaran-period h4 { margin: 0; color: #00204a; line-height: 1.4; }
-.anggaran-period h3 { font-size: 16px; font-weight: 600; }
-.anggaran-period h4 { font-size: 15px; font-weight: 600; }
+.anggaran-period h3 { margin: 0; color: #00204a; line-height: 1.4; font-size: 16px; font-weight: 600; }
 .anggaran-period-topline p, .anggaran-period-result-heading p { margin: 5px 0 0; color: #64748b; font-size: 12px; line-height: 1.6; }
 .anggaran-period-mode { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 6px; background: #e9edf3; color: #516078; font-size: 11px; font-weight: 500; line-height: 1.5; }
 .anggaran-period-mode.is-period { background: #e1ecfc; color: #00449c; }
 .anggaran-period-controls { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(180px, 1.5fr); gap: 14px; border: 0; padding: 0; margin: 20px 0 16px; min-width: 0; }
 .anggaran-period-controls label { display: flex; flex-direction: column; gap: 7px; min-width: 0; color: #475569; font-size: 12px; font-weight: 500; }
-.anggaran-period input:not([type="checkbox"]), .anggaran-period select { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; border: 1px solid #bdcadd; border-radius: 7px; padding: 9px 11px; background: white; color: #243347; font: inherit; font-size: 13px; line-height: 1.5; }
+.anggaran-period input, .anggaran-period select { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; border: 1px solid #bdcadd; border-radius: 7px; padding: 9px 11px; background: white; color: #243347; font: inherit; font-size: 13px; line-height: 1.5; }
 .anggaran-period input:focus-visible, .anggaran-period select:focus-visible, .anggaran-period button:focus-visible, .anggaran-period summary:focus-visible { outline: 2px solid #00449c; outline-offset: 3px; }
 .anggaran-period input:disabled, .anggaran-period select:disabled { background: #f1f4f8; color: #64748b; }
 .anggaran-period-button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 40px; width: auto; max-width: 100%; margin: 0; padding: 9px 15px; border: 1px solid #b9cbe3; border-radius: 7px; background: #fff; color: #00449c; font-size: 12px; font-weight: 500; line-height: 1.5; text-align: center; white-space: normal; cursor: pointer; box-shadow: none; transition: background-color .15s, border-color .15s; }
@@ -2776,7 +2773,6 @@ textarea.fg-input {
 .anggaran-period-alert { margin: 12px 30px 20px; padding: 13px 16px; border: 1px solid transparent; border-radius: 8px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .anggaran-period-alert p { margin: 4px 0 0; }
 .anggaran-period-alert.is-warning { background: #fff8ec; border-color: #f4dfb7; color: #85551b; }
-.anggaran-period-alert.is-info { background: #edf4ff; border-color: #d2e3fb; color: #285586; }
 .anggaran-period-result-heading { margin: 25px 30px 18px; align-items: center; }
 .anggaran-period-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 30px 16px; }
 .anggaran-period-summary > div { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 16px; border: 1px solid #e0e7ef; border-radius: 10px; background: #fafbfd; }

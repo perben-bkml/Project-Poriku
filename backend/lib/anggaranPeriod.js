@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {anggaranSpmSnapshot, bacaRincianSpm, parseSpmDetailQuery, pilihLingkupSpm, spmDetailError} from './anggaranSpm.js';
 
-export const unitKey = value => String(value ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+const unitKey = value => String(value ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
 export function periodDate(value) {
     if (value instanceof Date && !Number.isFinite(value.getTime())) return null;
     const text = value instanceof Date ? value.toISOString().slice(0,10) : String(value ?? '').trim();
@@ -31,10 +31,10 @@ export function periodAggregates(rows, override, {tahun,mulai,akhir}) {
     const includeCumulativeOpening = Boolean(cutoff && akhir >= cutoff);
     const period = new Map(), cumulative = new Map();
     const add = (map, key, realisasi=0, komitmen=0, dariAwal=0) => {
-        const id=rowKey(key), target=map.get(id) || {...key,realisasi:0,komitmen:0,dariAwal:0,baris:0};
+        const id=rowKey(key), target=map.get(id) || {...key,realisasi:0,komitmen:0,dariAwal:0};
         target.realisasi=amount(target.realisasi+realisasi);
         target.komitmen=amount(target.komitmen+komitmen);
-        target.dariAwal=amount(target.dariAwal+dariAwal);target.baris++;
+        target.dariAwal=amount(target.dariAwal+dariAwal);
         map.set(id,target);
     };
     let undated=0;
@@ -124,33 +124,33 @@ export function registerAnggaranPeriod(app,deps) {
         if (sourceIssues) notes.push('Ada catatan kualitas sumber. Nilai periode dapat belum lengkap.');
         if (view.tidakDikenal.length) notes.push(`${view.tidakDikenal.length} alokasi belum cocok dengan MAK/Unit pada revisi terbaru dan tidak masuk total anggaran.`);
         if (cumulativePartial) notes.push('Kumulatif, Sisa, dan % ditampilkan — karena saldo sampai tanggal akhir belum dapat dipastikan.');
-        return {...dates,revisi:{id:revisi.id,nomor_revisi:revisi.nomor_revisi},anggaran,snapshot,periodPartial,cumulativePartial,
+        const response={...dates,revisi:{id:revisi.id,nomor_revisi:revisi.nomor_revisi},anggaran,snapshot,periodPartial,cumulativePartial,
             note:notes.join(' '),outstandingNote:'Outstanding menunjukkan posisi saat ini; filter tanggal hanya berlaku untuk Realisasi.',
-            disegarkanPada:sync.disegarkan_pada,aggregate,belanja,units,warnings:sync.detail_peringatan || {}};
+            disegarkanPada:sync.disegarkan_pada,warnings:sync.detail_peringatan || {}};
+        return {response,aggregate,belanja,units};
     }
     route('/anggaran/periode',async(req,res)=>{
         range(req);
         try {await deps.refresh?.(req);} catch(error) {console.warn('Proyeksi periode tidak disegarkan:',error.code || 'source');}
         const result=await sql.begin('isolation level repeatable read read only',db=>read(db,req));
-        const {aggregate,belanja,units,...response}=result;
-        void aggregate;void belanja;void units;
-        res.json(response);
+        res.json(result.response);
     });
     route('/anggaran/periode/rincian',async(req,res)=>{
         const options=parseSpmDetailQuery(req.query);
         const result=await sql.begin('isolation level repeatable read read only',async db=>{
-            const current=await read(db,req);
+            const {response:current,aggregate,belanja,units}=await read(db,req);
             if (current.snapshot!==req.query.snapshot) throw spmDetailError('Data atau revisi terbaru berubah. Muat ulang periode.',409);
-            const scope=pilihLingkupSpm({anggaran:current.anggaran,belanja:current.belanja,viewer:req.viewer,
+            const scope=pilihLingkupSpm({anggaran:current.anggaran,belanja,viewer:req.viewer,
                 unitKerja:req.query.unitKerja,kodeMak:normalizeMak(req.query.kodeMak || ''),kodeAkun:options.kodeAkun,normalizeMak});
             const detail=await bacaRincianSpm(db,{...options,tahun:current.tahun,keys:scope.keys,
-                cutoff:current.aggregate.includeOpening ? current.aggregate.cutoff : null,
+                cutoff:aggregate.includeOpening ? aggregate.cutoff : null,
                 period:{mulai:current.mulai,akhir:current.akhir}});
-            return {...detail,snapshot:current.snapshot,scope:{...scope,keys:undefined},totals:scope.totals,
+            return {...detail,snapshot:current.snapshot,
+                scope:{unitKerja:scope.unitKerja,kodeMak:scope.kodeMak,kodeAkun:scope.kodeAkun,mode:scope.mode},totals:scope.totals,
                 warnings:current.warnings,periodPartial:current.periodPartial,outstandingNote:current.outstandingNote,
                 disegarkanPada:current.disegarkanPada,rows:detail.rows.map(row=>({...row,
                     key:`${current.tahun}|${row.alur}|${row.trans_id}|${row.unit_kerja_kunci}`,
-                    unitKerjaPengaju:current.units.get(row.unit_kerja_kunci)?.nama || row.unit_kerja_kunci}))};
+                    unitKerjaPengaju:units.get(row.unit_kerja_kunci)?.nama || row.unit_kerja_kunci}))};
         });
         res.json(result);
     });

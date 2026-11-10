@@ -1,5 +1,5 @@
-// Keep report dates and numeric exports independent of UI state.
-export function jakartaToday() {
+// Date validation and top-level report summaries, independent of component state.
+function jakartaToday() {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
         timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
     }).formatToParts(new Date()).map(p => [p.type, p.value]));

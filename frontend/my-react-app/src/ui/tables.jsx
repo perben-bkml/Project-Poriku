@@ -1590,20 +1590,18 @@ TableLayananGaji.propTypes = {
 
 // Anggaran.jsx - the pagu tree, Unit Kerja -> MAK -> Akun Belanja.
 // Positional arrays cannot express three levels, so unlike TableKelola this one takes the
-// nested objects GET /anggaran returns and keeps its own expand state per row. "Belum
-// dirinci" is the gap between a level's own pagu and what its children account for, which
-// is the whole reason pagu is stored at every level rather than only at the leaf; "Sisa"
-// is that pagu less everything committed or already paid against it, and a negative one is
+// nested objects GET /anggaran returns and keeps its own expand state per row. "Sisa"
+// is that pagu less recognized realization, and a negative one is
 // the computed replacement for the Pagu Minus an admin used to set by hand.
-// The displayed "Realisasi" still uses the API's terpakai (commitments + realization).
-// Sisa subtracts both, so a unit cannot over-submit while its pengajuan wait for KPPN.
+// Realisasi follows flow-specific approved/disbursed statuses; Outstanding is the remaining
+// commitment. Sisa subtracts recognized realization only; accrual is tracked separately.
 const ANGGARAN_HEAD = [
-    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Belum Dirinci",
+    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Outstanding",
 ];
 
 const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0)
     ? "-"
-    : `${(row.terpakai / row.pagu * 100).toLocaleString('id-ID', {
+    : `${(row.realisasi / row.pagu * 100).toLocaleString('id-ID', {
         minimumFractionDigits: 2, maximumFractionDigits: 2,
     })}%`;
 
@@ -1680,14 +1678,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                     </TableCell>
                                     <TableCell/>
                                     <TableCell sx={{fontWeight: 600}}>{formatRupiah(unit.pagu)}</TableCell>
-                                    <TableCell>{formatRupiah(unit.terpakai)}</TableCell>
+                                    <TableCell>{formatRupiah(unit.realisasi)}</TableCell>
                                     <TableCell sx={{fontWeight: 600, color: sisaWarna(unit.sisa)}}>
                                         {formatRupiah(unit.sisa)}
                                     </TableCell>
                                     <TableCell>{persenRealisasi(unit)}</TableCell>
-                                    <TableCell sx={{color: sisaWarna(unit.belumDirinci)}}>
-                                        {formatRupiah(unit.belumDirinci)}
-                                    </TableCell>
+                                    <TableCell>{formatRupiah(unit.outstanding)}</TableCell>
                                 </TableRow>
 
                                 {unitBuka && unit.mak.map((mak, urutan) => {
@@ -1731,14 +1727,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 </TableCell>
                                                 <TableCell>{dash(mak.uraian)}</TableCell>
                                                 <TableCell>{selLuarPagu(mak.pagu, mak.luarPagu)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.terpakai)}</TableCell>
+                                                <TableCell>{formatRupiah(mak.realisasi)}</TableCell>
                                                 <TableCell sx={{color: sisaWarna(mak.sisa ?? 0)}}>
                                                     {selLuarPagu(mak.sisa, mak.luarPagu)}
                                                 </TableCell>
                                                 <TableCell>{persenRealisasi(mak)}</TableCell>
-                                                <TableCell sx={{color: sisaWarna(mak.belumDirinci ?? 0)}}>
-                                                    {selLuarPagu(mak.belumDirinci, mak.luarPagu)}
-                                                </TableCell>
+                                                <TableCell>{formatRupiah(mak.outstanding)}</TableCell>
                                             </TableRow>
                                             {makBuka && mak.akun.map(akun => (
                                                 <TableRow key={`${kunciMak}|${akun.kode}`} hover>
@@ -1762,13 +1756,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     {/* Neither an undetailed akun nor a claimed one has a pagu
                                                         of its own, so neither has a Sisa */}
                                                     <TableCell>{selLuarPagu(akun.pagu, akun.takDirinci || akun.luarPagu)}</TableCell>
-                                                    <TableCell>{formatRupiah(akun.terpakai)}</TableCell>
+                                                    <TableCell>{formatRupiah(akun.realisasi)}</TableCell>
                                                     <TableCell sx={{color: sisaWarna(akun.sisa ?? 0)}}>
                                                         {selLuarPagu(akun.sisa, akun.takDirinci || akun.luarPagu)}
                                                     </TableCell>
                                                     <TableCell>{persenRealisasi(akun)}</TableCell>
-                                                    {/* an akun has no children, so it has nothing left to detail */}
-                                                    <TableCell/>
+                                                    <TableCell>{formatRupiah(akun.outstanding)}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </Fragment>

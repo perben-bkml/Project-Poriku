@@ -5882,7 +5882,7 @@ app.get("/home/dashboard", async (req, res) => {
 // with pagu stored at each level of the hierarchy.
 //
 // Pagu is stored at every level. A MAK routinely carries a ceiling before its akun are
-// detailed, and the screen reports the gap as "belum dirinci". The matching rule - that
+// detailed. The matching rule - that
 // children must not sum ABOVE their parent - cannot be a CHECK (it spans rows) or a
 // trigger (it would fire part way through the copy-forward insert, on a half built tree),
 // so it is enforced once, here, in the upload preview. That is sound only because the
@@ -6089,7 +6089,7 @@ function susunPohonDariExcel(baris, unitDikenal) {
 // Only for message text - the frontend does its own formatting
 const formatRupiahServer = (nominal) => `Rp${Number(nominal || 0).toLocaleString("id-ID")}`;
 
-// Children may sum below their parent - that gap is the "belum dirinci" the view shows.
+// Children may sum below their parent; only allocations above the parent are rejected.
 // Summing above it is always an error: it is a budget that cannot be executed.
 //
 // Run against the MERGED tree, not the uploaded file, and restricted to the unit kerja the
@@ -6333,6 +6333,12 @@ async function tulisPohonRevisi(trx, revisiId, units) {
 
 const REALISASI_TTL_MS = 5 * 60 * 1000;
 const STATUS_REALISASI = "SUDAH SP2D";
+const STATUS_REALISASI_VERIF = new Set([
+    "VERIFIKASI OK", "VERIFIKASI OK DENGAN CATATAN", "SIAP MAJU SPM", STATUS_REALISASI,
+]);
+const masukRealisasi = (alur, status) => alur === "gup"
+    ? normalizeSatker(status) === STATUS_REALISASI
+    : alur === "verif" && STATUS_REALISASI_VERIF.has(normalizeSatker(status).replace(/\s+/g, " "));
 // Two-argument advisory lock, a separate key space from the one-argument lock the revisi
 // activation takes, so a rebuild and an activation of the same year never queue behind
 // each other.
@@ -6421,7 +6427,7 @@ async function hitungBelanja(spreadsheetId) {
             semua.push({
                 transId, alur: sumber.alur, unitKerjaKunci: induk.unit,
                 nama: induk.nama, nomorSpp: induk.nomorSpp, tanggal: induk.tanggal,
-                kodeMak, kodeAkun, nominal, sudahSp2d: induk.status === STATUS_REALISASI,
+                kodeMak, kodeAkun, nominal, diakuiRealisasi: masukRealisasi(sumber.alur, induk.status),
             });
         }
     });
@@ -6451,7 +6457,8 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
                 kode_mak: row.kodeMak,
                 kode_akun: row.kodeAkun,
                 nominal: row.nominal,
-                sudah_sp2d: row.sudahSp2d,
+                // Legacy storage name: now the flow-specific realization eligibility flag.
+                sudah_sp2d: row.diakuiRealisasi,
             }));
             await trx`INSERT INTO anggaran_realisasi_baris ${trx(potong,
                 "tahun", "trans_id", "alur", "unit_kerja_kunci", "nama", "nomor_spp",
@@ -6468,11 +6475,16 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
 // De-duplicates concurrent rebuilds the way trackHasilVerif does: several readers arriving
 // on a stale year would otherwise each pay for the same Sheets read.
 const realisasiBerjalan = new Map();
+// Reclassify once per server process so pre-deployment snapshots cannot retain old rules.
+const realisasiTerklasifikasi = new Set();
 function segarkanSekali(tahun, spreadsheetId) {
     const kunci = `${tahun}|${spreadsheetId}`;
     let janji = realisasiBerjalan.get(kunci);
     if (!janji) {
-        janji = segarkanRealisasi(tahun, spreadsheetId).finally(() => realisasiBerjalan.delete(kunci));
+        janji = segarkanRealisasi(tahun, spreadsheetId).then(result => {
+            realisasiTerklasifikasi.add(kunci);
+            return result;
+        }).finally(() => realisasiBerjalan.delete(kunci));
         realisasiBerjalan.set(kunci, janji);
     }
     return janji;
@@ -6643,7 +6655,7 @@ async function bacaAgregatRealisasi(tahun, override) {
                COUNT(*) AS baris
         FROM anggaran_realisasi_baris
         WHERE tahun = ${tahun}
-              AND (${batas}::text IS NULL OR tanggal = '' OR tanggal > ${batas})
+              AND (${batas}::text IS NULL OR NOT sudah_sp2d OR tanggal = '' OR tanggal > ${batas})
         GROUP BY unit_kerja_kunci, kode_mak, kode_akun`;
 
     const total = new Map();
@@ -6689,7 +6701,7 @@ async function rinciKlaim(tahun, klaim, override) {
                COALESCE(SUM(nominal) FILTER (WHERE NOT sudah_sp2d), 0) AS komitmen
         FROM anggaran_realisasi_baris
         WHERE tahun = ${tahun} AND unit_kerja_kunci IN ${sql(unitKerja)}
-              AND (${batas}::text IS NULL OR tanggal > ${batas})
+              AND (${batas}::text IS NULL OR NOT sudah_sp2d OR tanggal = '' OR tanggal > ${batas})
         GROUP BY unit_kerja_kunci, kode_mak, kode_akun, trans_id, alur, nama, nomor_spp`;
 
     const rinci = [];
@@ -6814,9 +6826,13 @@ function klasifikasiBelanja(units, agregat) {
     return hasil;
 }
 
-// Map tree + spending -> the nested JSON the screen renders. "belum dirinci" is the gap
-// between a level's own pagu and what its children account for, which is why pagu lives at
-// each level; "sisa" is that pagu less everything spent or committed against it.
+// Map tree + spending -> the nested JSON the screen renders. Pagu is stored at each
+// level; Sisa subtracts recognized realization, with Outstanding shown separately.
+const rincianBelanja = (realisasi = 0, outstanding = 0) => ({realisasi, outstanding, terpakai: realisasi + outstanding});
+const totalBelanja = rows => rows.reduce((sum, row) => rincianBelanja(
+    sum.realisasi + row.realisasi, sum.outstanding + (row.outstanding ?? row.komitmen ?? 0),
+), rincianBelanja());
+
 function susunTampilan(units, belanja) {
     // What each (unit, mak, akun) slot is actually charged: its own spending, plus any
     // single-owner claim another unit made against it. Rows charged to nobody - an akun the
@@ -6826,10 +6842,10 @@ function susunTampilan(units, belanja) {
     const klaimPerUnit = new Map();
     const diklaimPerMak = new Map();
     for (const row of belanja.values()) {
-        const nilai = row.komitmen + row.realisasi;
         if (row.dibebankanKe) {
             const kunci = kunciRealisasi(row.dibebankanKe, row.kodeMak, row.kodeAkun);
-            beban.set(kunci, (beban.get(kunci) || 0) + nilai);
+            const sebelumnya = beban.get(kunci) || rincianBelanja();
+            beban.set(kunci, rincianBelanja(sebelumnya.realisasi + row.realisasi, sebelumnya.outstanding + row.komitmen));
         }
         if (row.hanyaAwal) continue;
         if (row.sebab === SEBAB_AKUN_BARU) {
@@ -6848,7 +6864,7 @@ function susunTampilan(units, belanja) {
             }
         }
     }
-    const ambil = (unit, kodeMak, kodeAkun) => beban.get(kunciRealisasi(unit, kodeMak, kodeAkun)) || 0;
+    const ambil = (unit, kodeMak, kodeAkun) => beban.get(kunciRealisasi(unit, kodeMak, kodeAkun)) || rincianBelanja();
 
     // A claimed MAK has no row in the claiming unit's tree - it is somebody else's - so it is
     // rebuilt here with no pagu at any level and kept out of that unit's roll-up: the amount
@@ -6856,14 +6872,14 @@ function susunTampilan(units, belanja) {
     const makDiklaim = (namaKunci) => [...(klaimPerUnit.get(namaKunci) || new Map()).entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([kode, { pemilik, baris }]) => ({
-            kode, uraian: "", pagu: null, belumDirinci: null, sisa: null,
+            kode, uraian: "", pagu: null, sisa: null,
             luarPagu: true, pemilik, akunTakDirinci: 0,
-            terpakai: baris.reduce((sum, row) => sum + row.komitmen + row.realisasi, 0),
+            ...totalBelanja(baris),
             akun: baris.filter(row => row.kodeAkun !== "")
                 .sort((a, b) => a.kodeAkun.localeCompare(b.kodeAkun))
                 .map(row => ({
                     kode: row.kodeAkun, pagu: null, sisa: null, luarPagu: true,
-                    terpakai: row.komitmen + row.realisasi,
+                    ...rincianBelanja(row.realisasi, row.komitmen),
                 })),
         }));
 
@@ -6878,36 +6894,32 @@ function susunTampilan(units, belanja) {
                     const kodeMak = normalisasiKodeMak(item.kode).kodeMak;
                     const akun = [...item.akun.values()].sort((a, b) => a.kode.localeCompare(b.kode))
                         .map(a => {
-                            const terpakai = ambil(namaKunci, kodeMak, a.kode);
-                            return { kode: a.kode, pagu: a.pagu, terpakai, sisa: a.pagu - terpakai };
+                            const nilai = ambil(namaKunci, kodeMak, a.kode);
+                            return { kode: a.kode, pagu: a.pagu, ...nilai, sisa: a.pagu - nilai.realisasi };
                         });
                     // Shown so the gap is visible, never added to terpakai: the DIPA has not
                     // said this akun exists, so there is nothing here it may draw down.
                     for (const row of akunBaruPerMak.get(`${namaKunci}|${kodeMak}`) || []) {
                         akun.push({
                             kode: row.kodeAkun, pagu: null, sisa: null, takDirinci: true,
-                            terpakai: row.komitmen + row.realisasi,
+                            ...rincianBelanja(row.realisasi, row.komitmen),
                         });
                     }
-                    const terpakai = ambil(namaKunci, kodeMak, "")
-                        + akun.reduce((sum, a) => sum + (a.takDirinci ? 0 : a.terpakai), 0);
-                    const terinci = akun.reduce((sum, a) => sum + (a.pagu || 0), 0);
+                    const nilai = totalBelanja([ambil(namaKunci, kodeMak, ""), ...akun.filter(a => !a.takDirinci)]);
                     return {
                         kode: item.kode, uraian: item.uraian, pagu: item.pagu,
-                        belumDirinci: item.pagu - terinci,
                         akunTakDirinci: akun.filter(a => a.takDirinci).length,
                         diklaimOleh: [...(diklaimPerMak.get(`${namaKunci}|${kodeMak}`) || [])],
-                        terpakai, sisa: item.pagu - terpakai, akun,
+                        ...nilai, sisa: item.pagu - nilai.realisasi, akun,
                     };
                 });
-            const terinci = mak.reduce((sum, m) => sum + m.pagu, 0);
-            const terpakai = mak.reduce((sum, m) => sum + m.terpakai, 0);
+            const nilai = totalBelanja(mak);
             const diklaim = makDiklaim(namaKunci);
             return {
-                unitKerja: unit.nama, pagu: unit.pagu, belumDirinci: unit.pagu - terinci,
+                unitKerja: unit.nama, pagu: unit.pagu,
                 akunTakDirinci: mak.reduce((sum, m) => sum + m.akunTakDirinci, 0),
                 makDiklaimOlehLain: mak.filter(m => m.diklaimOleh.length > 0).length,
-                terpakai, sisa: unit.pagu - terpakai,
+                ...nilai, sisa: unit.pagu - nilai.realisasi,
                 klaimUnitLain: diklaim.reduce((sum, m) => sum + m.terpakai, 0),
                 makDiklaim: diklaim.length,
                 akunDiklaim: diklaim.reduce((sum, m) => sum + m.akun.length, 0),
@@ -6965,8 +6977,9 @@ app.get("/anggaran", async (req, res) => {
         let override = null;
         try {
             sinkron = await bacaSinkronRealisasi(tahun);
-            if (realisasiUsang(sinkron)) {
-                await segarkanSekali(tahun, getSpreadsheetId(req, "AJUAN"));
+            const spreadsheetId = getSpreadsheetId(req, "AJUAN");
+            if (!realisasiTerklasifikasi.has(`${tahun}|${spreadsheetId}`) || realisasiUsang(sinkron)) {
+                await segarkanSekali(tahun, spreadsheetId);
                 sinkron = await bacaSinkronRealisasi(tahun);
             }
             override = await bacaOverrideRealisasi(tahun);

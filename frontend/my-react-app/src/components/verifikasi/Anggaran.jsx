@@ -91,11 +91,13 @@ export default function Anggaran() {
     async function unduhAnggaran() {
         const baris = [];
         const sel = (nilai) => nilai === null || nilai === undefined ? selTeks("-") : selAngka(String(nilai));
+        const persen = row => row.luarPagu || row.takDirinci || !(row.pagu > 0)
+            ? selTeks("-") : {value: row.realisasi / row.pagu, type: Number, format: '0.00%'};
         for (const unit of data?.anggaran || []) {
             const induk = [selTeks(unit.unitKerja), sel(unit.pagu)];
             if (unit.mak.length === 0) {
                 baris.push([...induk, selTeks(""), selTeks(""), selTeks("-"), selTeks(""), selTeks("-"),
-                    sel(unit.terpakai), sel(unit.sisa), sel(unit.belumDirinci), selTeks("")]);
+                    sel(unit.realisasi), sel(unit.sisa), persen(unit), sel(unit.outstanding), selTeks("")]);
                 continue;
             }
             for (const mak of unit.mak) {
@@ -103,20 +105,20 @@ export default function Anggaran() {
                 const catatanMak = mak.luarPagu ? `milik ${(mak.pemilik || []).join(", ")}` : "";
                 if (mak.akun.length === 0) {
                     baris.push([...induk, ...makSel, selTeks(""), selTeks("-"),
-                        sel(mak.terpakai), sel(mak.sisa), sel(mak.belumDirinci), selTeks(catatanMak)]);
+                        sel(mak.realisasi), sel(mak.sisa), persen(mak), sel(mak.outstanding), selTeks(catatanMak)]);
                     continue;
                 }
                 for (const akun of mak.akun) {
                     const catatan = akun.takDirinci ? "belum dirinci di DIPA"
                         : akun.luarPagu ? catatanMak : "";
                     baris.push([...induk, ...makSel, selTeks(akun.kode, true), sel(akun.pagu),
-                        sel(akun.terpakai), sel(akun.sisa), selTeks("-"), selTeks(catatan)]);
+                        sel(akun.realisasi), sel(akun.sisa), persen(akun), sel(akun.outstanding), selTeks(catatan)]);
                 }
             }
         }
         if (baris.length === 0) return showAlert("warning", "Tidak ada anggaran untuk diunduh.");
         await unduhExcel(`Anggaran ${data?.tahun || ""}.xlsx`, anggaranKolomEkspor, baris,
-            [22, 16, 22, 26, 16, 12, 14, 14, 14, 14, 24]);
+            [22, 16, 22, 26, 16, 12, 14, 14, 14, 16, 14, 24]);
     }
 
     async function unduhLaporan() {
@@ -375,7 +377,7 @@ export default function Anggaran() {
 
             {/* The budget as it currently stands */}
             <div className="bg-card wide-card-content">
-                <div className="wide-card-head">
+                <div className="wide-card-head anggaran-current-head">
                     <h2 className="wide-card-title">
                         Anggaran {data?.tahun || ""}
                         {revisiAktif &&
@@ -383,26 +385,30 @@ export default function Anggaran() {
                                 Revisi {revisiAktif.nomorRevisi}{revisiAktif.catatan ? ` - ${revisiAktif.catatan}` : ""}
                             </span>}
                     </h2>
-                    <div className="wide-card-actions">
-                        <span className="anggaran-sinkron">{labelSinkron}</span>
-                        <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel"
-                               disabled={isLoading || !(data?.anggaran || []).length}
-                               onClick={unduhAnggaran}/>
-                        <input className="btn-aksi btn-aksi-wide" type="button"
-                               value={isLaporan ? "Membuat Laporan..." : "Unduh Laporan Unit Kerja"}
-                               disabled={isLaporan || isLoading || !(data?.anggaran || []).length}
-                               onClick={unduhLaporan}/>
-                        {override &&
-                            <span className="anggaran-sinkron">
-                                Realisasi s.d. {override.tanggalBatas} dari unggahan
-                            </span>}
-                        {canUnggah &&
+                    <div className="wide-card-actions anggaran-current-actions">
+                        <div className="anggaran-sync-info">
+                            <span className="anggaran-sinkron">{labelSinkron}</span>
+                            {override &&
+                                <span className="anggaran-sinkron">
+                                    Realisasi s.d. {override.tanggalBatas} dari unggahan
+                                </span>}
+                        </div>
+                        <div className="anggaran-action-buttons">
+                            <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel"
+                                   disabled={isLoading || !(data?.anggaran || []).length}
+                                   onClick={unduhAnggaran}/>
                             <input className="btn-aksi btn-aksi-wide" type="button"
-                                   value={isSegarkan ? "Menyegarkan..." : "Segarkan Realisasi"}
-                                   disabled={isSegarkan || isLoading} onClick={segarkanRealisasi}/>}
-                        <input className="btn-aksi btn-aksi-wide" type="button"
-                               value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
-                               onClick={() => fetchAnggaran()}/>
+                                   value={isLaporan ? "Membuat Laporan..." : "Unduh Laporan Unit Kerja"}
+                                   disabled={isLaporan || isLoading || !(data?.anggaran || []).length}
+                                   onClick={unduhLaporan}/>
+                            {canUnggah &&
+                                <input className="btn-aksi btn-aksi-wide" type="button"
+                                       value={isSegarkan ? "Menyegarkan..." : "Segarkan Realisasi"}
+                                       disabled={isSegarkan || isLoading} onClick={segarkanRealisasi}/>}
+                            <input className="btn-aksi btn-aksi-wide" type="button"
+                                   value={isLoading ? "Memuat..." : "Muat Ulang"} disabled={isLoading}
+                                   onClick={() => fetchAnggaran()}/>
+                        </div>
                     </div>
                 </div>
                 <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>

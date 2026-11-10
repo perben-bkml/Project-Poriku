@@ -117,15 +117,15 @@ const anggaranModes = [
 // something Unggah Anggaran could parse back.
 const anggaranKolomEkspor = [
     "Unit Kerja", "Pagu Unit Kerja", "Kode MAK", "Uraian MAK", "Pagu MAK",
-    "Akun Belanja", "Pagu Akun", "Terpakai", "Sisa", "Belum Dirinci", "Keterangan",
+    "Akun Belanja", "Pagu Akun", "Realisasi", "Sisa", "% Realisasi", "Outstanding", "Keterangan",
 ]
 
-export const anggaranLaporanHead = ["Unit Kerja", "Pagu", "Realisasi", "Sisa", "% Realisasi"];
+export const anggaranLaporanHead = ["Unit Kerja", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Outstanding"];
 
 // LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
 // their nominal can never be attributed to an akun. Said out loud on the screen rather than
 // left for someone to discover by reconciling by hand.
-const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku."
+const anggaranTanpaRincian = "Realisasi dihitung berdasarkan pengajuan dengan status minimal Verifikasi OK/OK Catatan"
 
 // Twin of the SEBAB_* constants in server.js. "akun-belum-dirinci" never reaches these
 // panels - it is folded into its MAK - so it is not listed here.

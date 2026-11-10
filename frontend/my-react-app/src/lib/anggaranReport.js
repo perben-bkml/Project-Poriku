@@ -40,38 +40,41 @@ const number = (value, format = MONEY, style = {}) => ({value, type: Number, for
 export function buatLaporanAnggaran(data, dibuatPada = new Date()) {
     if (!data?.anggaran?.length) throw new Error('Tidak ada anggaran untuk dilaporkan.');
     const units = data.anggaran.map(unit => {
-        for (const key of ['pagu', 'terpakai', 'sisa']) {
+        for (const key of ['pagu', 'realisasi', 'outstanding', 'sisa']) {
             if (typeof unit[key] !== 'number' || !Number.isFinite(unit[key])) {
                 throw new Error(`Nilai ${key} untuk ${unit.unitKerja} tidak valid. Muat ulang anggaran.`);
             }
         }
-        return {...unit, persen: unit.pagu > 0 ? unit.terpakai / unit.pagu : null};
+        return {...unit, persen: unit.pagu > 0 ? unit.realisasi / unit.pagu : null};
     }).sort((a, b) => (b.persen ?? -Infinity) - (a.persen ?? -Infinity)
         || a.unitKerja.localeCompare(b.unitKerja, 'id'));
     const totals = units.reduce((sum, unit) => ({
-        pagu: sum.pagu + unit.pagu, terpakai: sum.terpakai + unit.terpakai, sisa: sum.sisa + unit.sisa,
-    }), {pagu: 0, terpakai: 0, sisa: 0});
+        pagu: sum.pagu + unit.pagu, realisasi: sum.realisasi + unit.realisasi,
+        outstanding: sum.outstanding + unit.outstanding, sisa: sum.sisa + unit.sisa,
+    }), {pagu: 0, realisasi: 0, outstanding: 0, sisa: 0});
     const rows = [
         [text(`Realisasi Anggaran ${data.tahun}`, {
-            columnSpan: 5, fontSize: 16, fontWeight: 'bold', height: 30, textColor: BLUE,
+            columnSpan: 6, fontSize: 16, fontWeight: 'bold', height: 30, textColor: BLUE,
         })],
         [text(`Per ${dibuatPada.toLocaleDateString('id-ID', {
             timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric',
-        })}`, {columnSpan: 5, fontSize: 10, height: 22, textColor: '#526176'})],
+        })}`, {columnSpan: 6, fontSize: 10, height: 22, textColor: '#526176'})],
         [],
         anggaranLaporanHead.map(label => text(label, {fontWeight: 'bold', backgroundColor: BLUE,
             textColor: '#FFFFFF', align: 'center', height: 30})),
         [text('TOTAL UNIT KERJA', {fontWeight: 'bold', backgroundColor: '#E5EDF8', height: 30}),
-            ...['pagu', 'terpakai', 'sisa'].map(key => number(totals[key], MONEY, {fontWeight: 'bold', backgroundColor: '#E5EDF8'})),
-            totals.pagu > 0 ? number(totals.terpakai / totals.pagu, PERCENT, {fontWeight: 'bold', backgroundColor: '#E5EDF8'})
-                : text('-', {align: 'right', backgroundColor: '#E5EDF8'})],
+            ...['pagu', 'realisasi', 'sisa'].map(key => number(totals[key], MONEY, {fontWeight: 'bold', backgroundColor: '#E5EDF8'})),
+            totals.pagu > 0 ? number(totals.realisasi / totals.pagu, PERCENT, {fontWeight: 'bold', backgroundColor: '#E5EDF8'})
+                : text('-', {align: 'right', backgroundColor: '#E5EDF8'}),
+            number(totals.outstanding, MONEY, {fontWeight: 'bold', backgroundColor: '#E5EDF8'})],
     ];
     const firstRow = rows.length + 1;
     units.forEach((unit, index) => {
         const style = {backgroundColor: index % 2 ? '#F1F5FA' : '#FFFFFF', height: 32};
         rows.push([text(unit.unitKerja, {...style, wrap: true}),
-            number(unit.pagu, MONEY, style), number(unit.terpakai, MONEY, style), number(unit.sisa, MONEY, style),
-            unit.persen === null ? text('-', {...style, align: 'right'}) : number(unit.persen, PERCENT, style)]);
+            number(unit.pagu, MONEY, style), number(unit.realisasi, MONEY, style), number(unit.sisa, MONEY, style),
+            unit.persen === null ? text('-', {...style, align: 'right'}) : number(unit.persen, PERCENT, style),
+            number(unit.outstanding, MONEY, style)]);
     });
     const lastRow = rows.length;
     const chartRow = lastRow + 3;
@@ -85,7 +88,7 @@ export function buatLaporanAnggaran(data, dibuatPada = new Date()) {
     ];
     return {
         rows,
-        options: {sheet: SHEET, columns: [48, 23, 23, 23, 19].map(width => ({width})),
+        options: {sheet: SHEET, columns: [48, 23, 23, 23, 19, 23].map(width => ({width})),
             showGridLines: false, orientation: 'landscape', stickyRowsCount: firstRow - 1, conditionalFormatting},
         // Native, range-backed chart remains editable in Excel; caches also let viewers
         // display it immediately without needing Excel to recalculate on first opening.

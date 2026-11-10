@@ -2179,7 +2179,56 @@ textarea.fg-input {
     color: #5A6472;
 }
 
-/* Sits inside .wide-card-actions, which is a flex row of buttons */
+/* Keep the annual budget actions inside the card as the viewport narrows. */
+.anggaran-current-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 0 30px;
+}
+
+.anggaran-current-head .wide-card-title {
+    flex: 1 1 220px;
+    min-width: 0;
+    margin-left: 0;
+    overflow-wrap: anywhere;
+}
+
+.anggaran-current-head .anggaran-current-actions {
+    flex: 1 1 640px;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    padding: 12px 0;
+}
+
+.anggaran-sync-info,
+.anggaran-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.anggaran-sync-info {
+    overflow-wrap: anywhere;
+}
+
+.anggaran-sync-info .anggaran-sinkron {
+    white-space: normal;
+}
+
+.anggaran-action-buttons .btn-aksi-wide {
+    max-width: 100%;
+    box-sizing: border-box;
+    height: auto;
+    min-height: 32px;
+    padding: 7px 18px;
+    white-space: normal;
+}
+
+/* Sits inside .wide-card-actions, which is a flex row of buttons. */
 .anggaran-sinkron {
     align-self: center;
     font-size: 0.82rem;

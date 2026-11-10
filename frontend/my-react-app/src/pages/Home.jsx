@@ -76,8 +76,9 @@ function Home() {
             : anggaran.anggaran;
         const totals = units.reduce((sum, unit) => ({
             pagu: sum.pagu + unit.pagu,
-            terpakai: sum.terpakai + unit.terpakai,
-        }), {pagu: 0, terpakai: 0});
+            terpakai: sum.terpakai + unit.realisasi,
+            outstanding: sum.outstanding + unit.outstanding,
+        }), {pagu: 0, terpakai: 0, outstanding: 0});
         return {...totals, sisa: totals.pagu - totals.terpakai,
             persen: totals.pagu ? totals.terpakai / totals.pagu * 100 : 0};
     }, [anggaran, selectedUnit]);
@@ -156,6 +157,7 @@ function Home() {
                                                     ["Terpakai", formatRupiah(ringkasan.terpakai)],
                                                     ["Sisa Anggaran", formatRupiah(ringkasan.sisa)],
                                                     ["Persentase", ringkasan.pagu ? `${ringkasan.persen.toFixed(2)}%` : "-"],
+                                                    ["Outstanding", formatRupiah(ringkasan.outstanding)],
                                                 ].map(([label, value]) => <div key={label}>
                                                     <dt>{label}</dt><dd>{value}</dd>
                                                 </div>)}

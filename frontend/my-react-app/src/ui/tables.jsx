@@ -1638,11 +1638,15 @@ const tandaPaguMinus = ada => ada
 // which would look like a real ceiling of nothing.
 const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : formatRupiah(nilai);
 
-export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini.", pencarian = ""}) {
+export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini.", pencarian = "", onSpmDetails}) {
     // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
     // under another unit kerja
     const [terbuka, setTerbuka] = useState({});
     const toggle = (kunci) => setTerbuka(prev => ({...prev, [kunci]: !prev[kunci]}));
+    const spmButton = (unit, mak, akun) => onSpmDetails ? <button type="button" className="anggaran-spm-trigger"
+        aria-label={`Rincian SPM ${unit.unitKerja}${mak ? ` MAK ${mak.kode}` : ''}${akun ? ` Akun ${akun.kode}` : ''}`}
+        onClick={() => onSpmDetails({unitKerja: unit.unitKerja, kodeMak: mak?.kode || '',
+            kodeAkun: akun?.kode || '', uraian: mak?.uraian || ''})}>Rincian SPM</button> : null;
 
     if (!anggaran || anggaran.length === 0) {
         return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
@@ -1669,6 +1673,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                         {unit.unitKerja}
                                         {barisLencana(
                                             tandaPaguMinus(unit.adaPaguMinus),
+                                            spmButton(unit),
                                             unit.klaimUnitLain > 0 &&
                                                 <span key="klaim" className="anggaran-lencana-klaim"
                                                       title="Belanja yang memakai Kode MAK milik unit kerja lain">
@@ -1726,6 +1731,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     {mak.kode}
                                                     {barisLencana(
                                                         tandaPaguMinus(mak.adaPaguMinus),
+                                                        spmButton(unit, mak),
                                                         mak.luarPagu &&
                                                             <span key="milik" className="anggaran-lencana-klaim">
                                                                 milik {(mak.pemilik || []).join(", ") || "unit kerja lain"}
@@ -1752,6 +1758,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     <TableCell sx={indentSel(2)}>
                                                         {akun.kode}
                                                         {barisLencana(
+                                                            spmButton(unit, mak, akun),
                                                             akun.takDirinci &&
                                                                 <span key="dirinci" className="anggaran-tanda-baru"
                                                                       title="Belum ada di DIPA, jadi tidak dihitung ke Realisasi">
@@ -1793,6 +1800,7 @@ TableAnggaranPohon.propTypes = {
     anggaran: PropTypes.array,
     kosong: PropTypes.string,
     pencarian: PropTypes.string,
+    onSpmDetails: PropTypes.func,
 };
 
 // Spending whose MAK has no home in the active revisi. Shown rather than dropped: a

@@ -414,7 +414,8 @@ export default function Anggaran() {
                     </div>
                 </div>
                 <AnggaranSearch anggaran={data?.anggaran || EMPTY_ANGGARAN} canSearch={canUnggah}
-                                loading={isLoading} kosong={pesanKosong}/>
+                                loading={isLoading} kosong={pesanKosong} tahun={data?.tahun}
+                                snapshot={data?.spmSnapshot} onRefresh={() => fetchAnggaran(true)}/>
                 <br/><br/>
             </div>
 

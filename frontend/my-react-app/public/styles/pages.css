@@ -2180,6 +2180,39 @@ textarea.fg-input {
 }
 
 /* Keep the annual budget actions inside the card as the viewport narrows. */
+.anggaran-spm-trigger {
+    border: 1px solid #B7C7DC;
+    background: #F2F6FC;
+    color: #00449C;
+    border-radius: 8px;
+    padding: 3px 9px;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.anggaran-spm-trigger:hover { background: #DCE9FF; }
+.anggaran-spm-trigger:focus-visible { outline: 2px solid #00449C; outline-offset: 2px; }
+.anggaran-spm-panel { padding: 24px; min-width: 0; }
+.anggaran-spm-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.anggaran-spm-header h2 { margin: 0 0 8px; color: #00204A; }
+.anggaran-spm-header p { margin: 4px 0; overflow-wrap: anywhere; }
+.anggaran-spm-close { border: 0; background: transparent; font-size: 2rem; cursor: pointer; color: #41506B; }
+.anggaran-spm-note { font-size: 0.82rem; color: #5A6472; line-height: 1.5; }
+.anggaran-spm-filters { display: flex; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
+.anggaran-spm-filters label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; flex: 1 1 220px; min-width: 0; }
+.anggaran-spm-filters input, .anggaran-spm-filters select { padding: 9px 12px; border: 1px solid #B7C7DC; border-radius: 8px; min-width: 0; font: inherit; }
+.anggaran-spm-totals { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin: 16px 0; }
+.anggaran-spm-totals > div { background: #F2F6FC; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 7px; }
+.anggaran-spm-totals span { font-size: 0.8rem; color: #5A6472; }
+.anggaran-spm-totals strong { font-size: 1.05rem; color: #00204A; }
+.anggaran-spm-source-warning { color: #8A6100; font-size: 0.8rem; line-height: 1.5; }
+.anggaran-spm-error { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.anggaran-spm-error > :first-child { flex-basis: 100%; }
+.anggaran-spm-table td { white-space: normal; vertical-align: top; }
+.anggaran-spm-table td:first-child { min-width: 160px; }
+.anggaran-spm-table small { display: block; margin-top: 6px; font-size: 0.73rem; color: #5A6472; }
+.anggaran-spm-table small.anggaran-spm-source-warning { color: #8A6100; }
+
 .anggaran-current-head {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -2293,10 +2326,21 @@ textarea.fg-input {
 .anggaran-lencana-baris {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 5px;
     margin-top: 3px;
     max-width: 320px;
     white-space: normal;
+}
+
+.anggaran-lencana-baris > .anggaran-lencana-klaim,
+.anggaran-lencana-baris > .anggaran-tanda-baru,
+.anggaran-lencana-baris > .anggaran-spm-trigger {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    box-sizing: border-box;
+    line-height: 1.3;
 }
 
 .anggaran-lencana-klaim {

@@ -15,6 +15,8 @@ import readXlsxFile from 'read-excel-file/node';
 import dns from 'node:dns/promises';
 import { createHash } from 'node:crypto';
 import { pjkSpmFromSpp, missingPjkSpmWrites } from './lib/pjkSpm.js';
+import {SPM_DETAIL_VERSION, anggaranSpmSnapshot, pilihLingkupSpm, parseSpmDetailQuery,
+    bacaRincianSpm, spmDetailError} from './lib/anggaranSpm.js';
 
 
 // Initialize tools
@@ -247,6 +249,7 @@ const ROUTE_ROLES = {
     // admin only, and the delete carries revisiId in the query so this stays a plain
     // lookup rather than needing a ROUTE_ROLES_PREFIX entry.
     "GET /anggaran": ANY_ROLE,
+    "GET /anggaran/rincian-spm": ANY_ROLE,
     "GET /anggaran/revisi": ADMIN,
     "POST /anggaran/unggah": ADMIN,
     "POST /anggaran/unggah/terapkan": ADMIN,
@@ -6132,8 +6135,8 @@ async function bacaUnitDikenal() {
     return new Map(rows.map(row => [row.nama_kunci, row]));
 }
 
-async function bacaRevisiAktif(tahun) {
-    const [row] = await sql`
+async function bacaRevisiAktif(tahun, db = sql) {
+    const [row] = await db`
         SELECT id, tahun, nomor_revisi, catatan, status, nama_berkas, dibuat_oleh, dibuat_pada, aktif_pada
         FROM anggaran_revisi WHERE tahun = ${tahun} AND status = 'aktif' LIMIT 1`;
     return row || null;
@@ -6141,10 +6144,10 @@ async function bacaRevisiAktif(tahun) {
 
 // The whole tree of one revisi in the same Map shape susunPohonDariExcel produces, so the
 // diff below never has to care which side came from a spreadsheet.
-async function bacaPohonRevisi(revisiId) {
+async function bacaPohonRevisi(revisiId, db = sql) {
     const units = new Map();
     if (!revisiId) return units;
-    const rows = await sql`
+    const rows = await db`
         SELECT uk.id   AS unit_kerja_id, uk.nama, uk.nama_kunci,
                au.pagu AS pagu_unit,
                am.kode AS kode_mak, am.uraian AS uraian_mak, am.pagu AS pagu_mak,
@@ -6351,13 +6354,13 @@ const TANGGAL_SP2D_KOLOM = 17; // column R on both antrian sheets
 const REALISASI_SUMBER = [
     {
         alur: "gup", antrian: "'Write Antrian'!A:R", kolomStatus: 7, kolomUnit: 11,
-        kolomNama: 2, kolomSpp: 9,
+        kolomNama: 2, kolomSpp: 9, kolomSpm: 10,
         tabel: "'Write Table'!B:E", trans: "'Write Table'!X:X", kolomNilai: 3,
     },
     {
         // Read to R on both: column R is Tanggal SP2D on either sheet
         alur: "verif", antrian: "'Write Antrian Verif'!A:R", kolomStatus: 5, kolomUnit: 8,
-        kolomNama: 2, kolomSpp: 6,
+        kolomNama: 2, kolomSpp: 6, kolomSpm: 7,
         tabel: "'Write Table Verif'!B:D", trans: "'Write Table Verif'!X:X", kolomNilai: 2,
     },
 ];
@@ -6386,12 +6389,14 @@ async function hitungBelanja(spreadsheetId) {
 
     const semua = [];
     let dilewati = 0;
+    const peringatan = {tanpaInduk: 0, makKosong: 0, nominalTidakValid: 0, identitasGanda: 0};
 
     REALISASI_SUMBER.forEach((sumber, urutan) => {
         const [antrian, tabel, trans] = nilai.slice(urutan * 3, urutan * 3 + 3);
 
         const indukPerId = new Map();
-        for (const row of antrian) {
+        const seen = new Set(), ambiguous = new Set();
+        for (const [index, row] of antrian.entries()) {
             const id = trimmed(row?.[0]);
             if (id) {
                 indukPerId.set(id, {
@@ -6399,12 +6404,20 @@ async function hitungBelanja(spreadsheetId) {
                     status: normalizeSatker(row?.[sumber.kolomStatus]),
                     nama: trimmed(row?.[sumber.kolomNama]),
                     nomorSpp: trimmed(row?.[sumber.kolomSpp]),
+                    nomorSpm: trimmed(row?.[sumber.kolomSpm]),
+                    jenis: trimmed(row?.[3]), statusAsli: trimmed(row?.[sumber.kolomStatus]),
                     // SP2D where there is one, otherwise the antrian timestamp: everything
                     // still in the queue counts toward Terpakai and needs a date too
                     tanggal: toIsoDate(row?.[TANGGAL_SP2D_KOLOM]) || toIsoDate(row?.[1]),
                 });
+                // A1/A2 are headers/counters, not competing pengajuan identities.
+                if (index >= 2) {
+                    if (seen.has(id)) ambiguous.add(id);
+                    seen.add(id);
+                }
             }
         }
+        peringatan.identitasGanda += ambiguous.size;
 
         let transId = null;
         for (let i = 0; i < tabel.length; i++) {
@@ -6413,33 +6426,42 @@ async function hitungBelanja(spreadsheetId) {
                 continue;
             }
             const induk = transId ? indukPerId.get(transId) : null;
-            if (!induk) continue;
+            if (!induk) {
+                if (filled(tabel[i]?.[MAK_KOLOM])) peringatan.tanpaInduk++;
+                continue;
+            }
 
             const { kodeMak, kodeAkun } = normalisasiKodeMak(tabel[i]?.[MAK_KOLOM]);
-            if (!kodeMak) continue;
+            if (!kodeMak) {
+                if (filled(tabel[i]?.[sumber.kolomNilai])) peringatan.makKosong++;
+                continue;
+            }
 
             const nominal = parseRupiah(tabel[i]?.[sumber.kolomNilai]);
             if (!Number.isFinite(nominal) || nominal <= 0) {
                 dilewati++;
+                peringatan.nominalTidakValid++;
                 continue;
             }
 
             semua.push({
                 transId, alur: sumber.alur, unitKerjaKunci: induk.unit,
                 nama: induk.nama, nomorSpp: induk.nomorSpp, tanggal: induk.tanggal,
+                nomorSpm: ambiguous.has(transId) ? '' : induk.nomorSpm,
+                jenis: induk.jenis, status: induk.statusAsli, sumberAmbigu: ambiguous.has(transId),
                 kodeMak, kodeAkun, nominal, diakuiRealisasi: masukRealisasi(sumber.alur, induk.status),
             });
         }
     });
 
-    return { baris: semua, barisSumber: semua.length + dilewati, dilewati };
+    return { baris: semua, barisSumber: semua.length + dilewati, dilewati, peringatan };
 }
 
 // Full replace, never a diff: a deleted pengajuan's block simply vanishes from the sheet,
 // and an incremental update would leave orphan rows overstating spending forever.
 async function segarkanRealisasi(tahun, spreadsheetId) {
     const mulai = Date.now();
-    const { baris, barisSumber, dilewati } = await hitungBelanja(spreadsheetId);
+    const { baris, barisSumber, dilewati, peringatan } = await hitungBelanja(spreadsheetId);
     const durasi = Date.now() - mulai;
 
     await sql.begin(async trx => {
@@ -6453,6 +6475,8 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
                 unit_kerja_kunci: row.unitKerjaKunci,
                 nama: row.nama,
                 nomor_spp: row.nomorSpp,
+                nomor_spm: row.nomorSpm, jenis_pengajuan: row.jenis,
+                status_pengajuan: row.status, sumber_ambigu: row.sumberAmbigu,
                 tanggal: row.tanggal,
                 kode_mak: row.kodeMak,
                 kode_akun: row.kodeAkun,
@@ -6462,13 +6486,15 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
             }));
             await trx`INSERT INTO anggaran_realisasi_baris ${trx(potong,
                 "tahun", "trans_id", "alur", "unit_kerja_kunci", "nama", "nomor_spp",
-                "tanggal", "kode_mak", "kode_akun", "nominal", "sudah_sp2d")}`;
+                "tanggal", "kode_mak", "kode_akun", "nominal", "sudah_sp2d",
+                "nomor_spm", "jenis_pengajuan", "status_pengajuan", "sumber_ambigu")}`;
         }
         await trx`
-            INSERT INTO anggaran_realisasi_sinkron (tahun, disegarkan_pada, baris_sumber, dilewati, durasi_ms)
-            VALUES (${tahun}, NOW(), ${barisSumber}, ${dilewati}, ${durasi})
+            INSERT INTO anggaran_realisasi_sinkron (tahun, disegarkan_pada, baris_sumber, dilewati, durasi_ms, detail_versi, detail_peringatan)
+            VALUES (${tahun}, NOW(), ${barisSumber}, ${dilewati}, ${durasi}, ${SPM_DETAIL_VERSION}, ${trx.json(peringatan)}::jsonb)
             ON CONFLICT (tahun) DO UPDATE SET disegarkan_pada = NOW(),
-                baris_sumber = ${barisSumber}, dilewati = ${dilewati}, durasi_ms = ${durasi}`;
+                baris_sumber = ${barisSumber}, dilewati = ${dilewati}, durasi_ms = ${durasi},
+                detail_versi = ${SPM_DETAIL_VERSION}, detail_peringatan = ${trx.json(peringatan)}::jsonb`;
     });
 }
 
@@ -6629,12 +6655,12 @@ function ratakanOverride(tahun, units) {
     return rows;
 }
 
-async function bacaOverrideRealisasi(tahun) {
-    const [meta] = await sql`
+async function bacaOverrideRealisasi(tahun, db = sql) {
+    const [meta] = await db`
         SELECT tanggal_batas, nama_berkas, dibuat_oleh, dibuat_pada
         FROM anggaran_realisasi_awal_meta WHERE tahun = ${tahun}`;
     if (!meta) return null;
-    const baris = await sql`
+    const baris = await db`
         SELECT unit_kerja_kunci, kode_mak, kode_akun, nominal
         FROM anggaran_realisasi_awal WHERE tahun = ${tahun}`;
     return { ...meta, baris };
@@ -6643,12 +6669,12 @@ async function bacaOverrideRealisasi(tahun) {
 // Everything up to and including the cutoff comes from the uploaded baseline, everything
 // after it from the pengajuan. Applied here rather than during the rebuild so moving the
 // cutoff takes effect on the next read.
-async function bacaAgregatRealisasi(tahun, override) {
+async function bacaAgregatRealisasi(tahun, override, db = sql) {
     const batas = override?.tanggal_batas || null;
     // tanggal = '' means neither the SP2D cell nor the timestamp parsed. Kept rather than
     // dropped: a row nobody can date is still money, and losing it silently is worse than
     // the small chance it belongs before the cutoff.
-    const rows = await sql`
+    const rows = await db`
         SELECT unit_kerja_kunci, kode_mak, kode_akun,
                COALESCE(SUM(nominal) FILTER (WHERE sudah_sp2d), 0)     AS realisasi,
                COALESCE(SUM(nominal) FILTER (WHERE NOT sudah_sp2d), 0) AS komitmen,
@@ -6731,9 +6757,9 @@ async function rinciKlaim(tahun, klaim, override) {
     return rinci.sort((a, b) => b.terpakai - a.terpakai);
 }
 
-async function bacaSinkronRealisasi(tahun) {
-    const [row] = await sql`
-        SELECT disegarkan_pada, baris_sumber, dilewati, durasi_ms
+async function bacaSinkronRealisasi(tahun, db = sql) {
+    const [row] = await db`
+        SELECT disegarkan_pada, baris_sumber, dilewati, durasi_ms, detail_versi, detail_peringatan
         FROM anggaran_realisasi_sinkron WHERE tahun = ${tahun}`;
     return row || null;
 }
@@ -6978,7 +7004,8 @@ app.get("/anggaran", async (req, res) => {
         try {
             sinkron = await bacaSinkronRealisasi(tahun);
             const spreadsheetId = getSpreadsheetId(req, "AJUAN");
-            if (!realisasiTerklasifikasi.has(`${tahun}|${spreadsheetId}`) || realisasiUsang(sinkron)) {
+            if (sinkron?.detail_versi !== SPM_DETAIL_VERSION
+                || !realisasiTerklasifikasi.has(`${tahun}|${spreadsheetId}`) || realisasiUsang(sinkron)) {
                 await segarkanSekali(tahun, spreadsheetId);
                 sinkron = await bacaSinkronRealisasi(tahun);
             }
@@ -7008,6 +7035,7 @@ app.get("/anggaran", async (req, res) => {
             tahun,
             revisi: { id: revisi.id, nomorRevisi: revisi.nomor_revisi, catatan: revisi.catatan, aktifPada: revisi.aktif_pada },
             anggaran,
+            spmSnapshot: anggaranSpmSnapshot(tahun, revisi, sinkron, override),
             klaimUnitLain: await rinciKlaim(tahun, klaimUnitLain, override),
             tidakDikenal,
             sinkron: sinkron && {
@@ -7024,6 +7052,42 @@ app.get("/anggaran", async (req, res) => {
         if (anggaranBelumSiap(error, res)) return;
         console.error("Error in GET /anggaran:", error);
         return res.status(500).json({ message: "Gagal memuat anggaran." });
+    }
+});
+
+app.get("/anggaran/rincian-spm", async (req, res) => {
+    try {
+        const tahun = anggaranTahun(req);
+        if (!tahun) throw spmDetailError('Tahun tidak valid.');
+        const options = parseSpmDetailQuery(req.query);
+        const result = await sql.begin('isolation level repeatable read read only', async db => {
+            const revisi = await bacaRevisiAktif(tahun, db);
+            const sinkron = await bacaSinkronRealisasi(tahun, db);
+            const override = await bacaOverrideRealisasi(tahun, db);
+            const snapshot = anggaranSpmSnapshot(tahun, revisi, sinkron, override);
+            if (!snapshot || snapshot !== req.query.snapshot) {
+                throw spmDetailError('Data anggaran berubah atau rincian belum siap. Muat ulang Anggaran untuk melihat rincian yang sesuai.', 409);
+            }
+            const units = await bacaPohonRevisi(revisi.id, db);
+            const agregat = await bacaAgregatRealisasi(tahun, override, db);
+            const belanja = klasifikasiBelanja(units, agregat);
+            const {anggaran} = susunTampilan(units, belanja);
+            const scope = pilihLingkupSpm({anggaran, belanja, viewer: req.viewer,
+                unitKerja: req.query.unitKerja, kodeMak: normalisasiKodeMak(req.query.kodeMak || '').kodeMak,
+                kodeAkun: options.kodeAkun, normalizeMak: value => normalisasiKodeMak(value).kodeMak});
+            const detail = await bacaRincianSpm(db, {...options, tahun, keys: scope.keys,
+                cutoff: override?.tanggal_batas || null});
+            return {...detail, snapshot, scope: {unitKerja: scope.unitKerja, kodeMak: scope.kodeMak,
+                kodeAkun: scope.kodeAkun, mode: scope.mode}, totals: scope.totals,
+            warnings: sinkron.detail_peringatan || {}, disegarkanPada: sinkron.disegarkan_pada,
+            rows: detail.rows.map(row => ({...row,
+                unitKerjaPengaju: units.get(row.unit_kerja_kunci)?.nama || row.unit_kerja_kunci,
+                key: `${tahun}|${row.alur}|${row.trans_id}|${row.unit_kerja_kunci}`}))};
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        if (!error.statusCode) console.error('Error in GET /anggaran/rincian-spm:', error);
+        return res.status(error.statusCode || 500).json({message: error.statusCode ? error.message : 'Gagal memuat rincian SPM.'});
     }
 });
 

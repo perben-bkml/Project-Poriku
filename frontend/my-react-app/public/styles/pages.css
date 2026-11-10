@@ -2186,6 +2186,52 @@ textarea.fg-input {
     padding: 0 30px;
 }
 
+.anggaran-search {
+    margin: 8px 30px 20px;
+    padding: 16px 18px;
+    border: 1px solid #DCE4EF;
+    border-radius: 12px;
+    background: #F7F9FC;
+}
+
+.anggaran-search > label {
+    display: block;
+    margin-bottom: 8px;
+    color: #00204A;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.anggaran-search-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.anggaran-search-controls input {
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #B7C7DC;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.anggaran-search-controls input:focus-visible {
+    outline: 2px solid #00449C;
+    outline-offset: 2px;
+}
+
+.anggaran-search > p {
+    margin: 10px 0 0;
+    color: #5A6472;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
 .anggaran-current-head .wide-card-title {
     flex: 1 1 220px;
     min-width: 0;

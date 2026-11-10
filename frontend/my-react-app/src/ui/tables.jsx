@@ -1626,12 +1626,19 @@ const tandaTakDirinci = (jumlah) => jumlah > 0
       </span>
     : null;
 
+const tandaPaguMinus = ada => ada
+    ? <span key="pagu-minus" className="anggaran-lencana-klaim"
+            title="Ada Akun dengan Sisa anggaran negatif di bawah kategori ini.">
+        Ada Pagu Minus
+      </span>
+    : null;
+
 // A claimed MAK belongs to another unit kerja, so it has no pagu here and nothing to
 // subtract from - every figure that would need one reads as a dash rather than a zero,
 // which would look like a real ceiling of nothing.
 const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : formatRupiah(nilai);
 
-export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini."}) {
+export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini.", pencarian = ""}) {
     // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
     // under another unit kerja
     const [terbuka, setTerbuka] = useState({});
@@ -1647,18 +1654,21 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                 <RealisasiHead heads={ANGGARAN_HEAD}/>
                 <TableBody>
                     {anggaran.map(unit => {
-                        const unitBuka = !!terbuka[unit.unitKerja];
+                        const unitBuka = !!pencarian || !!terbuka[unit.unitKerja];
                         return (
                             <Fragment key={unit.unitKerja}>
                                 <TableRow hover>
                                     <TableCell sx={{...indentSel(0), fontWeight: 600}}>
                                         {unit.mak.length > 0 &&
                                             <IconButton size="small" onClick={() => toggle(unit.unitKerja)}
+                                                        disabled={!!pencarian}
+                                                        title={pencarian ? "Hasil pencarian ditampilkan terbuka" : undefined}
                                                         aria-label={unitBuka ? "Tutup" : "Buka"}>
                                                 {unitBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                             </IconButton>}
                                         {unit.unitKerja}
                                         {barisLencana(
+                                            tandaPaguMinus(unit.adaPaguMinus),
                                             unit.klaimUnitLain > 0 &&
                                                 <span key="klaim" className="anggaran-lencana-klaim"
                                                       title="Belanja yang memakai Kode MAK milik unit kerja lain">
@@ -1688,7 +1698,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
 
                                 {unitBuka && unit.mak.map((mak, urutan) => {
                                     const kunciMak = `${unit.unitKerja}|${mak.kode}`;
-                                    const makBuka = !!terbuka[kunciMak];
+                                    const makBuka = !!pencarian || !!terbuka[kunciMak];
                                     // The claimed MAK are appended after the unit's own, so the
                                     // first of them opens the group. Announced rather than just
                                     // indented: these rows carry a nominal but deliberately do
@@ -1708,11 +1718,14 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 <TableCell sx={indentSel(1)}>
                                                     {mak.akun.length > 0 &&
                                                         <IconButton size="small" onClick={() => toggle(kunciMak)}
+                                                                    disabled={!!pencarian}
+                                                                    title={pencarian ? "Hasil pencarian ditampilkan terbuka" : undefined}
                                                                     aria-label={makBuka ? "Tutup" : "Buka"}>
                                                             {makBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                                         </IconButton>}
                                                     {mak.kode}
                                                     {barisLencana(
+                                                        tandaPaguMinus(mak.adaPaguMinus),
                                                         mak.luarPagu &&
                                                             <span key="milik" className="anggaran-lencana-klaim">
                                                                 milik {(mak.pemilik || []).join(", ") || "unit kerja lain"}
@@ -1779,6 +1792,7 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
 TableAnggaranPohon.propTypes = {
     anggaran: PropTypes.array,
     kosong: PropTypes.string,
+    pencarian: PropTypes.string,
 };
 
 // Spending whose MAK has no home in the active revisi. Shown rather than dropped: a

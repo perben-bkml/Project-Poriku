@@ -4,17 +4,19 @@ import apiClient from "../../lib/apiClient";
 import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {AuthContext} from "../../lib/AuthContext.jsx";
-import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes, anggaranTanpaRincian,
+import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes,
     anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan,
     anggaranKolomEkspor} from "./head-data.js";
 import {unduhExcel, selTeks, selAngka} from "../../lib/excel.js";
 import {unduhLaporanAnggaran} from "../../lib/anggaranReport.js";
 import {formatRupiah} from "../bendahara/head-data.js";
 // Import Tables
-import {TableAnggaranPohon, TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
+import {TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
+import AnggaranSearch from './Anggaran-Search.jsx';
 
 // Twin of ANGGARAN_MAX_FILE_MB in server.js - the label has to name the limit multer enforces
 const ANGGARAN_MAX_MB = 10;
+const EMPTY_ANGGARAN = [];
 
 export default function Anggaran() {
     const {user} = useContext(AuthContext);
@@ -411,9 +413,8 @@ export default function Anggaran() {
                         </div>
                     </div>
                 </div>
-                <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
-                {isLoading ? <LoadingAnimate/> :
-                    <TableAnggaranPohon anggaran={data?.anggaran || []} kosong={pesanKosong}/>}
+                <AnggaranSearch anggaran={data?.anggaran || EMPTY_ANGGARAN} canSearch={canUnggah}
+                                loading={isLoading} kosong={pesanKosong}/>
                 <br/><br/>
             </div>
 

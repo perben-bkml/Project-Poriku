@@ -5,14 +5,15 @@ import LoadingAnimate from "../../ui/loading.jsx";
 import {PopupAlert} from "../../ui/Popup.jsx";
 import {AuthContext} from "../../lib/AuthContext.jsx";
 import {anggaranKolomTemplate, anggaranContohBaris, anggaranModes,
-    anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan,
-    anggaranKolomEkspor} from "./head-data.js";
-import {unduhExcel, selTeks, selAngka} from "../../lib/excel.js";
+    anggaranSebabKeterangan, anggaranKlaimKeterangan, anggaranAwalKeterangan} from "./head-data.js";
+import {unduhExcel, selTeks} from "../../lib/excel.js";
+import {anggaranWorkbook} from '../../lib/anggaranExport.js';
 import {unduhLaporanAnggaran} from "../../lib/anggaranReport.js";
 import {formatRupiah} from "../bendahara/head-data.js";
 // Import Tables
 import {TableSelisihAnggaran, TableRealisasiTakDikenal, TableKlaimUnitLain} from "../../ui/tables.jsx";
 import AnggaranSearch from './Anggaran-Search.jsx';
+import AnggaranPeriod from './Anggaran-Period.jsx';
 
 // Twin of ANGGARAN_MAX_FILE_MB in server.js - the label has to name the limit multer enforces
 const ANGGARAN_MAX_MB = 10;
@@ -87,40 +88,10 @@ export default function Anggaran() {
         await unduhExcel("Template Anggaran.xlsx", anggaranKolomTemplate, baris, [22, 18, 22, 28, 18, 14, 18]);
     }
 
-    // Flattened one row per akun with the parent columns repeated, the shape the tree reads
-    // top to bottom. A row with no pagu of its own writes "-" rather than 0, which would
-    // read as a real ceiling of nothing.
     async function unduhAnggaran() {
-        const baris = [];
-        const sel = (nilai) => nilai === null || nilai === undefined ? selTeks("-") : selAngka(String(nilai));
-        const persen = row => row.luarPagu || row.takDirinci || !(row.pagu > 0)
-            ? selTeks("-") : {value: row.realisasi / row.pagu, type: Number, format: '0.00%'};
-        for (const unit of data?.anggaran || []) {
-            const induk = [selTeks(unit.unitKerja), sel(unit.pagu)];
-            if (unit.mak.length === 0) {
-                baris.push([...induk, selTeks(""), selTeks(""), selTeks("-"), selTeks(""), selTeks("-"),
-                    sel(unit.realisasi), sel(unit.sisa), persen(unit), sel(unit.outstanding), selTeks("")]);
-                continue;
-            }
-            for (const mak of unit.mak) {
-                const makSel = [selTeks(mak.kode, true), selTeks(mak.uraian), sel(mak.pagu)];
-                const catatanMak = mak.luarPagu ? `milik ${(mak.pemilik || []).join(", ")}` : "";
-                if (mak.akun.length === 0) {
-                    baris.push([...induk, ...makSel, selTeks(""), selTeks("-"),
-                        sel(mak.realisasi), sel(mak.sisa), persen(mak), sel(mak.outstanding), selTeks(catatanMak)]);
-                    continue;
-                }
-                for (const akun of mak.akun) {
-                    const catatan = akun.takDirinci ? "belum dirinci di DIPA"
-                        : akun.luarPagu ? catatanMak : "";
-                    baris.push([...induk, ...makSel, selTeks(akun.kode, true), sel(akun.pagu),
-                        sel(akun.realisasi), sel(akun.sisa), persen(akun), sel(akun.outstanding), selTeks(catatan)]);
-                }
-            }
-        }
-        if (baris.length === 0) return showAlert("warning", "Tidak ada anggaran untuk diunduh.");
-        await unduhExcel(`Anggaran ${data?.tahun || ""}.xlsx`, anggaranKolomEkspor, baris,
-            [22, 16, 22, 26, 16, 12, 14, 14, 14, 16, 14, 24]);
+        const {head, baris, lebar} = anggaranWorkbook(data?.anggaran || []);
+        if (!baris.length) return showAlert("warning", "Tidak ada anggaran untuk diunduh.");
+        await unduhExcel(`Anggaran ${data?.tahun || ""}.xlsx`, head, baris, lebar);
     }
 
     async function unduhLaporan() {
@@ -396,11 +367,11 @@ export default function Anggaran() {
                                 </span>}
                         </div>
                         <div className="anggaran-action-buttons">
-                            <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel"
+                            <input className="btn-aksi btn-aksi-wide" type="button" value="Unduh Excel Tahunan"
                                    disabled={isLoading || !(data?.anggaran || []).length}
                                    onClick={unduhAnggaran}/>
                             <input className="btn-aksi btn-aksi-wide" type="button"
-                                   value={isLaporan ? "Membuat Laporan..." : "Unduh Laporan Unit Kerja"}
+                                   value={isLaporan ? "Membuat Laporan..." : "Unduh Laporan Unit Kerja Tahunan"}
                                    disabled={isLaporan || isLoading || !(data?.anggaran || []).length}
                                    onClick={unduhLaporan}/>
                             {canUnggah &&
@@ -413,9 +384,12 @@ export default function Anggaran() {
                         </div>
                     </div>
                 </div>
+                {data?.tahun ? <AnggaranPeriod key={data.tahun} tahun={data.tahun} canManage={canUnggah}
+                    units={(data?.anggaran || EMPTY_ANGGARAN).map(unit => unit.unitKerja)}>
                 <AnggaranSearch anggaran={data?.anggaran || EMPTY_ANGGARAN} canSearch={canUnggah}
                                 loading={isLoading} kosong={pesanKosong} tahun={data?.tahun}
                                 snapshot={data?.spmSnapshot} onRefresh={() => fetchAnggaran(true)}/>
+                </AnggaranPeriod> : null}
                 <br/><br/>
             </div>
 

@@ -1599,9 +1599,9 @@ const ANGGARAN_HEAD = [
     "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Outstanding",
 ];
 
-const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0)
+const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0) || row.realisasiKumulatif === null
     ? "-"
-    : `${(row.realisasi / row.pagu * 100).toLocaleString('id-ID', {
+    : `${((row.realisasiKumulatif ?? row.realisasi) / row.pagu * 100).toLocaleString('id-ID', {
         minimumFractionDigits: 2, maximumFractionDigits: 2,
     })}%`;
 
@@ -1636,7 +1636,10 @@ const tandaPaguMinus = ada => ada
 // A claimed MAK belongs to another unit kerja, so it has no pagu here and nothing to
 // subtract from - every figure that would need one reads as a dash rather than a zero,
 // which would look like a real ceiling of nothing.
-const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : formatRupiah(nilai);
+const uangAnggaran = value => value === null ? '—' : formatRupiah(value);
+const nilaiRealisasi = row => <>{uangAnggaran(row.realisasi)}{row.realisasiKumulatif !== undefined &&
+    <small className="anggaran-period-cumulative">Kumulatif: {uangAnggaran(row.realisasiKumulatif)}</small>}</>;
+const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : uangAnggaran(nilai);
 
 export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini.", pencarian = "", onSpmDetails}) {
     // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
@@ -1692,13 +1695,13 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                         )}
                                     </TableCell>
                                     <TableCell/>
-                                    <TableCell sx={{fontWeight: 600}}>{formatRupiah(unit.pagu)}</TableCell>
-                                    <TableCell>{formatRupiah(unit.realisasi)}</TableCell>
+                                    <TableCell sx={{fontWeight: 600}}>{uangAnggaran(unit.pagu)}</TableCell>
+                                    <TableCell>{nilaiRealisasi(unit)}</TableCell>
                                     <TableCell sx={{fontWeight: 600, color: sisaWarna(unit.sisa)}}>
-                                        {formatRupiah(unit.sisa)}
+                                        {uangAnggaran(unit.sisa)}
                                     </TableCell>
                                     <TableCell>{persenRealisasi(unit)}</TableCell>
-                                    <TableCell>{formatRupiah(unit.outstanding)}</TableCell>
+                                    <TableCell>{uangAnggaran(unit.outstanding)}</TableCell>
                                 </TableRow>
 
                                 {unitBuka && unit.mak.map((mak, urutan) => {
@@ -1746,12 +1749,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 </TableCell>
                                                 <TableCell>{dash(mak.uraian)}</TableCell>
                                                 <TableCell>{selLuarPagu(mak.pagu, mak.luarPagu)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.realisasi)}</TableCell>
+                                                <TableCell>{nilaiRealisasi(mak)}</TableCell>
                                                 <TableCell sx={{color: sisaWarna(mak.sisa ?? 0)}}>
                                                     {selLuarPagu(mak.sisa, mak.luarPagu)}
                                                 </TableCell>
                                                 <TableCell>{persenRealisasi(mak)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.outstanding)}</TableCell>
+                                                <TableCell>{uangAnggaran(mak.outstanding)}</TableCell>
                                             </TableRow>
                                             {makBuka && mak.akun.map(akun => (
                                                 <TableRow key={`${kunciMak}|${akun.kode}`} hover>
@@ -1776,12 +1779,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     {/* Neither an undetailed akun nor a claimed one has a pagu
                                                         of its own, so neither has a Sisa */}
                                                     <TableCell>{selLuarPagu(akun.pagu, akun.takDirinci || akun.luarPagu)}</TableCell>
-                                                    <TableCell>{formatRupiah(akun.realisasi)}</TableCell>
+                                                    <TableCell>{nilaiRealisasi(akun)}</TableCell>
                                                     <TableCell sx={{color: sisaWarna(akun.sisa ?? 0)}}>
                                                         {selLuarPagu(akun.sisa, akun.takDirinci || akun.luarPagu)}
                                                     </TableCell>
                                                     <TableCell>{persenRealisasi(akun)}</TableCell>
-                                                    <TableCell>{formatRupiah(akun.outstanding)}</TableCell>
+                                                    <TableCell>{uangAnggaran(akun.outstanding)}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </Fragment>

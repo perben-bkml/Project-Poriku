@@ -11,7 +11,7 @@ const MAK_PER_PAGE = 10;
 const BudgetTable = memo(TableAnggaranPohon);
 
 // Input state stays here, so typing cannot rerender upload, history and diagnostic panels.
-function AnggaranSearch({anggaran, canSearch, loading, kosong, tahun, snapshot, onRefresh}) {
+function AnggaranSearch({anggaran, canSearch, loading, kosong, tahun, snapshot, onRefresh, period}) {
     const [scope, setScope] = useState(null);
     const openSpm = useCallback(value => setScope(value), []);
     const [input, setInput] = useState('');
@@ -45,7 +45,7 @@ function AnggaranSearch({anggaran, canSearch, loading, kosong, tahun, snapshot, 
                        placeholder="Contoh: EBA, belanja barang, 511111"
                        aria-describedby="anggaran-search-result"
                        onChange={event => setInput(event.target.value)}/>
-                {input && <button type="button" className="spm-button" onClick={() => setInput('')}>Reset</button>}
+                {input && <button type="button" className="anggaran-period-button" onClick={() => setInput('')}>Reset</button>}
             </div>
             <p id="anggaran-search-result" role="status">
                 {loading ? 'Memuat anggaran…' : updating ? 'Memperbarui hasil…' : pencarian
@@ -53,7 +53,7 @@ function AnggaranSearch({anggaran, canSearch, loading, kosong, tahun, snapshot, 
                     : ''}
             </p>
         </form>}
-        <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>
+        {!period && <p className="anggaran-note anggaran-catatan-realisasi">{anggaranTanpaRincian}</p>}
         <div aria-busy={updating || loading}>
             {loading ? <LoadingAnimate/> : <BudgetTable anggaran={visible} pencarian={pencarian}
                 onSpmDetails={openSpm}
@@ -62,7 +62,7 @@ function AnggaranSearch({anggaran, canSearch, loading, kosong, tahun, snapshot, 
         {!loading && pencarian && pages > 1 && <Pagination className="dp-pagination" count={pages} page={page}
             disabled={updating} onChange={(_, value) => setPageState({query: pencarian, value})}/>}
         {scope && <AnggaranSpmDrawer key={`${scope.unitKerja}|${scope.kodeMak}|${scope.kodeAkun}`}
-            scope={scope} tahun={tahun} snapshot={snapshot} onClose={() => setScope(null)} onRefresh={onRefresh}/>}
+            scope={scope} tahun={tahun} snapshot={snapshot} period={period} onClose={() => setScope(null)} onRefresh={onRefresh}/>}
     </>;
 }
 
@@ -72,6 +72,7 @@ AnggaranSearch.propTypes = {
     loading: PropTypes.bool.isRequired,
     kosong: PropTypes.string.isRequired,
     tahun: PropTypes.number, snapshot: PropTypes.string, onRefresh: PropTypes.func.isRequired,
+    period: PropTypes.object,
 };
 
 export default memo(AnggaranSearch);

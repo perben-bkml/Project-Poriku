@@ -10,7 +10,7 @@ import LoadingAnimate from '../../ui/loading.jsx';
 const WARNING_LABELS = {tanpaInduk: 'baris tanpa pengajuan asal', makKosong: 'baris tanpa MAK',
     nominalTidakValid: 'baris bernominal tidak valid/nonpositif', identitasGanda: 'identitas pengajuan ganda'};
 
-export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRefresh}) {
+export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRefresh, period}) {
     const [input, setInput] = useState('');
     const [search, setSearch] = useState('');
     const [kategori, setKategori] = useState('semua');
@@ -29,7 +29,7 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
 
     useEffect(() => {
         const controller = new AbortController();
-        const key = JSON.stringify([tahun, snapshot, scope.unitKerja, scope.kodeMak, scope.kodeAkun, kategori, search, page]);
+        const key = JSON.stringify([tahun, snapshot, period, scope.unitKerja, scope.kodeMak, scope.kodeAkun, kategori, search, page]);
         setError(null);
         setResult(null);
         if (!snapshot) {
@@ -44,9 +44,10 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
             return () => controller.abort();
         }
         setLoading(true);
-        apiClient.get('/anggaran/rincian-spm', {signal: controller.signal, params: {
+        apiClient.get(period ? '/anggaran/periode/rincian' : '/anggaran/rincian-spm', {signal: controller.signal, params: {
             year: tahun, snapshot, unitKerja: scope.unitKerja, kodeMak: scope.kodeMak || '',
             kodeAkun: scope.kodeAkun || '', kategori, search, page, limit: 25,
+            ...(period ? {mulai: period.mulai, akhir: period.akhir} : {}),
         }}).then(({data}) => {
             if (controller.signal.aborted) return;
             if (cache.current.size >= 40) cache.current.clear();
@@ -57,7 +58,7 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
                 message: err.response?.data?.message || 'Gagal memuat rincian SPM.'});
         }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
         return () => controller.abort();
-    }, [scope.unitKerja, scope.kodeMak, scope.kodeAkun, tahun, snapshot, kategori, search, page, retry]);
+    }, [scope.unitKerja, scope.kodeMak, scope.kodeAkun, tahun, snapshot, kategori, search, page, retry, period]);
 
     async function refresh() {
         setRefreshing(true);
@@ -75,7 +76,9 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
                 </div>
                 <button type="button" className="anggaran-spm-close" aria-label="Tutup rincian SPM" onClick={onClose}>×</button>
             </div>
-            <p className="anggaran-spm-note">Nominal hanya mencakup alokasi pada lingkup yang dipilih. Nomor SPM pada antrian dapat berasal dari SPP; lihat status proses pengajuannya.</p>
+            <p className="anggaran-spm-note">{period
+                ? `Realisasi ${period.mulai}–${period.akhir} menggunakan Pagu revisi terbaru. Outstanding tetap menunjukkan posisi saat ini.`
+                : 'Nominal hanya mencakup alokasi pada lingkup yang dipilih. Nomor SPM pada antrian dapat berasal dari SPP; lihat status proses pengajuannya.'}</p>
             <form className="anggaran-spm-filters" onSubmit={event => event.preventDefault()}>
                 <label>Cari SPM / SPP / ID
                     <input type="search" value={input} maxLength={100} placeholder="Contoh: 00561A"
@@ -88,17 +91,19 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
             </form>
             {error && <div className="anggaran-spm-error">
                 <PopupAlert severity="warning" message={error.message}/>
-                <button type="button" className="spm-button" disabled={refreshing} onClick={refresh}>
+                <button type="button" className="anggaran-period-button" disabled={refreshing} onClick={refresh}>
                     {refreshing ? 'Memuat…' : 'Muat ulang Anggaran'}</button>
-                {error.status !== 409 && <button type="button" className="spm-button" onClick={() => setRetry(value => value + 1)}>Coba lagi</button>}
+                {error.status !== 409 && <button type="button" className="anggaran-period-button" onClick={() => setRetry(value => value + 1)}>Coba lagi</button>}
             </div>}
             <div aria-busy={loading}>
                 {loading ? <LoadingAnimate/> : result && <>
                     <div className="anggaran-spm-totals" aria-label="Total lingkup anggaran">
-                        {[['Realisasi', result.totals.realisasi], ['Outstanding', result.totals.outstanding],
-                            ['Saldo awal—tanpa rincian SPM', result.totals.saldoAwal]].map(([label, value]) =>
-                            <div key={label}><span>{label}</span><strong>{formatRupiah(value)}</strong></div>)}
+                        {[['Realisasi', result.totals.realisasi], [period ? 'Outstanding saat ini' : 'Outstanding', result.totals.outstanding],
+                            ...(!period || result.totals.saldoAwal > 0 ? [['Saldo awal—tanpa rincian SPM', result.totals.saldoAwal]] : [])].map(([label, value]) =>
+                            <div key={label}><span>{label}</span><strong>{value === null ? '—' : formatRupiah(value)}</strong></div>)}
                     </div>
+                    {period && <p className="anggaran-spm-note">{result.outstandingNote}</p>}
+                    {period && result.periodPartial && <p className="anggaran-spm-source-warning">Realisasi periode dapat belum lengkap karena saldo override tidak memiliki rincian tanggal atau ada tanggal pengakuan yang belum terisi.</p>}
                     {result.scope.mode !== 'anggaran' && <p className="anggaran-spm-note">
                         {result.scope.mode === 'klaim' ? 'MAK ini memakai anggaran unit lain. Nominal ditampilkan sebagai klaim dan tidak dijumlahkan ulang ke unit pengaju.'
                             : 'Akun ini belum dirinci di DIPA. Nominal tidak termasuk total MAK dan Unit Kerja induk.'}</p>}
@@ -110,7 +115,7 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
                         <thead><tr>{['SPM / SPP', 'Jenis', 'Unit Kerja Pengaju', 'Nominal pada Lingkup Ini', 'Kategori', 'Status Pengajuan']
                             .map(label => <th key={label}>{label}</th>)}</tr></thead>
                         <tbody>{result.rows.map(row => {
-                            const realized = row.realisasi > 0;
+                            const realized = row.realisasi !== 0;
                             const style = daftarStatusStyle(realized ? 'sudah' : 'belum');
                             return <tr key={row.key}>
                                 <td><strong>{row.sumber_ambigu ? 'Nomor SPM tidak dapat dipastikan' : row.nomor_spm || 'Belum ada SPM'}</strong>
@@ -125,7 +130,7 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
                     </table></div> : <p className="kelola-empty">Tidak ada pengajuan yang cocok. Saldo awal tidak memiliki rincian SPM.</p>}
                     {result.pages > 1 && <Pagination className="dp-pagination" count={result.pages} page={result.page}
                         onChange={(_, value) => setPage(value)}/>}
-                    <p className="anggaran-spm-note">Data diperbarui: {new Date(result.disegarkanPada).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})}.</p>
+                    {result.disegarkanPada && <p className="anggaran-spm-note">Data diperbarui: {new Date(result.disegarkanPada).toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'})}.</p>}
                 </>}
             </div>
         </section>
@@ -135,4 +140,5 @@ export default function AnggaranSpmDrawer({scope, tahun, snapshot, onClose, onRe
 AnggaranSpmDrawer.propTypes = {
     scope: PropTypes.object.isRequired, tahun: PropTypes.number, snapshot: PropTypes.string,
     onClose: PropTypes.func.isRequired, onRefresh: PropTypes.func.isRequired,
+    period: PropTypes.object,
 };

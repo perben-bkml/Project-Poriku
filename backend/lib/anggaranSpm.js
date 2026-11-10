@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 
-export const SPM_DETAIL_VERSION = 1;
+export const SPM_DETAIL_VERSION = 2;
 const key = value => String(value ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
 export const spmDetailError = (message, statusCode = 400) => Object.assign(new Error(message), {statusCode});
 
@@ -63,7 +63,7 @@ const number = value => {
 
 // One SQL statement supplies rows, count and filtered total from the same snapshot.
 // The transaction provided by the route is REPEATABLE READ and read-only.
-export async function bacaRincianSpm(db, {tahun, keys, cutoff, page, limit, kategori, search}) {
+export async function bacaRincianSpm(db, {tahun, keys, cutoff, page, limit, kategori, search, period = null}) {
     if (!keys.length) return {rows: [], total: 0, totalNominal: 0, page: 1, pages: 0};
     const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
     const numericSearch = /^\d+[AT]?$/i.test(search) ? search.replace(/^0+/, '').toUpperCase() || null : null;
@@ -73,7 +73,10 @@ export async function bacaRincianSpm(db, {tahun, keys, cutoff, page, limit, kate
             JOIN jsonb_to_recordset(${db.json(keys)}::jsonb) AS k(unit text, mak text, akun text)
               ON r.unit_kerja_kunci=k.unit AND r.kode_mak=k.mak AND r.kode_akun=k.akun
             WHERE r.tahun=${tahun}
-              AND (${cutoff}::text IS NULL OR NOT r.sudah_sp2d OR r.tanggal='' OR r.tanggal>${cutoff})
+              AND ((${!period} AND (${cutoff}::text IS NULL OR NOT r.sudah_sp2d OR r.tanggal='' OR r.tanggal>${cutoff}))
+                OR (${Boolean(period)} AND (NOT r.sudah_sp2d OR
+                    r.tanggal_pengakuan BETWEEN ${period?.mulai || null} AND ${period?.akhir || null}
+                    AND (${cutoff}::text IS NULL OR r.tanggal_pengakuan>${cutoff}))))
         ), grouped AS (
             SELECT alur, trans_id, unit_kerja_kunci,
                    MAX(nomor_spm) AS nomor_spm, MAX(nomor_spp) AS nomor_spp,

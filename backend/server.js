@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { pjkSpmFromSpp, missingPjkSpmWrites } from './lib/pjkSpm.js';
 import {SPM_DETAIL_VERSION, anggaranSpmSnapshot, pilihLingkupSpm, parseSpmDetailQuery,
     bacaRincianSpm, spmDetailError} from './lib/anggaranSpm.js';
+import {registerAnggaranPeriod, periodDate} from './lib/anggaranPeriod.js';
 
 
 // Initialize tools
@@ -249,6 +250,8 @@ const ROUTE_ROLES = {
     // admin only, and the delete carries revisiId in the query so this stays a plain
     // lookup rather than needing a ROUTE_ROLES_PREFIX entry.
     "GET /anggaran": ANY_ROLE,
+    "GET /anggaran/periode": ANY_ROLE,
+    "GET /anggaran/periode/rincian": ANY_ROLE,
     "GET /anggaran/rincian-spm": ANY_ROLE,
     "GET /anggaran/revisi": ADMIN,
     "POST /anggaran/unggah": ADMIN,
@@ -6409,6 +6412,8 @@ async function hitungBelanja(spreadsheetId) {
                     // SP2D where there is one, otherwise the antrian timestamp: everything
                     // still in the queue counts toward Terpakai and needs a date too
                     tanggal: toIsoDate(row?.[TANGGAL_SP2D_KOLOM]) || toIsoDate(row?.[1]),
+                    tanggalPengakuan: periodDate(sumber.alur === 'gup' ? toIsoDate(row?.[TANGGAL_SP2D_KOLOM])
+                        : toIsoDate(trimmed(row?.[12]).split(' ')[0]) || toIsoDate(row?.[TANGGAL_SP2D_KOLOM])) || '',
                 });
                 // A1/A2 are headers/counters, not competing pengajuan identities.
                 if (index >= 2) {
@@ -6447,6 +6452,7 @@ async function hitungBelanja(spreadsheetId) {
             semua.push({
                 transId, alur: sumber.alur, unitKerjaKunci: induk.unit,
                 nama: induk.nama, nomorSpp: induk.nomorSpp, tanggal: induk.tanggal,
+                tanggalPengakuan: induk.tanggalPengakuan,
                 nomorSpm: ambiguous.has(transId) ? '' : induk.nomorSpm,
                 jenis: induk.jenis, status: induk.statusAsli, sumberAmbigu: ambiguous.has(transId),
                 kodeMak, kodeAkun, nominal, diakuiRealisasi: masukRealisasi(sumber.alur, induk.status),
@@ -6478,6 +6484,7 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
                 nomor_spm: row.nomorSpm, jenis_pengajuan: row.jenis,
                 status_pengajuan: row.status, sumber_ambigu: row.sumberAmbigu,
                 tanggal: row.tanggal,
+                tanggal_pengakuan: row.tanggalPengakuan,
                 kode_mak: row.kodeMak,
                 kode_akun: row.kodeAkun,
                 nominal: row.nominal,
@@ -6487,7 +6494,8 @@ async function segarkanRealisasi(tahun, spreadsheetId) {
             await trx`INSERT INTO anggaran_realisasi_baris ${trx(potong,
                 "tahun", "trans_id", "alur", "unit_kerja_kunci", "nama", "nomor_spp",
                 "tanggal", "kode_mak", "kode_akun", "nominal", "sudah_sp2d",
-                "nomor_spm", "jenis_pengajuan", "status_pengajuan", "sumber_ambigu")}`;
+                "nomor_spm", "jenis_pengajuan", "status_pengajuan", "sumber_ambigu",
+                "tanggal_pengakuan")}`;
         }
         await trx`
             INSERT INTO anggaran_realisasi_sinkron (tahun, disegarkan_pada, baris_sumber, dilewati, durasi_ms, detail_versi, detail_peringatan)
@@ -6981,6 +6989,17 @@ const anggaranBelumSiap = (error, res) => {
     res.status(500).json({ message: "Tabel anggaran belum tersedia di database." });
     return true;
 };
+
+registerAnggaranPeriod(app, {sql, yearOf: anggaranTahun, today: () => getFormattedDate().fullDateFormat,
+    readActive: bacaRevisiAktif, readTree: bacaPohonRevisi, readOverride: bacaOverrideRealisasi,
+    readSync: bacaSinkronRealisasi, classify: klasifikasiBelanja, renderTree: susunTampilan,
+    normalizeMak: value => normalisasiKodeMak(value).kodeMak,
+    refresh: async req => {
+        const tahun = anggaranTahun(req);
+        const sync = await bacaSinkronRealisasi(tahun);
+        if (sync?.detail_versi !== SPM_DETAIL_VERSION || realisasiUsang(sync))
+            await segarkanSekali(tahun, getSpreadsheetId(req, 'AJUAN'));
+    }});
 
 app.get("/anggaran", async (req, res) => {
     try {

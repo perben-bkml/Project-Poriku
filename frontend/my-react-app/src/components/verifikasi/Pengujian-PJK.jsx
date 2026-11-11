@@ -2,23 +2,35 @@ import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../lib/apiClient';
 import PropTypes from "prop-types";
 import { WideTableCard } from '../../ui/cards.jsx';
-import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI } from "../bendahara/head-data.js";
+import { pjkHeadData, pjkHeadDataMulai, formatNomorSpp, spmKey, STATUS_DIPERBAIKI, jenisPengajuan, jenisValueFromLabel, subjenisPengajuan, pjkStatusOptions, pjkKelengkapanOptions, monitorPjkHead, pjkRepairStatusLabel, PJK_OVERDUE_STATUS, pjkMonitorStatusOptions, daftarStatusStyle, buktiSetorLabel } from "../bendahara/head-data.js";
 import { userSatkerNames } from "./head-data.js";
 import { unduhExcel, selAngka, selTeks } from "../../lib/excel.js";
+import { PopupAlert } from "../../ui/Popup.jsx";
 
 // Column indices on 'Write Antrian Verif'; 18 is the source id the backend appends past R
-// Rows are already in hand, so both controls filter locally and cost no Sheets read
+// Rows are already in hand, so the filters run locally and cost no additional Sheets read
 const normalSatker = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toUpperCase();
 
 const DOK_VERIF = 15;
 const TANGGAL_SP2D = 17;
 const SOURCE_ID = 18;
-const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, 4, 8, 9, 10];
+// Appended after sourceId (18) and Tanggal Perbaikan (19); not the raw sheet's T index.
+const SUBJENIS = 20;
+const DEADLINE = 21, REPAIR_STATUS = 22;
+// Appended after the correction link (23), evaluated with the server's Jakarta date.
+const REPAIR_OVERDUE = 24;
+const monitorRepairStatus = row => row[REPAIR_OVERDUE] === true ? PJK_OVERDUE_STATUS : pjkRepairStatusLabel(row[REPAIR_STATUS]);
+const INFO_COLUMNS = [0, SOURCE_ID, 1, 6, 2, 3, SUBJENIS, 4, 8, 9, 10];
 const MULAI_COLUMNS = [...INFO_COLUMNS, 11];
 const SPP = 6;
 const NOMINAL = 4;
 const SUBSTANSI = 9, KELENGKAPAN = 10;
 const UNIT_KERJA = 8;
+// Same column N used by Aksi-Verif-PJK's catatan field; already included in the API rows.
+const CATATAN = 13;
+const SPM = 7;
+// Virtual table column resolved from the shared Pembayaran BP lookup, not a sheet index.
+const BUKTI_SETOR = 25;
 
 // Informasi Pengajuan has nothing verified yet, so it is the one section without the link
 const DOK_HEAD = "Dok. Verifikasi";
@@ -26,9 +38,12 @@ const INFO_DOK_COLUMNS = [...INFO_COLUMNS, DOK_VERIF];
 const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
 
 const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
-const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT)];
-const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD];
-const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 20, 16, 24, 13, 13, 46];
+const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT), BUKTI_SETOR];
+const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD, "Bukti Setor Pajak"];
+const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 46, 60];
+const MONITOR_COLUMNS = [...SUDAH_COLUMNS, DEADLINE, REPAIR_STATUS];
+const MONITOR_HEAD = [...SUDAH_HEAD, ...monitorPjkHead];
+const MONITOR_LEBAR = [...SUDAH_LEBAR.slice(0, -1), 20, 24, 60];
 
 // Generation takes 6-8s; the cap stops a wedged job polling forever
 const POLL_INTERVAL_MS = 2000;
@@ -46,7 +61,7 @@ const diperbaiki = row => ditolak(row) && String(row[PERBAIKAN] ?? "").trim() !=
 const TAB_KEY = 'pengujianPjkTab';
 
 function PengujianPJK(props) {
-    const [sections, setSections] = useState([[], [], []]);
+    const [sections, setSections] = useState([[], [], [], []]);
     const [pending, setPending] = useState(new Set());
     const [isLoading, setIsLoading] = useState(true);
     const [activeTitle, setActiveTitle] = useState(() => localStorage.getItem(TAB_KEY) || "");
@@ -54,18 +69,40 @@ function PengujianPJK(props) {
     const [cariInput, setCariInput] = useState("");
     const [cariNomor, setCariNomor] = useState("");
     const [unitKerja, setUnitKerja] = useState("");
+    const [jenis, setJenis] = useState("");
+    const [subjenis, setSubjenis] = useState("");
+    const [substansiFilter, setSubstansiFilter] = useState("");
+    const [kelengkapanFilter, setKelengkapanFilter] = useState("");
+    const [loadError, setLoadError] = useState("");
+    const [buktiSetor, setBuktiSetor] = useState({});
+    const [buktiSetorError, setBuktiSetorError] = useState("");
+    const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     // quiet skips the spinner, for the background swap-in once a PDF lands
     async function fetchPjk({quiet = false} = {}) {
         try {
+            setLoadError("");
             if (!quiet) setIsLoading(true);
-            const response = await apiClient.get('/verifikasi/pengujian-pjk');
+            const [pjkResult, taxResult] = await Promise.allSettled([
+                apiClient.get('/verifikasi/pengujian-pjk'),
+                apiClient.get('/bendahara/pembayaran-bp/bukti-setor', {params: {includeEmpty: true}}),
+            ]);
+            if (taxResult.status === "fulfilled") {
+                setBuktiSetor(taxResult.value.data.data || {});
+                setBuktiSetorError("");
+            } else {
+                setBuktiSetor({});
+                setBuktiSetorError("Bukti Setor Pajak gagal dimuat. Klik Muat Ulang untuk mencoba lagi.");
+            }
+            if (pjkResult.status === "rejected") throw pjkResult.reason;
+            const response = pjkResult.value;
             if (response.status === 200) {
                 setSections(response.data.data);
                 setPending(new Set((response.data.pending || []).map(String)));
             }
         } catch (error) {
             console.error("Error fetching PJK data", error);
+            setLoadError(error.response?.data?.message || error.response?.data?.error || "Gagal memuat pengujian PJK.");
         } finally {
             if (!quiet) setIsLoading(false);
         }
@@ -88,8 +125,16 @@ function PengujianPJK(props) {
         return () => clearInterval(timer);
     }, [pending]);
 
+    const buktiSetorEntries = row => [...new Set(String(row[SPM] ?? "").split(/[,&]/).map(value => value.trim()).filter(Boolean))]
+        .map(spm => ({spm, entry: buktiSetor[spmKey(spm)]})).filter(item => item.entry)
+        .map(({spm, entry}) => ({spm, entry, url: entry.url || "",
+            label: entry.tidakPerlu ? "Tidak Perlu (Non Pajak)" : buktiSetorLabel(entry)}));
+
     // The plain text of a cell, so the table and the Excel export cannot drift apart
     const cellText = (row, index) => {
+        if (index === BUKTI_SETOR) return buktiSetorEntries(row)
+            .map(item => item.url || `${/[,&]/.test(String(row[SPM] ?? "")) ? `SPM ${item.spm}: ` : ""}${item.label}`).join('\n');
+        if (index === REPAIR_STATUS) return monitorRepairStatus(row);
         if (index === SPP) return formatNomorSpp(row[index]);
         if (index === SOURCE_ID) return row[index] || "-";
         if (index === DOK_VERIF) return pending.has(String(row[0])) ? "Sedang dibuat" : (row[index] || "-");
@@ -97,8 +142,21 @@ function PengujianPJK(props) {
     };
 
     const project = (rows, columns) => rows.map(row => columns.map(index => {
+        if (index === BUKTI_SETOR) {
+            const entries = buktiSetorEntries(row);
+            const multiple = /[,&]/.test(String(row[SPM] ?? ""));
+            if (!multiple && entries[0]?.url) return <a key={index} href={entries[0].url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>;
+            return entries.length ? <span key={index}>{entries.map(({spm, url, label, entry}, at) => {
+                const style = daftarStatusStyle(entry.tidakPerlu || entry.ada ? "sudah" : "belum");
+                return <span key={spm}>
+                    {at > 0 ? ", " : ""}{multiple ? `SPM ${spm}: ` : ""}
+                    {url ? <a href={url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>
+                        : <span className="dp-status" style={{backgroundColor: style.bg, color: style.fg}}>{label}</span>}
+                </span>;
+            })}</span> : <span key={index}/>;
+        }
         if (index === DOK_VERIF) {
-            if (pending.has(String(row[0]))) return <span key={index} style={{color: '#8A6100'}}>Sedang dibuat…</span>;
+            if (pending.has(String(row[0]))) return <span key={index} style={{color: 'var(--theme-ink-8a6100, #8A6100)'}}>Sedang dibuat…</span>;
             return row[index]
                 ? <a key={index} href={row[index]} target="_blank" rel="noopener noreferrer">Lihat Dokumen</a>
                 : "-";
@@ -106,35 +164,63 @@ function PengujianPJK(props) {
         return cellText(row, index);
     }));
 
-    const tables = useMemo(() => [
-        {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0],
-            empty: "Tidak ada pengajuan yang perlu diuji."},
-        {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
-            empty: "Tidak ada pengajuan yang sedang diverifikasi."},
-        {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
-            rows: sections[1].filter(row => ditolak(row) && !diperbaiki(row)), alert: true,
-            empty: "Tidak ada pengajuan bermasalah."},
-        {title: STATUS_DIPERBAIKI, head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
-            rows: sections[1].filter(diperbaiki),
-            empty: "Tidak ada pengajuan yang telah diperbaiki."},
-        {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
-            rows: sections[2].filter(row =>
-                (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
-                && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))),
-            empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
-    ], [sections, cariNomor, unitKerja]);
+    const tables = useMemo(() => {
+        const filterRows = rows => rows.filter(row =>
+            (!cariNomor || spmKey(row[SPP]) === spmKey(cariNomor))
+            && (!unitKerja || normalSatker(row[UNIT_KERJA]) === normalSatker(unitKerja))
+            && (!jenis || jenisValueFromLabel(row[3]) === jenis)
+            && (!subjenis || normalSatker(row[SUBJENIS]) === normalSatker(subjenis))
+            && (!substansiFilter || normalSatker(row[SUBSTANSI]) === normalSatker(substansiFilter))
+            && (!kelengkapanFilter || normalSatker(row[KELENGKAPAN]) === normalSatker(kelengkapanFilter)));
+        return [
+            {title: "Informasi Pengajuan", head: pjkHeadData, columns: INFO_COLUMNS, rows: sections[0],
+                empty: "Tidak ada pengajuan yang perlu diuji."},
+            {title: "Sedang Di Verifikasi", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS, rows: sections[1].filter(row => !ditolak(row)),
+                empty: "Tidak ada pengajuan yang sedang diverifikasi."},
+            {title: "Pengajuan Bermasalah", head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+                rows: sections[1].filter(row => ditolak(row) && !diperbaiki(row)), alert: true,
+                empty: "Tidak ada pengajuan bermasalah."},
+            {title: STATUS_DIPERBAIKI, head: [...pjkHeadDataMulai, DOK_HEAD], columns: MULAI_DOK_COLUMNS,
+                rows: sections[1].filter(diperbaiki),
+                empty: "Tidak ada pengajuan yang telah diperbaiki."},
+            {title: "Sudah Verifikasi", head: SUDAH_HEAD, columns: SUDAH_COLUMNS, cari: true,
+                rows: filterRows(sections[2]),
+                empty: "Tidak ada pengajuan yang sudah diverifikasi.", unduh: true},
+            {title: "Monitor PJK", head: MONITOR_HEAD, columns: MONITOR_COLUMNS, cari: true,
+                rows: filterRows(sections[3] || []), lebar: MONITOR_LEBAR,
+                empty: "Tidak ada PJK yang sudah SP2D dengan status OK Catatan.", unduh: true},
+        ];
+    }, [sections, cariNomor, unitKerja, jenis, subjenis, substansiFilter, kelengkapanFilter]);
 
     const active = tables.find(table => table.title === activeTitle) || tables[0];
+    const monitorSummary = active.title === "Monitor PJK" ? (
+        <section className="pjk-repair-summary" aria-label="Ringkasan Status Perbaikan sesuai filter">
+            <p>Ringkasan Status Perbaikan (sesuai filter)</p>
+            <div className="pjk-repair-counters">
+                {pjkMonitorStatusOptions.map(label => {
+                    const style = daftarStatusStyle(label);
+                    const count = active.rows.filter(row => monitorRepairStatus(row) === label).length;
+                    return <div key={label} className="pjk-repair-counter" style={{backgroundColor: style.bg, color: style.fg}}>
+                        <span>{label}</span><strong>{isLoading ? "—" : count}</strong>
+                    </div>;
+                })}
+            </div>
+        </section>
+    ) : null;
 
     async function unduhTabel() {
         setIsExporting(true);
         try {
-            const baris = active.rows.map(row => active.columns.map(index =>
-                index === NOMINAL ? selAngka(row[index]) : selTeks(cellText(row, index), index === SPP)));
+            const baris = active.rows.map(row => [
+                ...active.columns.map(index =>
+                    index === NOMINAL ? selAngka(row[index]) : {...selTeks(cellText(row, index), index === SPP), wrap: index === 3 || index === SUBJENIS || index === BUKTI_SETOR}),
+                {...selTeks(row[CATATAN]), wrap: true},
+            ]);
             const now = new Date();
             const tanggal = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
                 .map(part => String(part).padStart(2, "0")).join("-");
-            await unduhExcel(`${active.title} PJK ${tanggal}.xlsx`, active.head, baris, SUDAH_LEBAR);
+            const title = active.title.endsWith("PJK") ? active.title : `${active.title} PJK`;
+            await unduhExcel(`${title} ${tanggal}.xlsx`, [...active.head, "Catatan"], baris, active.lebar || SUDAH_LEBAR);
         } catch (error) {
             console.error("Gagal membuat file Excel", error);
         } finally {
@@ -152,22 +238,66 @@ function PengujianPJK(props) {
     const cariBar = active.cari ? (
         <form className="bar-cari bar-cari-pjk"
               onSubmit={event => (event.preventDefault(), setCariNomor(cariInput.trim()))}>
-            <label htmlFor="pjk-cari-spp">Cari Nomor SPP</label>
-            <input id="pjk-cari-spp" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
-                   value={cariInput} placeholder="mis. 00041"
-                   onChange={event => setCariInput(event.target.value)}/>
-            <label htmlFor="pjk-unit">Unit Kerja</label>
-            <select id="pjk-unit" className="type-btn" value={unitKerja}
-                    onChange={event => setUnitKerja(event.target.value)}>
-                <option value="">Semua Unit Kerja</option>
-                {userSatkerNames.slice(1).map(item => (
-                    <option key={item.value} value={item.title}>{item.title}</option>
-                ))}
-            </select>
-            <button className="spm-button" type="submit">Cari</button>
-            {(cariNomor || unitKerja) &&
-                <button className="spm-button" type="button"
-                        onClick={() => (setCariInput(""), setCariNomor(""), setUnitKerja(""))}>Reset</button>}
+            <div className="pjk-filter-fields">
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-cari-spp">Cari Nomor SPP</label>
+                    <input id="pjk-cari-spp" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
+                           value={cariInput} placeholder="mis. 00041"
+                           onChange={event => setCariInput(event.target.value)}/>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-jenis">Jenis</label>
+                    <select id="pjk-jenis" className="type-btn" value={jenis}
+                            onChange={event => { setJenis(event.target.value); setSubjenis(""); }}>
+                        <option value="">Semua Jenis</option>
+                        {jenisPengajuan.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-subjenis">Subjenis</label>
+                    <select id="pjk-subjenis" className="type-btn" value={subjenis}
+                            disabled={subjenisOptions.length === 0}
+                            onChange={event => setSubjenis(event.target.value)}>
+                        <option value="">Semua Subjenis</option>
+                        {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-unit">Unit Kerja</label>
+                    <select id="pjk-unit" className="type-btn" value={unitKerja}
+                            onChange={event => setUnitKerja(event.target.value)}>
+                        <option value="">Semua Unit Kerja</option>
+                        {userSatkerNames.slice(1).map(item => (
+                            <option key={item.value} value={item.title}>{item.title}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-substansi">Substansi</label>
+                    <select id="pjk-substansi" className="type-btn" value={substansiFilter}
+                            onChange={event => setSubstansiFilter(event.target.value)}>
+                        <option value="">Semua Status</option>
+                        {pjkStatusOptions.map(option => <option key={option.label} value={option.label}>{option.label}</option>)}
+                    </select>
+                </div>
+                <div className="pjk-filter-field">
+                    <label htmlFor="pjk-kelengkapan">Kelengkapan</label>
+                    <select id="pjk-kelengkapan" className="type-btn" value={kelengkapanFilter}
+                            onChange={event => setKelengkapanFilter(event.target.value)}>
+                        <option value="">Semua Status</option>
+                        {pjkKelengkapanOptions.map(option => <option key={option.label} value={option.label}>{option.label}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="pjk-filter-actions">
+                <button className="spm-button" type="submit">Cari</button>
+                {(cariNomor || unitKerja || jenis || subjenis || substansiFilter || kelengkapanFilter) &&
+                    <button className="spm-button pjk-filter-reset" type="button"
+                            onClick={() => {
+                                setCariInput(""); setCariNomor(""); setUnitKerja("");
+                                setJenis(""); setSubjenis(""); setSubstansiFilter(""); setKelengkapanFilter("");
+                            }}>Reset</button>}
+            </div>
         </form>
     ) : null;
 
@@ -187,6 +317,8 @@ function PengujianPJK(props) {
 
     return (
         <div className='kelola-container'>
+            {loadError && <PopupAlert severity="error" message={loadError}/>}
+            {buktiSetorError && <PopupAlert severity="warning" message={buktiSetorError}/>}
             <div className='kelola-tabs' role='tablist'>
                 {tables.map(table => {
                     const isActive = table.title === active.title;
@@ -208,11 +340,12 @@ function PengujianPJK(props) {
                         {aksi}
                     </div>
                     {cariBar}
+                    {monitorSummary}
                     <p className='kelola-empty'>{active.empty}</p>
                 </div>
             ) : (
                 <WideTableCard key={active.title} title={active.title} feature="PJK" actions={aksi}
-                    toolbar={cariBar}
+                    toolbar={<>{cariBar}{monitorSummary}</>}
                     aksiLabel="Verif" aksiTarget="aksi-verif-PJK"
                     tableHead={active.head}
                     tableContent={project(active.rows, active.columns)}

@@ -4,7 +4,7 @@ import apiClient from "../../lib/apiClient";
 import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 import { TableDaftarPengajuan } from "../../ui/tables.jsx";
 import CekSisaGup from "./Cek-Sisa-Gup.jsx";
-import { rowsPerPageOptions, monthNames, statusSudahVerifikasi, statusSudahMaju, OK_CATATAN } from "./head-data.js";
+import { rowsPerPageOptions, monthNames, jenisPengajuan, subjenisPengajuan, formatJenisPengajuan, statusSudahVerifikasi, statusSudahMaju, statusSudahMajuVerif, OK_CATATAN, pjkRepairStatusLabel, PJK_OVERDUE_STATUS } from "./head-data.js";
 import { userSatkerNames } from "../verifikasi/head-data.js";
 import { AuthContext } from "../../lib/AuthContext";
 import PropTypes from "prop-types";
@@ -19,7 +19,7 @@ const TAB_KEY = 'daftarTabBendahara';
 // verifikasi flow and locks with LS even though it is listed under GUP/PTUP.
 const LOCKED_STATUS = {
     gup: ["Sudah Diterbitkan DRPP", ...statusSudahMaju],
-    verif: [...statusSudahVerifikasi, ...statusSudahMaju],
+    verif: [...statusSudahVerifikasi, ...statusSudahMajuVerif],
 };
 const statusKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -36,7 +36,21 @@ const EXTRA_COLUMNS = {
         { label: "Kelengkapan", field: "kelengkapan", text: true },
         { label: "SPP", field: "spp" },
     ],
+    "perbaikan-pjk": [],
 };
+
+const CORRECTION_COLUMNS = [
+    { label: "No.", field: "id" },
+    { label: "Jenis", field: "jenis" },
+    { label: "Nominal", field: "nominal", numeric: true },
+    { label: "Substansi", field: "substansi" },
+    { label: "Kelengkapan", field: "kelengkapan" },
+    { label: "DRPP", field: "drpp" },
+    { label: "SPP", field: "spp" },
+    { label: "SPM", field: "spm" },
+    { label: "Deadline Perbaikan", field: "deadlinePerbaikan" },
+    { label: "Status Perbaikan", field: "statusPerbaikan" },
+];
 
 // The verifikasi sheet has no Ketersediaan Anggaran column, so it is blank on every LS row
 const HIDDEN_DETAIL = { gup: [], ls: ["anggaran"] };
@@ -49,6 +63,7 @@ const NO_COLUMN = [];
 const TABS = [
     { kategori: "gup", label: "GUP/PTUP" },
     { kategori: "ls", label: "LS (Langsung)" },
+    { kategori: "perbaikan-pjk", label: "Perlu Perbaikan PJK" },
 ];
 
 // Canonical 'Write Antrian' indices. 20+ are appended server-side past ANTRIAN_ROW_WIDTH,
@@ -57,18 +72,22 @@ function toTableRow(data, pending, lastPage, readOnly) {
     // Lampiran (19) is the Bupot on a GUP/PTUP row and the PJK on every other jenis, whose
     // PJK index the server just copies from it. Same split Buat-Pengajuan.jsx makes.
     const isGup = data[20] === "gup";
+    const needsPjkCorrection = [data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN));
+    const statusLocked = LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]));
+    // GUP KKP is listed in the GUP tab, but its values come from Write Antrian Verif
+    const isGupKkp = data[20] === "verif" && String(data[3] ?? "").trim().toUpperCase() === "GUP KKP";
     return {
         key: `${data[20]}-${data[0]}`,
         id: data[0],
-        jenis: String(data[3] ?? "").toUpperCase(),
+        jenis: formatJenisPengajuan(data[3], data[28]).toUpperCase(),
         nominal: data[4],
         tglAjuan: data[1],
         unitKerja: data[11],
-        tglProses: data[6],
-        drpp: data[8],
+        tglProses: isGupKkp ? data[14] : data[6],
+        drpp: isGupKkp ? "" : data[8],
         status: data[7],
         spp: data[9],
-        spm: data[10],
+        spm: isGupKkp ? data[9] : data[10],
         pajak: data[12],
         anggaran: data[13],
         mulaiVerif: data[14],
@@ -76,6 +95,8 @@ function toTableRow(data, pending, lastPage, readOnly) {
         catatan: data[16],
         substansi: data[25],
         kelengkapan: data[26],
+        deadlinePerbaikan: data[31],
+        statusPerbaikan: data[32] === true ? PJK_OVERDUE_STATUS : pjkRepairStatusLabel(data[30]),
         isGup,
         bupot: isGup ? data[19] : "",
         pjk: data[21] || (isGup ? "" : data[19]),
@@ -84,14 +105,15 @@ function toTableRow(data, pending, lastPage, readOnly) {
         hasilVerifPending: pending.has(String(data[24])),
         // An OK Catatan verdict leaves something for the bendahara to fix, so the row stays
         // editable however far its status has moved
-        locked: readOnly || LOCKED_STATUS[isGup ? "gup" : "verif"].some(status => statusKey(status) === statusKey(data[7]))
-            && (isGup || ![data[25], data[26]].some(verdict => statusKey(verdict) === statusKey(OK_CATATAN))),
+        locked: readOnly || (statusLocked && !needsPjkCorrection),
+        deleteLocked: readOnly || statusLocked || needsPjkCorrection,
         // Shape Bendahara-Page's handleInvisibleComponent destructures
         passData: {
             lastPage, keyword: data[0], antriNum: data[0], antriName: data[2], antriType: data[3],
             antriSum: data[4], antriDate: data[5], createDate: data[1], accDate: data[6],
             status: data[7], fileLink: data[19], flow: data[20], pjkLink: data[21],
-            spp: data[9], catatan: data[16], pjkCatatan: data[22],
+            spp: data[9], catatan: data[16], pjkCatatan: data[22], subjenis: data[28] || "",
+            editMode: needsPjkCorrection ? "pjk-correction" : "", correctionLink: data[29] || "",
         },
     };
 }
@@ -111,6 +133,8 @@ function DaftarPengajuan(props){
     const [cariInput, setCariInput] = useState("")
     const [cariNomor, setCariNomor] = useState("")
     const [unitKerja, setUnitKerja] = useState("")
+    const [jenis, setJenis] = useState("");
+    const [subjenis, setSubjenis] = useState("");
     const [datePrefix, setDatePrefix] = useState("");
     const [kategori, setKategori] = useState(() => {
         const saved = localStorage.getItem(TAB_KEY);
@@ -141,6 +165,9 @@ function DaftarPengajuan(props){
     // Admins see every satker, so only they have anything to narrow. A "user" is already
     // pinned to its own unit kerja by the route.
     const bisaFilterUnit = String(user?.role ?? "").includes("admin");
+    const jenisOptions = jenisPengajuan.filter(item =>
+        kategori === "perbaikan-pjk" || (item.value.startsWith("ls-") ? "ls" : "gup") === kategori);
+    const subjenisOptions = subjenisPengajuan[jenis] || [];
 
     function cariSubmit(event) {
         event.preventDefault();
@@ -158,6 +185,8 @@ function DaftarPengajuan(props){
         setCariInput("");
         setCariNomor("");
         setUnitKerja("");
+        setJenis("");
+        setSubjenis("");
     }
 
     const applyResult = useCallback((result) => {
@@ -172,7 +201,7 @@ function DaftarPengajuan(props){
     // Every view is served from cache first and revalidated behind it, so switching back to a
     // tab or page costs no Sheets read - the route re-reads both antrian sheets on every call.
     const fetchAntrianData = useCallback(async (page, { quiet = false } = {}) => {
-        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}`;
+        const key = `${kategori}|${page}|${rowsPerPage}|${datePrefix}|${cariNomor}|${unitKerja}|${jenis}|${subjenis}`;
         // A quiet refresh only ever follows a change, and a delete shifts rows across pages
         if (quiet) cacheRef.current.clear();
         const cached = quiet ? null : cacheRef.current.get(key);
@@ -183,7 +212,7 @@ function DaftarPengajuan(props){
             setIsLoading(true);
         }
 
-        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja };
+        const params = { page, limit: rowsPerPage, username: user.name, kategori, cariNomor, unitKerja, jenis, subjenis };
         try {
             const { data } = datePrefix
                 ? await apiClient.get('/bendahara/filter-date', { params: { ...params, datePrefix } })
@@ -214,7 +243,7 @@ function DaftarPengajuan(props){
         } finally {
             setIsLoading(false); // otherwise a failed fetch leaves the spinner up for good
         }
-    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, showAlert, applyResult]);
+    }, [datePrefix, rowsPerPage, kategori, user.name, cariNomor, unitKerja, jenis, subjenis, showAlert, applyResult]);
 
     useEffect(() => {
         fetchAntrianData(currentPage);
@@ -244,6 +273,8 @@ function DaftarPengajuan(props){
 
     const selectTab = useCallback((value) => {
         setKategori(value);
+        setJenis("");
+        setSubjenis("");
         localStorage.setItem(TAB_KEY, value);
         setCurrentPage(1);
     }, []);
@@ -343,14 +374,14 @@ function DaftarPengajuan(props){
                 </form>
                 <form className="bar-cari" onSubmit={cariSubmit}>
                     <label htmlFor="cari-nomor">
-                        Cari {kategori === "gup" ? "Nomor SPM" : "Nomor SPP"}
+                        Cari {kategori === "perbaikan-pjk" ? "Nomor SPM / SPP" : kategori === "gup" ? "Nomor SPM" : "Nomor SPP"}
                     </label>
                     <input id="cari-nomor" className="type-btn bar-cari-nomor" type="text" inputMode="numeric"
                            value={cariInput} placeholder={kategori === "gup" ? "mis. 00123" : "mis. 00041"}
                            onChange={event => setCariInput(event.target.value)} />
                     {bisaFilterUnit &&
                         <>
-                            <label htmlFor="filter-unit">Unit Kerja</label>
+                            <label htmlFor="filter-unit" style={{paddingLeft: "15px"}}>Unit Kerja</label>
                             <select id="filter-unit" className="type-btn" value={unitKerja}
                                     onChange={event => gantiUnitKerja(event.target.value)}>
                                 <option value="">Semua Unit Kerja</option>
@@ -359,8 +390,24 @@ function DaftarPengajuan(props){
                                 ))}
                             </select>
                         </>}
+                    <label htmlFor="filter-jenis" style={{paddingLeft: "20px"}}>Jenis</label>
+                    <select id="filter-jenis" className="type-btn" value={jenis}
+                            onChange={event => { setCurrentPage(1); setJenis(event.target.value); setSubjenis(""); }}>
+                        <option value="">Semua Jenis</option>
+                        {jenisOptions.map(item => (
+                            <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                    </select>
+                    {subjenisOptions.length > 0 && <>
+                        <label htmlFor="filter-subjenis">Subjenis</label>
+                        <select id="filter-subjenis" className="type-btn" value={subjenis}
+                                onChange={event => { setCurrentPage(1); setSubjenis(event.target.value); }}>
+                            <option value="">Semua Subjenis</option>
+                            {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                    </>}
                     <button className="spm-button" type="submit">Cari</button>
-                    {(cariNomor || unitKerja) &&
+                    {(cariNomor || unitKerja || jenis || subjenis) &&
                         <button className="spm-button" type="button" onClick={hapusCari}>Reset</button>}
                 </form>
             </div>
@@ -376,6 +423,7 @@ function DaftarPengajuan(props){
             </div>
             <TableDaftarPengajuan
                 rows={rows}
+                summaryColumns={kategori === "perbaikan-pjk" ? CORRECTION_COLUMNS : undefined}
                 jenisColumns={isAdmin ? UNIT_KERJA_COLUMN : NO_COLUMN}
                 extraColumns={EXTRA_COLUMNS[kategori]}
                 hiddenDetail={HIDDEN_DETAIL[kategori]}

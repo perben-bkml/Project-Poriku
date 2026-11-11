@@ -51,13 +51,13 @@
     justify-content: center;
     margin-top: 15px;
     margin-bottom: 0px;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .h1-unique {
     display: flex;
     justify-content: center;
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
     margin-top: 0px;
 }
 
@@ -68,7 +68,7 @@
     font-size: 1.38rem;
     word-spacing: -0.5px;
     letter-spacing: -0.5px;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     font-weight: 500;
 }
 
@@ -189,7 +189,7 @@
     margin-top: 47px;
     padding-bottom: 15px;
     width: 480px;
-    background-color: #fdfdfd;
+    background-color: var(--theme-surface, #fdfdfd);
     border-radius: 55px;
     box-shadow: 0px 8px 30px rgba(0, 0, 0, 0.15);
 }
@@ -200,7 +200,7 @@
     display: grid;
     grid-template-rows: repeat(2, 1fr);
     justify-items: center;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .login-title-1 {
@@ -240,7 +240,7 @@
     border: none;
     border-radius: 18px;
     padding-left: 25px;
-    background-color: rgb(236, 235, 235);
+    background-color: var(--theme-surface-raised, rgb(236, 235, 235));
     font-size: 1.1rem;
     font-weight: 200;
 }
@@ -266,7 +266,7 @@
     margin-top: 0px;
     transition: all 0.2s ease-in-out;
     font-size: 1.3rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .login-gaji-p1:hover {
@@ -323,7 +323,7 @@
     right: 0;
     margin-top: 12px;
     width: 400px;
-    background-color: #ffffff;
+    background-color: var(--theme-surface, #ffffff);
     border-radius: 8px;
     box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.3);
     z-index: 1000;
@@ -337,8 +337,8 @@
     align-items: center;
     font-size: 18px;
     height: 50px;
-    color: #00449C;
-    background-color: #FFCF5F;
+    color: var(--theme-ink-00449c, #00449C);
+    background-color: var(--theme-fill-ffcf5f, #FFCF5F);
 }
 
 .notif-arrows {
@@ -360,7 +360,7 @@
 .home-navbar-content {
     height: 40px;
     width: 1020px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     border: none;
     border-radius: 35px;
 }
@@ -370,7 +370,7 @@
     width: 170px;
     border: none;
     border-radius: 35px;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     background-color: transparent;
     align-items: center;
     justify-content: center;
@@ -384,17 +384,17 @@
 }
 
 .home-button:hover {
-    background-color: #e3e3e3;
+    background-color: var(--theme-surface-raised, #e3e3e3);
     box-shadow: 0px 3px 12px #808080;
 }
 
 .home-button-clicked {
-    background-color: #FFCF5F;
+    background-color: var(--theme-fill-ffcf5f, #FFCF5F);
     box-shadow: 0px 3px 12px rgba(255, 207, 95, 0.5);
 }
 
 .home-button-clicked:hover {
-    background-color: #fabd1f;
+    background-color: var(--theme-fill-fabd1f, #fabd1f);
 }
 
 .home-button-external:hover {
@@ -459,7 +459,7 @@
 .dashboard-title {
     font-size: 2rem;
     font-weight: 500;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .home-dashboard-left, .home-dashboard-right {
@@ -473,8 +473,8 @@
 
 .dashboard-realisasi {
     width: 88%;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 15px;
     padding: 20px 25px;
     box-sizing: border-box;
@@ -483,8 +483,37 @@
 
 .dashboard-realisasi-note {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--theme-text, #666);
     margin: 0 0 14px;
+}
+
+.dashboard-realisasi-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    color: var(--theme-ink-41506b, #41506B);
+}
+
+.dashboard-realisasi-filter select {
+    box-sizing: border-box;
+    flex: 1 1 220px;
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--theme-border, #C7CDD7);
+    border-radius: 10px;
+    background-color: var(--theme-surface, #FFFFFF);
+    color: var(--theme-ink-00204a, #00204A);
+    font: inherit;
+}
+
+.dashboard-realisasi-filter select:focus-visible {
+    outline: 2px solid var(--theme-border, #00449C);
+    outline-offset: 2px;
 }
 
 .dashboard-realisasi-body {
@@ -505,7 +534,7 @@
 .dashboard-realisasi-totals {
     flex: 1 1 230px;
     min-width: 0;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
     margin: 0;
 }
 
@@ -515,7 +544,7 @@
     justify-content: space-between;
     gap: 6px 12px;
     padding: 10px 0;
-    border-bottom: 1px solid #E4E9F2;
+    border-bottom: 1px solid var(--theme-border, #E4E9F2);
 }
 
 .dashboard-realisasi-totals dd {
@@ -525,7 +554,7 @@
 }
 
 .dashboard-realisasi-empty {
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     text-align: center;
     padding: 30px 0;
 }
@@ -562,8 +591,8 @@
     justify-content: center;
     gap: 6px;
     padding: 18px 10px;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 15px;
     box-shadow: 0px 2px 10px rgba(0, 32, 74, 0.08);
 }
@@ -572,19 +601,19 @@
     font-size: 2.4rem;
     font-weight: 600;
     line-height: 1;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .dashboard-count-label {
     font-size: 1rem;
     font-weight: 500;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .dashboard-status-pjk {
     width: 80%;
     height: 70%;
-    border: 1px solid black;
+    border: 1px solid var(--theme-border, black);
     border-radius: 15px;
     overflow: hidden;
     display: grid;
@@ -616,7 +645,7 @@
     font-size: 1.1rem;
     letter-spacing: -0.3px;
     font-weight: 600;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     text-align: center;
 }
 
@@ -711,31 +740,31 @@
     flex-direction: column;
     min-height: 100%; /* Ensures sidebar takes full height of the viewport */
     height: auto;
-    background-color: #f5f6fa;
+    background-color: var(--theme-fill-f5f6fa, #f5f6fa);
     width: 230px; /* Default width */
     transform: translateX(0);
     transition: transform 0.3s ease-in-out;
 }
 
 .dash-title {
-    background-color: white;
+    background-color: var(--theme-surface, white);
     display: flex;
     padding-left: 31px;
     font-size: 1.1rem;
-    color: #00204A;
-    border: 1px solid rgb(214, 214, 214);
+    color: var(--theme-ink-00204a, #00204A);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
 }
 
 .page-content {
     width: 100%; /* Prevents content from overflowing */
     overflow-x: hidden; /* Allows scrolling instead of overflow */
     word-wrap: break-word; /* Ensures text doesn't push the width */
-    background-color: #fcfcfc;
+    background-color: var(--theme-surface, #fcfcfc);
     transition: width 0.3s ease-in-out;
 }
 
 .content-title {
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
     padding: 25px 51px 20px 51px;
     margin: 0px;
     font-size: 2.5rem;
@@ -746,8 +775,8 @@
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-top: 0px;
 }
 
@@ -781,15 +810,15 @@
     text-align: left;
     line-height: 1.3;
     font-size: 1rem;
-    background-color: white;
-    color: #00204A;
-    /*The button that got clicked will have this bg color: background-color: #e8ebf1; will add with On Click*/
+    background-color: var(--theme-surface, white);
+    color: var(--theme-ink-00204a, #00204A);
+    /*The button that got clicked will have this bg color: background-color: var(--theme-ink-e8ebf1, #e8ebf1); will add with On Click*/
     border: none;
     border-radius: 25px;
 }
 
 .dash-button:hover {
-    background-color: #e5e7ec;
+    background-color: var(--theme-surface-raised, #e5e7ec);
 }
 
 .btn-selected {
@@ -802,13 +831,13 @@
 }
 
 .dash-user {
-    background-color: white;
+    background-color: var(--theme-surface, white);
     display: flex;
     align-items: center;
     padding-left: 26px;
     font-size: 1.3rem;
-    color: #00204A;
-    border: 1px solid rgb(214, 214, 214);
+    color: var(--theme-ink-00204a, #00204A);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-top: 0px;
     font-weight: 500;
 }
@@ -870,7 +899,7 @@
 
 /* Pelayanan Gaji Page */
 .gaji-page {
-    background-color: #fcfcfc;
+    background-color: var(--theme-surface, #fcfcfc);
     min-height: 100vh;
     width: 100%;
     display: grid;
@@ -919,7 +948,7 @@
 }
 
 .gaji-button:hover {
-    background-color: #016FFC;
+    background-color: var(--theme-fill-016ffc, #016FFC);
     box-shadow: 0px 1px 20px #016FFC;
 }
 
@@ -950,7 +979,7 @@
     padding-left: 5%;
     padding-right: 5%;
     font-size: 2rem;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .gaji-content h2 {
@@ -963,8 +992,8 @@
     width: 96%;
     min-height: 200px;
     height: auto;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 20px;
     padding: 15px 2% 20px 2%;
     overflow-wrap: break-word;
@@ -1028,12 +1057,12 @@
     width: 90%;
     margin: 50px auto 0 auto;
     padding: 0 5%;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .fg-card {
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 20px;
     padding: 25px 3% 30px 3%;
 }
@@ -1047,11 +1076,11 @@
     margin: 0 0 25px 0;
     font-size: 1rem;
     line-height: 1.5;
-    color: #41506B;
+    color: var(--theme-ink-41506b, #41506B);
 }
 
 .fg-wajib {
-    color: #C62828;
+    color: var(--theme-ink-c62828, #C62828);
 }
 
 .fg-grid {
@@ -1081,20 +1110,20 @@
     padding: 10px 12px;
     font-family: inherit;
     font-size: 1rem;
-    color: #00204A;
-    background-color: #fcfcfc;
-    border: 1px solid #C9D2E0;
+    color: var(--theme-ink-00204a, #00204A);
+    background-color: var(--theme-surface, #fcfcfc);
+    border: 1px solid var(--theme-border, #C9D2E0);
     border-radius: 8px;
     outline: none;
     transition: border-color 0.15s ease-in-out;
 }
 
 .fg-input:focus {
-    border-color: #00449C;
+    border-color: var(--theme-border, #00449C);
 }
 
 .fg-input-salah {
-    border-color: #C62828;
+    border-color: var(--theme-border, #C62828);
 }
 
 textarea.fg-input {
@@ -1119,16 +1148,16 @@ textarea.fg-input {
     font-size: 1rem;
     font-weight: 400;
     line-height: 1.35;
-    color: #00204A;
-    background-color: #fcfcfc;
-    border: 1px solid #C9D2E0;
+    color: var(--theme-ink-00204a, #00204A);
+    background-color: var(--theme-surface, #fcfcfc);
+    border: 1px solid var(--theme-border, #C9D2E0);
     border-radius: 8px;
     cursor: pointer;
 }
 
 .fg-pilihan-item:has(input:checked) {
-    border-color: #00449C;
-    background-color: #EEF4FD;
+    border-color: var(--theme-border, #00449C);
+    background-color: var(--theme-fill-eef4fd, #EEF4FD);
 }
 
 .fg-pilihan-item input {
@@ -1136,16 +1165,16 @@ textarea.fg-input {
     width: 18px;
     height: 18px;
     margin: 2px 0 0 0;
-    accent-color: #00449C;
+    accent-color: var(--theme-ink-00449c, #00449C);
 }
 
 .fg-pesan {
     font-size: 0.85rem;
-    color: #6B7A90;
+    color: var(--theme-muted, #6B7A90);
 }
 
 .fg-pesan-salah {
-    color: #C62828;
+    color: var(--theme-ink-c62828, #C62828);
 }
 
 /* A warning, not an error: the permintaan was recorded, only the confirmation mail bounced */
@@ -1155,8 +1184,8 @@ textarea.fg-input {
     font-size: 0.95rem;
     line-height: 1.5;
     text-align: left;
-    color: #8A6100;
-    background-color: #FFF6E0;
+    color: var(--theme-ink-8a6100, #8A6100);
+    background-color: var(--theme-fill-fff6e0, #FFF6E0);
     border-radius: 8px;
 }
 
@@ -1164,8 +1193,8 @@ textarea.fg-input {
     margin: 20px 0 0 0;
     padding: 12px 15px;
     font-size: 1rem;
-    color: #8A1C1C;
-    background-color: #FDECEC;
+    color: var(--theme-ink-8a1c1c, #8A1C1C);
+    background-color: var(--theme-fill-fdecec, #FDECEC);
     border-radius: 8px;
 }
 
@@ -1195,19 +1224,19 @@ textarea.fg-input {
 }
 
 .fg-kirim:hover:enabled {
-    background-color: #016FFC;
+    background-color: var(--theme-fill-016ffc, #016FFC);
     box-shadow: 0 1px 20px #016FFC;
 }
 
 .fg-kirim:disabled {
-    background-color: #7A8699;
+    background-color: var(--theme-surface-raised, #7A8699);
     box-shadow: none;
     cursor: not-allowed;
 }
 
 .fg-kembali {
     font-size: 1.1rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     text-decoration: none;
     font-weight: 600;
 }
@@ -1227,7 +1256,7 @@ textarea.fg-input {
 
 .fg-antrian b {
     font-size: 1.8rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .fg-ringkas {
@@ -1240,7 +1269,7 @@ textarea.fg-input {
 
 .fg-ringkas dt {
     font-size: 0.85rem;
-    color: #6B7A90;
+    color: var(--theme-muted, #6B7A90);
 }
 
 .fg-ringkas dd {
@@ -1987,7 +2016,7 @@ textarea.fg-input {
 .dokumen-gaji-form label {
     margin-bottom: 6px;
     font-weight: 500;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .dokumen-gaji-form .type-btn {
@@ -2016,13 +2045,13 @@ textarea.fg-input {
 
 .dokumen-gaji-file-error {
     margin-top: 6px;
-    color: #EB2727;
+    color: var(--theme-ink-eb2727, #EB2727);
     font-size: 0.85rem;
 }
 
 .dokumen-gaji-file-current {
     margin-top: 6px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
 }
 
@@ -2044,7 +2073,7 @@ textarea.fg-input {
 .anggaran-form label {
     margin-bottom: 6px;
     font-weight: 500;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .anggaran-form .type-btn {
@@ -2064,14 +2093,14 @@ textarea.fg-input {
 
 .anggaran-note {
     margin: 6px 0 0;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
     line-height: 1.6;
 }
 
 .anggaran-intro {
     margin: 0 0 18px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.9rem;
     line-height: 1.6;
 }
@@ -2081,29 +2110,29 @@ textarea.fg-input {
    red the blocking errors use, so the warning is not just more grey body text. */
 .anggaran-mode-note {
     margin: -12px 0 18px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
     line-height: 1.6;
 }
 
 .anggaran-mode-note.anggaran-bahaya {
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
 }
 
 /* Blocking problems. Same shape as .docs-sp2d, in red rather than amber. */
 .anggaran-pesan {
     margin: 0 35px 22px;
     padding: 14px 18px 16px;
-    border: 1px solid #F0A9A9;
-    border-left: 6px solid #BD1404;
+    border: 1px solid var(--theme-border, #F0A9A9);
+    border-left: 6px solid var(--theme-border, #BD1404);
     border-radius: 12px;
-    background: #FBEAEA;
+    background: var(--theme-fill-fbeaea, #FBEAEA);
 }
 
 .anggaran-pesan h3 {
     margin: 0 0 8px;
     font-size: 1.05rem;
-    color: #7A0B0B;
+    color: var(--theme-ink-7a0b0b, #7A0B0B);
 }
 
 .anggaran-pesan ul,
@@ -2116,7 +2145,7 @@ textarea.fg-input {
 
 /* Amber, because a pratinjau has changed nothing yet and still needs a decision */
 .anggaran-pratinjau {
-    border-left: 6px solid #E8A33D;
+    border-left: 6px solid var(--theme-border, #E8A33D);
 }
 
 .anggaran-pratinjau-body {
@@ -2129,17 +2158,17 @@ textarea.fg-input {
 }
 
 .anggaran-hapus {
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
 }
 
 .anggaran-peringatan {
     margin-bottom: 12px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .anggaran-belum {
     margin: 0 0 4px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
 }
 
@@ -2147,14 +2176,142 @@ textarea.fg-input {
     margin-left: 12px;
     font-size: 0.9rem;
     font-weight: 400;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
-/* Sits inside .wide-card-actions, which is a flex row of buttons */
+/* Keep the annual budget actions inside the card as the viewport narrows. */
+.anggaran-spm-trigger {
+    border: 1px solid var(--theme-border, #B7C7DC);
+    background: var(--theme-fill-f2f6fc, #F2F6FC);
+    color: var(--theme-ink-00449c, #00449C);
+    border-radius: 8px;
+    padding: 3px 9px;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.anggaran-spm-trigger:hover { background: var(--theme-fill-dce9ff, #DCE9FF); }
+.anggaran-spm-trigger:focus-visible { outline: 2px solid var(--theme-border, #00449C); outline-offset: 2px; }
+.anggaran-spm-panel { padding: 24px; min-width: 0; }
+.anggaran-spm-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.anggaran-spm-header h2 { margin: 0 0 8px; color: var(--theme-ink-00204a, #00204A); }
+.anggaran-spm-header p { margin: 4px 0; overflow-wrap: anywhere; }
+.anggaran-spm-close { border: 0; background: transparent; font-size: 2rem; cursor: pointer; color: var(--theme-ink-41506b, #41506B); }
+.anggaran-spm-note { font-size: 0.82rem; color: var(--theme-text, #5A6472); line-height: 1.5; }
+.anggaran-spm-filters { display: flex; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
+.anggaran-spm-filters label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; flex: 1 1 220px; min-width: 0; }
+.anggaran-spm-filters input, .anggaran-spm-filters select { padding: 9px 12px; border: 1px solid var(--theme-border, #B7C7DC); border-radius: 8px; min-width: 0; font: inherit; }
+.anggaran-spm-totals { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin: 16px 0; }
+.anggaran-spm-totals > div { background: var(--theme-fill-f2f6fc, #F2F6FC); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 7px; }
+.anggaran-spm-totals span { font-size: 0.8rem; color: var(--theme-text, #5A6472); }
+.anggaran-spm-totals strong { font-size: 1.05rem; color: var(--theme-ink-00204a, #00204A); }
+.anggaran-spm-source-warning { color: var(--theme-ink-8a6100, #8A6100); font-size: 0.8rem; line-height: 1.5; }
+.anggaran-spm-error { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.anggaran-spm-error > :first-child { flex-basis: 100%; }
+.anggaran-spm-table td { white-space: normal; vertical-align: top; }
+.anggaran-spm-table td:first-child { min-width: 160px; }
+.anggaran-spm-table small { display: block; margin-top: 6px; font-size: 0.73rem; color: var(--theme-text, #5A6472); }
+.anggaran-spm-table small.anggaran-spm-source-warning { color: var(--theme-ink-8a6100, #8A6100); }
+
+.anggaran-current-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 0 30px;
+}
+
+.anggaran-search {
+    margin: 8px 30px 20px;
+    padding: 16px 18px;
+    border: 1px solid var(--theme-border, #DCE4EF);
+    border-radius: 12px;
+    background: var(--theme-fill-f7f9fc, #F7F9FC);
+}
+
+.anggaran-search > label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--theme-ink-00204a, #00204A);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.anggaran-search-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.anggaran-search-controls input {
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--theme-border, #B7C7DC);
+    border-radius: 8px;
+    font: inherit;
+}
+
+.anggaran-search-controls input:focus-visible {
+    outline: 2px solid var(--theme-border, #00449C);
+    outline-offset: 2px;
+}
+
+.anggaran-search > p {
+    margin: 10px 0 0;
+    color: var(--theme-text, #5A6472);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.anggaran-current-head .wide-card-title {
+    flex: 1 1 220px;
+    min-width: 0;
+    margin-left: 0;
+    overflow-wrap: anywhere;
+}
+
+.anggaran-current-head .anggaran-current-actions {
+    flex: 1 1 640px;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    padding: 12px 0;
+}
+
+.anggaran-sync-info,
+.anggaran-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.anggaran-sync-info {
+    overflow-wrap: anywhere;
+}
+
+.anggaran-sync-info .anggaran-sinkron {
+    white-space: normal;
+}
+
+.anggaran-action-buttons .btn-aksi-wide {
+    max-width: 100%;
+    box-sizing: border-box;
+    height: auto;
+    min-height: 32px;
+    padding: 7px 18px;
+    white-space: normal;
+}
+
+/* Sits inside .wide-card-actions, which is a flex row of buttons. */
 .anggaran-sinkron {
     align-self: center;
     font-size: 0.82rem;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     white-space: nowrap;
 }
 
@@ -2169,17 +2326,28 @@ textarea.fg-input {
 .anggaran-lencana-baris {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 5px;
     margin-top: 3px;
     max-width: 320px;
     white-space: normal;
 }
 
+.anggaran-lencana-baris > .anggaran-lencana-klaim,
+.anggaran-lencana-baris > .anggaran-tanda-baru,
+.anggaran-lencana-baris > .anggaran-spm-trigger {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    box-sizing: border-box;
+    line-height: 1.3;
+}
+
 .anggaran-lencana-klaim {
     padding: 1px 8px;
     border-radius: 10px;
-    background-color: #FBE1DE;
-    color: #BD1404;
+    background-color: var(--theme-fill-fbe1de, #FBE1DE);
+    color: var(--theme-ink-bd1404, #BD1404);
     font-size: 0.72rem;
     font-weight: 500;
     white-space: nowrap;
@@ -2189,9 +2357,9 @@ textarea.fg-input {
    add to the totals above, so the break has to be unmistakable. */
 .anggaran-pemisah-luar {
     padding: 6px 16px 6px 44px !important;
-    background-color: #FBF4F3;
-    border-top: 1px solid #F0C9C3;
-    color: #8B3A2E;
+    background-color: var(--theme-fill-fbf4f3, #FBF4F3);
+    border-top: 1px solid var(--theme-border, #F0C9C3);
+    color: var(--theme-ink-8b3a2e, #8B3A2E);
     font-size: 0.76rem;
     font-style: italic;
 }
@@ -2199,8 +2367,8 @@ textarea.fg-input {
 .anggaran-tanda-baru {
     padding: 1px 7px;
     border-radius: 10px;
-    background-color: #E7ECF4;
-    color: #5A6472;
+    background-color: var(--theme-fill-e7ecf4, #E7ECF4);
+    color: var(--theme-text, #5A6472);
     font-size: 0.7rem;
     font-weight: 400;
     /* Each badge stays whole; the row wraps between them instead */
@@ -2215,12 +2383,12 @@ textarea.fg-input {
 }
 
 .anggaran-riwayat-berlaku {
-    color: #0F9043;
+    color: var(--theme-ink-0f9043, #0F9043);
     font-weight: 500;
 }
 
 .anggaran-riwayat-meta {
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 /* --- Kelola KKP -------------------------------------------------------------
@@ -2254,7 +2422,7 @@ textarea.fg-input {
 .kkp-sub {
     margin: 18px 0 8px 0;
     font-size: 1rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 /* Inside .anggaran-pratinjau the subheads sit above a full width table, which has
@@ -2302,7 +2470,7 @@ textarea.fg-input {
 }
 
 .kkp-belum {
-    color: #8A6100;
+    color: var(--theme-ink-8a6100, #8A6100);
     font-weight: 500;
     font-size: 0.85rem;
 }
@@ -2310,12 +2478,12 @@ textarea.fg-input {
 .kkp-total {
     margin: 12px 0 0 0;
     text-align: right;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .kkp-total strong {
     margin-left: 10px;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
     font-size: 1.05rem;
 }
 
@@ -2327,19 +2495,19 @@ textarea.fg-input {
     margin: 24px 30px 0 30px;
     padding: 14px 20px;
     border-radius: 10px;
-    background-color: #F4F7FB;
-    border: 1px solid #E1E7EF;
+    background-color: var(--theme-fill-f4f7fb, #F4F7FB);
+    border: 1px solid var(--theme-border, #E1E7EF);
 }
 
 .kkp-grand strong {
     font-size: 1.3rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .kkp-catatan {
     margin: 10px 30px 0 30px;
     text-align: right;
-    color: #8A6100;
+    color: var(--theme-ink-8a6100, #8A6100);
     font-size: 0.85rem;
 }
 
@@ -2365,8 +2533,8 @@ textarea.fg-input {
    sit under it. Colour on the band and the chip is the unit kerja; whether it is settled is
    said in words on .kkp-status, because status must never have to be inferred from a hue. */
 .kkp-band > td {
-    background-color: #F7F9FC;
-    border-bottom: 1px solid #E1E7EF;
+    background-color: var(--theme-fill-f7f9fc, #F7F9FC);
+    border-bottom: 1px solid var(--theme-border, #E1E7EF);
     padding-top: 10px;
     padding-bottom: 10px;
 }
@@ -2382,7 +2550,7 @@ textarea.fg-input {
 .kkp-band-meta {
     display: block;
     margin: 4px 0 0 40px;   /* clears the expand button above it */
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-size: 0.82rem;
 }
 
@@ -2397,7 +2565,7 @@ textarea.fg-input {
 
 .kkp-grup-unit {
     font-weight: 600;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
 }
 
 .kkp-status {
@@ -2433,8 +2601,8 @@ textarea.fg-input {
     margin-left: 10px;
     padding: 2px 10px;
     border-radius: 20px;
-    background-color: #FFF1CC;
-    color: #8A6100;
+    background-color: var(--theme-fill-fff1cc, #FFF1CC);
+    color: var(--theme-ink-8a6100, #8A6100);
     font-size: 0.78rem;
     font-weight: 600;
 }
@@ -2446,7 +2614,7 @@ textarea.fg-input {
 }
 
 .kkp-anak-no {
-    color: #8792A3;
+    color: var(--theme-muted, #8792A3);
     font-variant-numeric: tabular-nums;
 }
 
@@ -2462,25 +2630,25 @@ textarea.fg-input {
 /* A refund is a negative nominal, so it has to read as money coming back rather than as
    a smaller charge that happens to have a dash in front of it */
 .kkp-refund {
-    color: #0F9043;
+    color: var(--theme-ink-0f9043, #0F9043);
     font-variant-numeric: tabular-nums;
 }
 
 .kkp-bukti {
     display: inline-flex;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .kkp-bukti-kosong {
-    color: #C9CFD8;
+    color: var(--theme-muted, #C9CFD8);
 }
 
 .kkp-btn-spm {
     padding: 4px 14px;
-    border: 1px solid #00449C;
+    border: 1px solid var(--theme-border, #00449C);
     border-radius: 20px;
-    background-color: white;
-    color: #00449C;
+    background-color: var(--theme-surface, white);
+    color: var(--theme-ink-00449c, #00449C);
     font-family: inherit;
     font-size: 0.82rem;
     font-weight: 600;
@@ -2504,14 +2672,14 @@ textarea.fg-input {
 .kkp-bagian {
     margin-bottom: 18px;
     padding: 14px 18px 4px 18px;
-    border: 1px solid #E7ECF3;
+    border: 1px solid var(--theme-border, #E7ECF3);
     border-radius: 12px;
-    background-color: #FCFDFE;
+    background-color: var(--theme-fill-fcfdfe, #FCFDFE);
 }
 
 .kkp-bagian-judul {
     margin: 0 0 12px 0;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     font-size: 0.9rem;
     font-weight: 600;
     letter-spacing: 0.4px;
@@ -2531,7 +2699,7 @@ textarea.fg-input {
 
 .kkp-bantuan {
     margin-top: 5px;
-    color: #8792A3;
+    color: var(--theme-muted, #8792A3);
     font-size: 0.78rem;
 }
 
@@ -2545,11 +2713,11 @@ textarea.fg-input {
     gap: 10px;
     margin: 2px 0 14px 0;
     padding: 10px 14px;
-    border: 1px solid #E7ECF3;
-    border-left: 4px solid #9AA4B2;
+    border: 1px solid var(--theme-border, #E7ECF3);
+    border-left: 4px solid var(--theme-border, #9AA4B2);
     border-radius: 10px;
-    background-color: #F7F9FC;
-    color: #5A6472;
+    background-color: var(--theme-fill-f7f9fc, #F7F9FC);
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
 }
 
@@ -2562,7 +2730,7 @@ textarea.fg-input {
 
 .kkp-ringkas-jadi {
     margin-left: auto;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
@@ -2577,4 +2745,60 @@ textarea.fg-input {
     margin: 0;
     padding: 6px 10px;
     font-size: 0.9rem;
+}
+/* Period reporting uses local button styles: .spm-button elsewhere has fixed dimensions. */
+.anggaran-period { min-width: 0; color: var(--theme-ink-243347, #243347); }
+.anggaran-period *, .anggaran-period *::before, .anggaran-period *::after { box-sizing: border-box; }
+.anggaran-period .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.anggaran-period-filter { margin: 8px 30px 22px; border: 1px solid var(--theme-border, #dce4ef); border-radius: 12px; padding: 20px; background: var(--theme-fill-f7f9fc, #f7f9fc); }
+.anggaran-period-topline, .anggaran-period-result-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+.anggaran-period-topline > div, .anggaran-period-result-heading > div { min-width: 0; flex: 1 1 280px; }
+.anggaran-period h3 { margin: 0; color: var(--theme-ink-00204a, #00204a); line-height: 1.4; font-size: 16px; font-weight: 600; }
+.anggaran-period-topline p, .anggaran-period-result-heading p { margin: 5px 0 0; color: var(--theme-muted, #64748b); font-size: 12px; line-height: 1.6; }
+.anggaran-period-mode { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 6px; background: var(--theme-fill-e9edf3, #e9edf3); color: var(--theme-text, #516078); font-size: 11px; font-weight: 500; line-height: 1.5; }
+.anggaran-period-mode.is-period { background: var(--theme-fill-e1ecfc, #e1ecfc); color: var(--theme-ink-00449c, #00449c); }
+.anggaran-period-controls { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(180px, 1.5fr); gap: 14px; border: 0; padding: 0; margin: 20px 0 16px; min-width: 0; }
+.anggaran-period-controls label { display: flex; flex-direction: column; gap: 7px; min-width: 0; color: var(--theme-text, #475569); font-size: 12px; font-weight: 500; }
+.anggaran-period input, .anggaran-period select { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; border: 1px solid var(--theme-border, #bdcadd); border-radius: 7px; padding: 9px 11px; background: var(--theme-surface, white); color: var(--theme-ink-243347, #243347); font: inherit; font-size: 13px; line-height: 1.5; }
+.anggaran-period input:focus-visible, .anggaran-period select:focus-visible, .anggaran-period button:focus-visible, .anggaran-period summary:focus-visible { outline: 2px solid var(--theme-border, #00449c); outline-offset: 3px; }
+.anggaran-period input:disabled, .anggaran-period select:disabled { background: var(--theme-fill-f1f4f8, #f1f4f8); color: var(--theme-muted, #64748b); }
+.anggaran-period-button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 40px; width: auto; max-width: 100%; margin: 0; padding: 9px 15px; border: 1px solid var(--theme-border, #b9cbe3); border-radius: 7px; background: var(--theme-surface, #fff); color: var(--theme-ink-00449c, #00449c); font-size: 12px; font-weight: 500; line-height: 1.5; text-align: center; white-space: normal; cursor: pointer; box-shadow: none; transition: background-color .15s, border-color .15s; }
+.anggaran-period-button:hover:not(:disabled) { background: var(--theme-fill-eaf1fc, #eaf1fc); border-color: var(--theme-border, #8baedc); }
+.anggaran-period-button.is-primary { background: #00449c; border-color: var(--theme-border, #00449c); color: #fff; }
+.anggaran-period-button.is-primary:hover:not(:disabled) { background: #00367d; border-color: var(--theme-border, #00367d); }
+.anggaran-period button:disabled { cursor: wait; opacity: .55; }
+.anggaran-period-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; }
+.anggaran-period-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--theme-border, #e0e7f0); padding-top: 13px; }
+.anggaran-period-footer > p { margin: 0; color: var(--theme-muted, #64748b); font-size: 11px; line-height: 1.6; flex: 1 1 280px; }
+.anggaran-period-alert { margin: 12px 30px 20px; padding: 13px 16px; border: 1px solid transparent; border-radius: 8px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.anggaran-period-alert p { margin: 4px 0 0; }
+.anggaran-period-alert.is-warning { background: var(--theme-fill-fff8ec, #fff8ec); border-color: var(--theme-border, #f4dfb7); color: var(--theme-ink-85551b, #85551b); }
+.anggaran-period-result-heading { margin: 25px 30px 18px; align-items: center; }
+.anggaran-period-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 30px 16px; }
+.anggaran-period-summary > div { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 16px; border: 1px solid var(--theme-border, #e0e7ef); border-radius: 10px; background: var(--theme-fill-fafbfd, #fafbfd); }
+.anggaran-period-summary > div.is-emphasis { border-color: var(--theme-border, #bbd4f3); background: var(--theme-fill-f0f6ff, #f0f6ff); }
+.anggaran-period-summary span { color: var(--theme-muted, #64748b); font-size: 11px; }
+.anggaran-period-summary strong { font-size: clamp(14px, 1.4vw, 19px); font-weight: 600; color: var(--theme-ink-00204a, #00204a); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.anggaran-period-summary .is-negative { color: var(--theme-ink-bd1404, #bd1404); }
+.anggaran-period-summary small { font-size: 10px; color: var(--theme-muted, #64748b); line-height: 1.6; }
+.anggaran-period-explanation { margin: 0 30px 18px; border-radius: 8px; background: var(--theme-fill-f4f7fb, #f4f7fb); padding: 12px 14px; font-size: 11px; line-height: 1.8; color: var(--theme-text, #586a80); }
+.anggaran-period-explanation summary { cursor: pointer; color: var(--theme-ink-33537b, #33537b); font-weight: 500; }
+.anggaran-period-explanation p { margin: 10px 0 0; }
+.anggaran-period-result.is-loading { opacity: .55; pointer-events: none; }
+.anggaran-period-cumulative { display: block; color: var(--theme-muted, #64748b); margin-top: 4px; white-space: nowrap; font-size: 11px; }
+@media (min-width: 1450px) {
+    .anggaran-period-controls { grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.4fr) auto; align-items: end; }
+    .anggaran-period-controls .anggaran-period-actions { grid-column: auto; }
+    .anggaran-period-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+    .anggaran-period-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .anggaran-period-unit { grid-column: 1 / -1; }
+    .anggaran-period-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+    .anggaran-period-filter, .anggaran-period-summary, .anggaran-period-alert, .anggaran-period-result-heading, .anggaran-period-explanation { margin-left: 14px; margin-right: 14px; }
+    .anggaran-period-filter { padding: 15px; }
+    .anggaran-period-button { flex: 1 1 auto; }
+    .anggaran-period-summary { grid-template-columns: minmax(0, 1fr); }
 }

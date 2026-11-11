@@ -117,15 +117,15 @@ const anggaranModes = [
 // something Unggah Anggaran could parse back.
 const anggaranKolomEkspor = [
     "Unit Kerja", "Pagu Unit Kerja", "Kode MAK", "Uraian MAK", "Pagu MAK",
-    "Akun Belanja", "Pagu Akun", "Terpakai", "Sisa", "Belum Dirinci", "Keterangan",
+    "Akun Belanja", "Pagu Akun", "Realisasi", "Sisa", "% Realisasi", "Outstanding", "Keterangan",
 ]
 
-export const anggaranLaporanHead = ["Unit Kerja", "Pagu", "Realisasi", "Sisa", "% Realisasi"];
+export const anggaranLaporanHead = ["Unit Kerja", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Outstanding"];
 
 // LS Pegawai and LS Platform are submitted without a tabel, so they carry no Kode MAK and
 // their nominal can never be attributed to an akun. Said out loud on the screen rather than
 // left for someone to discover by reconciling by hand.
-const anggaranTanpaRincian = "Realisasi dihitung berdasarkan MAK pengajuan di Poriku."
+const anggaranTanpaRincian = "Realisasi dihitung berdasarkan pengajuan dengan status minimal Verifikasi OK/OK Catatan"
 
 // Twin of the SEBAB_* constants in server.js. "akun-belum-dirinci" never reaches these
 // panels - it is folded into its MAK - so it is not listed here.
@@ -147,10 +147,10 @@ const anggaranAwalKeterangan = "Upload pada bagian ini akan mencatat manual real
 // How a Kode MAK cell is marked on Aksi-Pengajuan and Aksi-Verif-PJK. Keys are the SEBAB_*
 // values server.js returns as tandaMak.
 const anggaranTandaMak = {
-    "cocok":              {label: "MAK sesuai", bg: "#D6F5E1", fg: "#0F7A3D"},
-    "klaim-unit-lain":    {label: "MAK unit lain", bg: "#FBE1DE", fg: "#BD1404"},
-    "mak-tidak-ada":      {label: "MAK tidak terdaftar", bg: "#FBE1DE", fg: "#BD1404"},
-    "akun-belum-dirinci": {label: "Akun belum dirinci", bg: "#FFF1CF", fg: "#8A6100"},
+    "cocok":              {label: "MAK sesuai", bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)"},
+    "klaim-unit-lain":    {label: "MAK unit lain", bg: "var(--theme-fill-fbe1de, #FBE1DE)", fg: "var(--theme-ink-bd1404, #BD1404)"},
+    "mak-tidak-ada":      {label: "MAK tidak terdaftar", bg: "var(--theme-fill-fbe1de, #FBE1DE)", fg: "var(--theme-ink-bd1404, #BD1404)"},
+    "akun-belum-dirinci": {label: "Akun belum dirinci", bg: "var(--theme-fill-fff1cf, #FFF1CF)", fg: "var(--theme-ink-8a6100, #8A6100)"},
 }
 
 const tandaMakPesan = (tanda) => {

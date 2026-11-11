@@ -16,9 +16,9 @@ const LAINNYA = "Lainnya";
 // iOS Safari zooms the page whenever a focused field is smaller than that.
 const CARI_SX = {
     "& .MuiOutlinedInput-root": {
-        backgroundColor: "#fcfcfc", borderRadius: "8px", fontSize: "1rem", minHeight: "44px",
+        backgroundColor: "var(--theme-surface, #fcfcfc)", borderRadius: "8px", fontSize: "1rem", minHeight: "44px",
     },
-    "& .MuiOutlinedInput-notchedOutline": {borderColor: "#C9D2E0"},
+    "& .MuiOutlinedInput-notchedOutline": {borderColor: "var(--theme-border, #C9D2E0)"},
 };
 
 // The first field the pemohon has to fix, in the order the form shows them - not the order
@@ -182,7 +182,7 @@ export default function InputFormGaji() {
             <div className="fg-content">
                 {hasil
                     ? <div className="fg-card fg-selesai">
-                        <TaskAltIcon sx={{fontSize: 64, color: "#0F7A3D"}} />
+                        <TaskAltIcon sx={{fontSize: 64, color: "var(--theme-ink-0f7a3d, #0F7A3D)"}} />
                         <h2>Permintaan Anda Telah Kami Terima</h2>
                         <p className="fg-antrian">No. Antrian <b>{hasil.no}</b></p>
                         <dl className="fg-ringkas">

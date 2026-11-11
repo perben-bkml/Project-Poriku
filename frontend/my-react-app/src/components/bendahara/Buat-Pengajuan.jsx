@@ -3,8 +3,8 @@ import * as math from "mathjs";
 import apiClient from "../../lib/apiClient";
 
 // Import Components
-import Popup from "../../ui/Popup.jsx";
-import { columns, jenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
+import Popup, { PopupAlert } from "../../ui/Popup.jsx";
+import { columns, jenisPengajuan, subjenisPengajuan, jenisTabelPenuh, jenisTanpaTabel, jenisBanyakBaris, ringkasColumns, ringkasLabels, jenisValueFromLabel, daftarStatusStyle } from "./head-data.js";
 
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
 import { SubmitButton, UploadButton } from "../../ui/buttons.jsx";
@@ -56,6 +56,9 @@ function BuatPengajuan(props) {
             : jenisValueFromLabel(props.passedData[2]) || "gup"
     ));
     const [jumlahAjuan, setJumlahAjuan] = useState("");
+    const [subjenis, setSubjenis] = useState(() => props.type === "buat" ? "" : props.passedData?.[15] || "");
+    const [subjenisError, setSubjenisError] = useState("");
+    const subjenisRef = useRef(null);
     const [nomorSpp, setNomorSpp] = useState(() => props.passedData?.[12] || "");
     const [sppError, setSppError] = useState("");
     const sppRef = useRef(null);
@@ -90,6 +93,9 @@ function BuatPengajuan(props) {
     // Marks the stored PJK for removal - applied, together with deleting the file itself,
     // when the edit is saved
     const [removePjk, setRemovePjk] = useState(false);
+    const [correctionError, setCorrectionError] = useState("");
+    const isPjkCorrection = props.type === "edit" && props.passedData?.[16] === "pjk-correction";
+    const correctionLink = props.passedData?.[17] || "";
 
     // Jenis Pengajuan drives the whole form shape in every mode. Anything other than
     // GUP/PTUP is a verifikasi flow, whether it is being created or reopened from the
@@ -102,9 +108,9 @@ function BuatPengajuan(props) {
     // Rows submitted before these jenis had a table have no block on the sheet. Editing one
     // must leave it that way rather than send a table the backend has nowhere to put.
     const [tabelAda, setTabelAda] = useState(true);
-    const nomorSppRequired = !isTabelPenuh && componentType !== "lihat";
+    const nomorSppRequired = !isTabelPenuh && componentType !== "lihat" && !isPjkCorrection;
     const canUploadPjk = true;
-    const showUploadGroup = componentType !== "lihat" && (isTabelPenuh || canUploadPjk);
+    const showUploadGroup = componentType !== "lihat" && !isPjkCorrection && (isTabelPenuh || canUploadPjk);
     // Which antrian/table sheet pair this pengajuan lives on
     const rowFlow = isBuat ? null : (props.passedData?.[10] || (isTabelPenuh ? "gup" : "verif"));
     // GUP/PTUP keep the Bupot on their own row and the PJK on the mirror row, which the
@@ -121,6 +127,8 @@ function BuatPengajuan(props) {
 
     // All jenis are available to all users.
     const jenisOptions = jenisPengajuan;
+    const subjenisOptions = subjenisPengajuan[ajuan] || [];
+    const subjenisRequired = subjenisOptions.length > 0 && componentType !== "lihat" && !isPjkCorrection;
 
     // The form keeps its state when Bendahara-Page swaps between lihat/edit/buat, so a jenis
     // left over from a reopened row can outlive the switch to composing. Snap it back to a
@@ -129,7 +137,7 @@ function BuatPengajuan(props) {
         if (isBuat && !jenisOptions.some(jenis => jenis.value === ajuan)) setAjuan(jenisOptions[0].value);
     }, [isBuat, jenisOptions, ajuan]);
 
-    // The verifikasi table is a single row, and its sheet has no Request Tanggal column.
+    // Verifikasi has no Request Tanggal; only jenis outside jenisBanyakBaris use a single row.
     // Only applies while composing - a reopened row already arrives in its own shape.
     useEffect(() => {
         if (!isBuat || isTabelPenuh) return;
@@ -199,30 +207,34 @@ function BuatPengajuan(props) {
     useEffect(() => {
         const newComponentType = props.type;
         setComponentType(newComponentType);
+        setSubjenis(newComponentType === "buat" ? "" : props.passedData?.[15] || "");
+        setSubjenisError("");
 
         // LS Pegawai and LS Platform never wrote a table block, so there is nothing to fetch
         if (newComponentType !== "buat" && !isTanpaTabel) {
             fetchAntrianTable();
         }
-    }, [props.type, isTanpaTabel]);
+    }, [props.type, isTanpaTabel, props.passedData]);
 
 
-    //Handle how many rows the user wants
+    // Resize on change so the number spinner and table stay in sync without waiting for blur.
     function handleRowChange(event) {
-        const userRowValue = parseInt(event.target.value)
-        setRowNum(userRowValue);
-    }
-
-    function handleRowBlur(event) {
-        const userRowValue = parseInt(event.target.value);
-        setRowNum(userRowValue);
-        if (userRowValue > tableData.length) {
-            const newRows = Array.from({ length: userRowValue - tableData.length }, (_, index) => 
-                [tableData.length + index + 1, ...emptyCell] );
-            setTableData([...tableData, ...newRows]);
-        } else if (userRowValue < tableData.length) {
-            setTableData(tableData.slice(0, userRowValue).map((row, index) => [index + 1, ...row.slice(1)]))
-        }
+        const value = event.target.value;
+        const requested = Number(value);
+        // Clearing an input while replacing its number must not discard existing rows.
+        const count = value === "" || !Number.isFinite(requested)
+            ? Math.max(1, tableData.length)
+            : Math.max(1, Math.trunc(requested));
+        setRowNum(count);
+        setTableData(previous => {
+            if (count > previous.length) {
+                const newRows = Array.from({ length: count - previous.length }, (_, index) =>
+                    [previous.length + index + 1, ...emptyCell]);
+                return [...previous, ...newRows];
+            }
+            return previous.slice(0, count);
+        });
+        setPage(previous => Math.min(previous, Math.ceil(count / rowsPerPage) - 1));
     }
     //Number format generator
     function numberFormats(num) {
@@ -785,9 +797,21 @@ function BuatPengajuan(props) {
         return totals;
     }, [tableData, summableColumns, calculateColumnTotal]);
 
+    function validateSubjenis() {
+        if (!subjenisRequired || subjenisOptions.includes(subjenis)) return true;
+        setSubjenisError("Subjenis pengajuan wajib dipilih.");
+        subjenisRef.current?.focus();
+        return false;
+    }
+
     // Handle Popups
     function handlePopup() {
         if (!isPopup) {
+            if (!validateSubjenis()) return;
+            if (isPjkCorrection && !filePjk) {
+                setCorrectionError("Pilih berkas Perbaikan PJK terlebih dahulu.");
+                return;
+            }
             if (nomorSppRequired && nomorSpp.trim() === "") {
                 setSppError("Nomor SPP wajib diisi.");
                 sppRef.current?.focus();
@@ -811,6 +835,7 @@ function BuatPengajuan(props) {
     async function handleSubmit(event){
         event.preventDefault();
         setIsPopup(false);
+        if (!validateSubjenis()) return;
 
         // Grabbing input & select tag values from useState
         const inputArray = [namaPengisi, ajuan, jumlahAjuan, tanggalAjuan, nomorSpp];
@@ -833,6 +858,7 @@ function BuatPengajuan(props) {
         formData.append('textdata', JSON.stringify(inputArray));
         formData.append('tabledata', JSON.stringify(sendTable));
         formData.append('userdata', user.name);
+        formData.append('subjenis', subjenis);
 
         // Set loading state
         setIsLoading(true);
@@ -906,6 +932,31 @@ function BuatPengajuan(props) {
     async function handleSubmitEdit(event){
         event.preventDefault();
         setIsPopup(false);
+        if (!validateSubjenis()) return;
+
+        if (isPjkCorrection) {
+            if (!filePjk) {
+                setCorrectionError("Pilih berkas Perbaikan PJK terlebih dahulu.");
+                return;
+            }
+            const data = new FormData();
+            data.append("antriPosition", JSON.stringify(props.passedData[5]));
+            data.append("flow", rowFlow);
+            data.append("pjkCorrection", "true");
+            data.append("filePjk", filePjk);
+            setIsLoading(true);
+            setCorrectionError("");
+            try {
+                const response = await apiClient.patch('/bendahara/edit-table', data);
+                props.alertMessage(response.data.warning || response.data.message || "Perbaikan PJK berhasil diunggah.");
+                props.changeComponent("daftar-pengajuan");
+            } catch (error) {
+                setCorrectionError(error.response?.data?.message || "Gagal mengunggah Perbaikan PJK. Silakan coba lagi.");
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
 
         const finalNama = namaPengisi === "" ? props.passedData[1] : namaPengisi;
         const finalJumlah = jumlahAjuan === "" ? props.passedData[3] : jumlahAjuan;
@@ -951,6 +1002,7 @@ function BuatPengajuan(props) {
         formData.append('antriPosition', JSON.stringify(antriPosition));
         formData.append('lastTableEndRow', JSON.stringify(keywordEndRow));
         formData.append('flow', rowFlow);
+        formData.append('subjenis', subjenis);
         if (!isTabelPenuh) {
             formData.append('nomorSpp', nomorSpp);
         }
@@ -1024,12 +1076,12 @@ function BuatPengajuan(props) {
     const TableComponent = useMemo(() => {
         return (
             <React.Fragment>
-                <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid rgb(236, 236, 236)"}}>
+                <TableContainer className="table-container" sx={{maxHeight: 950, border:"2px solid var(--theme-border, rgb(236, 236, 236))"}}>
                     <Table stickyHeader aria-label="sticky table">
                         <TableHead className="table-head">
                             <TableRow className="table-row">
                                 {activeColumns.map((colIndex) => (
-                                    <TableCell className="table-cell head-data" key={columns[colIndex].id} sx={{fontWeight: "bold", minWidth: columns[colIndex].minWidth, backgroundColor: "#00449C", color: "white", border: "none"}} align="center">{ringkasLabels[colIndex] && !isTabelPenuh ? ringkasLabels[colIndex] : columns[colIndex].label}</TableCell>
+                                    <TableCell className="table-cell head-data" key={columns[colIndex].id} sx={{fontWeight: "bold", minWidth: columns[colIndex].minWidth, backgroundColor: "var(--theme-table-header, #00449C)", color: "white", border: "none"}} align="center">{ringkasLabels[colIndex] && !isTabelPenuh ? ringkasLabels[colIndex] : columns[colIndex].label}</TableCell>
                                 ))}
                             </TableRow>
                         </TableHead>
@@ -1062,7 +1114,7 @@ function BuatPengajuan(props) {
                                                     onBlur={(input) => handleCellBlur(actualRowIndex, colIndex, input.target.value)}
                                                     onKeyDown={(event) => handleCellKeyDown(event, actualRowIndex, colIndex)}
                                                     onPaste={(event) => handlePaste(event, actualRowIndex, colIndex)}
-                                                    readOnly={componentType == "lihat"}
+                                                    readOnly={componentType == "lihat" || isPjkCorrection}
                                                 />
                                             </TableCell>
                                         ))}
@@ -1120,6 +1172,7 @@ function BuatPengajuan(props) {
         handleCellKeyDown,
         handlePaste,
         componentType,
+        isPjkCorrection,
         setPage,
         setRowsPerPage,
         setTargetReference,
@@ -1149,6 +1202,8 @@ function BuatPengajuan(props) {
             }
             <div className="pengajuan-content">
                 <form className="pengajuan-form" onSubmit={componentType === "buat" ? handleSubmit : handleSubmitEdit}>
+                    {correctionError && <PopupAlert severity="error" message={correctionError}/>}
+                    <fieldset className="pengajuan-fields" disabled={isPjkCorrection}>
                     <div className="pengajuan-form-textdata">
                         <label htmlFor="aju-name">Nama Pengisi Form:</label>
                         <input type="text" id="aju-name" name="nama-pengisi" value={namaPengisi}
@@ -1158,7 +1213,7 @@ function BuatPengajuan(props) {
                             required/>
                         <label htmlFor="ajuan">Jenis Pengajuan:</label>
                         {componentType === "buat" ?
-                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => setAjuan(e.target.value)}>
+                        <select name="ajuan" id="ajuan" value={ajuan} onChange={(e) => { setAjuan(e.target.value); setSubjenis(""); setSubjenisError(""); }}>
                             {jenisOptions.map((jenis) => (
                                 <option key={jenis.value} value={jenis.value}>{jenis.label}</option>
                             ))}
@@ -1172,6 +1227,17 @@ function BuatPengajuan(props) {
                                 : <option value={ajuan}>{String(props.passedData[2]).toUpperCase()}</option>}
                         </select>))
                         }
+                        {subjenisOptions.length > 0 && <>
+                            <label htmlFor="aju-subjenis">Subjenis Pengajuan{subjenisRequired ? " (wajib)" : ""}:</label>
+                            <select id="aju-subjenis" name="subjenis" value={subjenis} ref={subjenisRef}
+                                    onChange={event => {setSubjenis(event.target.value);setSubjenisError("");}}
+                                    aria-invalid={subjenisError ? "true" : undefined}
+                                    aria-describedby={subjenisError ? "aju-subjenis-error" : undefined}
+                                    disabled={componentType === "lihat"} required={subjenisRequired}>
+                                <option value="">{subjenisRequired ? "Pilih Subjenis Pengajuan" : "Belum ditentukan"}</option>
+                                {subjenisOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                        </>}
                         <label htmlFor="aju-number">Jumlah Total Pengajuan:</label>
                         <input type="text" id="aju-number" placeholder={componentType === "buat"? "Di isi angka" : (props.passedData && props.passedData[3])} name="jumlah-ajuan"
                             value={jumlahAjuan}
@@ -1195,20 +1261,22 @@ function BuatPengajuan(props) {
                             onChange={(e)=>setTanggalAjuan(e.target.value)}/>
                         </>}
                     </div>
+                    {subjenisRequired && subjenisError && <p id="aju-subjenis-error" className="pengajuan-form-error" role="alert">{subjenisError}</p>}
                     {nomorSppRequired && sppError ?
                         <p id="aju-spp-error" className="pengajuan-form-error" role="alert">{sppError}</p> : null}
+                    </fieldset>
                     <br/>
-                    <div className="pengajuan-form-tabledata">
-                        <div className="pengajuan-form-tableinfo">
+                    <div className={`pengajuan-form-tabledata${isPjkCorrection ? " pengajuan-has-correction" : ""}`}>
+                        <fieldset className="pengajuan-fields pengajuan-form-tableinfo" disabled={isPjkCorrection}>
                             <p>Input Data Pengajuan</p>
                             {bisaAturBaris && <>
                             <label>Tentukan Jumlah Row Tabel:</label>
-                            <input type="number" value={rowNum > 0 ? rowNum : ""}
-                                onChange={handleRowChange} onBlur={handleRowBlur}
-                                readOnly={componentType === "lihat"} min="0"
+                            <input type="number" value={rowNum}
+                                onChange={handleRowChange}
+                                readOnly={componentType === "lihat"} min="1" step="1"
                                 disabled={lockRow}
                             />
-                            <div className="table-lock" onClick={() => setLockRow(!lockRow)}>
+                            <div className="table-lock" onClick={() => !isPjkCorrection && setLockRow(!lockRow)}>
                                 {lockRow === false ? <LockOpenIcon fontSize={"medium"} /> : <LockIcon fontSize={"medium"} />}
                             </div>
                             </>}
@@ -1220,17 +1288,20 @@ function BuatPengajuan(props) {
                                             ? <span style={{textDecoration: "line-through"}}>Klik Disini</span>
                                             : <a href={pjkLink} target={"_blank"} rel="noopener noreferrer" >Klik Disini</a>}
                                             {/* Replacing supersedes removing, so the control hides once a new file is picked */}
-                                            {componentType === "edit" && !filePjk ?
+                                            {componentType === "edit" && !isPjkCorrection && !filePjk ?
                                                 <DeleteForeverIcon
                                                     titleAccess={removePjk ? "Batalkan hapus PJK" : "Hapus PJK"}
                                                     sx={{fontSize: 20, marginLeft: "6px", verticalAlign: "middle", cursor: "pointer",
-                                                        color: removePjk ? "#6c757d" : "#BD1404"}}
+                                                        color: removePjk ? "var(--theme-muted, #6c757d)" : "var(--theme-ink-bd1404, #BD1404)"}}
                                                     onClick={() => setRemovePjk(!removePjk)}/>
                                                 : null}
                                         </p> : null}
-                                    {removePjk ? <p style={{color: "#BD1404"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
+                                    {removePjk ? <p style={{color: "var(--theme-ink-bd1404, #BD1404)"}}>Berkas PJK akan dihapus saat perubahan disimpan.</p> : null}
                                 </div> : null}
-                        </div>
+                        </fieldset>
+                        {isPjkCorrection && <div className="pengajuan-correction-upload">
+                            <UploadButton title="Perbaikan PJK" onFileSelect={setFilePjk} accept="application/pdf" maxSizeMb={100}/>
+                        </div>}
                         {showUploadGroup &&
                             <div className="upload-btn-group">
                                 {isTabelPenuh && <UploadButton title={"Bupot"} onFileSelect={setFile}/>}
@@ -1239,8 +1310,13 @@ function BuatPengajuan(props) {
                                 {canUploadPjk && <UploadButton title={"PJK"} onFileSelect={setFilePjk} accept={"application/pdf"} maxSizeMb={100}/>}
                             </div>
                         }
-                        {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}
+                        <fieldset className="pengajuan-fields" disabled={isPjkCorrection}>
+                            {isTanpaTabel ? null : (isLoading2 ? <LoadingAnimate /> : TableComponent)}
+                        </fieldset>
                     </div>
+                    {correctionLink && <p className="pengajuan-correction-link">
+                        Perbaikan PJK terakhir: <a href={correctionLink} target="_blank" rel="noopener noreferrer">Lihat Dokumen</a>
+                    </p>}
                     {componentType === "buat" ?
                     <div className="form-submit">
                         <SubmitButton value="Kirim Pengajuan" name="submit-all" onClick={handlePopup}/>

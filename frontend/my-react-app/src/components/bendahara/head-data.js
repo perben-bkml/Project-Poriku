@@ -46,6 +46,7 @@ const columns2 = [
 const jenisPengajuan = [
     { value: "gup", label: "GUP" },
     { value: "gup-kkp", label: "GUP KKP" },
+    { value: "ls-banyak-penerima", label: "LS Banyak Penerima" },
     { value: "ls-bendahara", label: "LS Bendahara" },
     { value: "ls-kontraktual", label: "LS Kontraktual" },
     { value: "ls-pegawai", label: "LS Pegawai" },
@@ -53,16 +54,28 @@ const jenisPengajuan = [
     { value: "ptup", label: "PTUP" },
 ];
 
+// Labels stored separately in Write Antrian Verif column T; parent Jenis stays in D.
+export const subjenisPengajuan = {
+    "ls-bendahara": ["Perjalanan Dinas Jabatan", "Perjalanan Dinas Pindah", "Honorarium Kegiatan", "Honorarium Tim"],
+    "ls-kontraktual": ["SBSN", "RM", "PLN"],
+    "ls-pegawai": ["Gaji Induk PNS", "Gaji Induk PPPK", "Uang Makan PNS", "Uang Makan PPPK",
+        "Tunkin PNS", "Tunkin TNI", "Tunkin PPPK", "Gaji Susulan"],
+    "ls-banyak-penerima": ["E-Katalog", "Honor PPNPN"],
+};
+
+export const formatJenisPengajuan = (jenis, subjenis) => [jenis, subjenis]
+    .map(value => String(value ?? "").trim()).filter(Boolean).join(" - ");
+
 // GUP/PTUP keep the full table and the Request Tanggal input. Everything else is a
-// verifikasi flow with a one row table cropped from the full one, except these two, which
+// verifikasi flow with a one row table cropped from the full one, except jenisBanyakBaris, which
 // keep that narrow shape but let the user add rows. Nothing is tableless any more; rows
 // created before that changed simply have no block on the sheet.
 const jenisTabelPenuh = ["gup", "ptup"];
 const jenisTanpaTabel = [];
-const jenisBanyakBaris = ["ls-pegawai", "ls-platform"];
+const jenisBanyakBaris = ["gup-kkp", "ls-banyak-penerima", "ls-pegawai", "ls-platform"];
 
 // Jenis the verifikator may push on to SPM. Twin of majuSpm in JENIS_PENGAJUAN.
-const jenisMajuSpm = new Set(["gup-kkp", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);
+const jenisMajuSpm = new Set(["gup-kkp", "ls-banyak-penerima", "ls-bendahara", "ls-kontraktual", "ls-pegawai", "ls-platform"]);
 const ringkasColumns = [0, 1, 2, 4];
 const ringkasLabels = { 4: "Nilai Tagihan/Gross" };
 
@@ -88,9 +101,9 @@ const infoHeadData = ["No. Antri", "Nama", "Jenis", "Tgl. Antri", "Status", "Sat
 
 //For Pengujian-PJK.jsx & Aksi-Verif-PJK.jsx
 // ID GUP is the 'Write Antrian' id a GUP/PTUP mirror row came from, blank for every other jenis
-const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
+const pjkHeadData = ["No.", "ID GUP", "Timestamp", "Nomor SPP", "Nama", "Jenis", "Subjenis", "Nominal", "Unit Kerja", "Substansi", "Kelengkapan"];
 const pjkHeadDataMulai = [...pjkHeadData, "Tgl. Mulai Verifikasi"];
-const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Tgl. Antri", "Satker", "Nominal"];
+const pjkInfoHeadData = ["No. Antri", "ID GUP", "Nomor SPP", "Nama", "Jenis", "Subjenis", "Tgl. Antri", "Satker", "Nominal"];
 
 // Mirrors the backend: 5 digit zero padding, non-numeric values left as they are.
 // Rows written before the padding existed still display padded.
@@ -99,15 +112,26 @@ const formatNomorSpp = (value) => {
     return /^\d+$/.test(text) ? text.padStart(5, "0") : text;
 };
 const pjkStatusOptions = [
-    {label: "Belum", color: "white", textcolor: "#00204A"},
-    {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
-    {label: "OK Catatan", color: "#FFE39F", textcolor: "#8A6100"},
-    {label: "Ditolak", color: "#EB2727", textcolor: "#EEC6C6"},
+    {label: "Belum", color: "var(--theme-surface, white)", textcolor: "var(--theme-ink-00204a, #00204A)"},
+    {label: "OK", color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)"},
+    {label: "OK Catatan", color: "var(--theme-fill-ffe39f, #FFE39F)", textcolor: "var(--theme-ink-8a6100, #8A6100)"},
+    {label: "Ditolak", color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)"},
 ];
 const pjkKelengkapanOptions = [
     {...pjkStatusOptions[0], label: "Belum Verif"},
     ...pjkStatusOptions.slice(1),
 ];
+
+export const monitorPjkHead = ["Deadline Perbaikan", "Status Perbaikan"];
+export const pjkRepairOptions = ["OK", "Tolak"];
+export const PJK_OVERDUE_STATUS = "Lewat Batas Deadline";
+export const pjkMonitorStatusOptions = ["Belum Diperbaiki", "Sudah Diperbaiki", "Perbaikan Ditolak", "Sudah OK", PJK_OVERDUE_STATUS];
+export const isMonitorPjkRow = row =>
+    (String(row[5] ?? "").trim().toLowerCase() === "sudah sp2d" || String(row[17] ?? "").trim() !== "")
+    && [row[9], row[10]].some(value => String(value ?? "").trim().toLowerCase() === "ok catatan");
+export const pjkRepairStatusLabel = value => ({
+    "": "Belum Diperbaiki", "sudah upload": "Sudah Diperbaiki", "tolak": "Perbaikan Ditolak", "ok": "Sudah OK",
+}[String(value ?? "").trim().toLowerCase()] || String(value ?? "").trim());
 
 //For Aksi-Drpp.jsx
 const drppHeadData = ["No.", "Tanggal", "Satker", "DRPP", "SPM", "Nominal", "Pungut Pajak", "Setor Pajak", "Jenis Tagihan"]
@@ -121,12 +145,13 @@ const buktiSetorLabel = (entry) =>
 const cardTitles = ["Belum Pungut", "Sudah Pungut", "Belum Setor", "Sudah Setor", "Total DRPP"]
 const pajakStatus = ["", "Belum", "Sudah", "Ada Masalah", "Tidak Ada Pajak", "Pajak Manual"]
 
-//Status values on 'Write Antrian Verif' column F, which the sheet owns. Twin of
-//STATUS_SUDAH_VERIFIKASI / STATUS_SUDAH_MAJU in server.js.
+// Status lists mirror the backend constants. Only Write Antrian Verif uses Siap Maju SPM;
+// Write Antrian retains Sudah Diajukan ke KPPN.
 const statusSudahVerifikasi = [
     "Sudah Di Verifikasi", "Sudah Verifikasi", "Verifikasi OK", "Verifikasi OK Dengan Catatan",
 ];
 const statusSudahMaju = ["Sudah Diajukan ke KPPN", "Sudah SP2D"];
+export const statusSudahMajuVerif = ["Siap Maju SPM", "Sudah SP2D"];
 const OK_CATATAN = "OK Catatan";
 // Twin of STATUS_DIPERBAIKI in server.js. Must not contain the word "masalah": daftarStatusStyle
 // tests for that first and would paint a repaired row red.
@@ -134,34 +159,40 @@ const STATUS_DIPERBAIKI = "Telah Diperbaiki";
 
 //Status pill colours, shared by the daftar table and the pengajuan detail view
 // Ordered as the row travels: neutral, blue, amber while in progress, then olive for
-// passed-with-notes, green for passed, teal and purple through DRPP/KPPN, and a solid
+// passed-with-notes, green for passed, teal and purple through DRPP/SPM/KPPN, and a solid
 // fill at SP2D - the only filled pill, because it is the one terminal state.
 const DAFTAR_STATUS_STYLE = {
-    "dalam antrian":                { bg: "#E7ECF4", fg: "#41506B" },
-    "diajukan hari ini":            { bg: "#DCE9FF", fg: "#00449C" },
-    "sedang di verifikasi":         { bg: "#FFF1CF", fg: "#8A6100" },
+    "dalam antrian":                { bg: "var(--theme-fill-e7ecf4, #E7ECF4)", fg: "var(--theme-ink-41506b, #41506B)" },
+    "diajukan hari ini":            { bg: "var(--theme-fill-dce9ff, #DCE9FF)", fg: "var(--theme-ink-00449c, #00449C)" },
+    "sedang di verifikasi":         { bg: "var(--theme-fill-fff1cf, #FFF1CF)", fg: "var(--theme-ink-8a6100, #8A6100)" },
     // The satker has answered a problem and the desk owes it a second look, so it reads as
     // outstanding work rather than as a pass
-    "telah diperbaiki":             { bg: "#FFE2CC", fg: "#A64B00" },
-    "verifikasi ok dengan catatan": { bg: "#E9F2C6", fg: "#55700D" },
-    "sudah di verifikasi":          { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "sudah verifikasi":             { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "verifikasi ok":                { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "sudah diterbitkan drpp":       { bg: "#D5EEF6", fg: "#0B6478" },
-    "sudah diajukan ke kppn":       { bg: "#E5DEFA", fg: "#4B32A8" },
+    "telah diperbaiki":             { bg: "var(--theme-fill-ffe2cc, #FFE2CC)", fg: "var(--theme-ink-a64b00, #A64B00)" },
+    "verifikasi ok dengan catatan": { bg: "var(--theme-fill-e9f2c6, #E9F2C6)", fg: "var(--theme-ink-55700d, #55700D)" },
+    "sudah di verifikasi":          { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "sudah verifikasi":             { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "verifikasi ok":                { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "sudah diterbitkan drpp":       { bg: "var(--theme-fill-d5eef6, #D5EEF6)", fg: "var(--theme-ink-0b6478, #0B6478)" },
+    "sudah diajukan ke kppn":       { bg: "var(--theme-fill-e5defa, #E5DEFA)", fg: "var(--theme-ink-4b32a8, #4B32A8)" },
+    "siap maju spm":                { bg: "var(--theme-fill-e5defa, #E5DEFA)", fg: "var(--theme-ink-4b32a8, #4B32A8)" },
     "sudah sp2d":                   { bg: "#0F7A3D", fg: "#FFFFFF" },
+    "belum diperbaiki":             { bg: "var(--theme-fill-fff1cf, #FFF1CF)", fg: "var(--theme-ink-8a6100, #8A6100)" },
+    "sudah diperbaiki":             { bg: "var(--theme-fill-dce9ff, #DCE9FF)", fg: "var(--theme-ink-00449c, #00449C)" },
+    "perbaikan ditolak":            { bg: "var(--theme-fill-fbe1de, #FBE1DE)", fg: "var(--theme-ink-bd1404, #BD1404)" },
+    "sudah ok":                     { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "lewat batas deadline":         { bg: "#BD1404", fg: "#FFFFFF" },
     // PJK verdicts (Substansi/Kelengkapan) and the bendahara's Pajak/Anggaran columns,
     // which share the pill treatment now that TableKelola renders them the same way
-    "ok":                           { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "ok catatan":                   { bg: "#E9F2C6", fg: "#55700D" },
-    "ditolak":                      { bg: "#FBE1DE", fg: "#BD1404" },
-    "sudah":                        { bg: "#D6F5E1", fg: "#0F7A3D" },
-    "belum":                        { bg: "#FFF1CF", fg: "#8A6100" },
-    "tidak ada pajak":              { bg: "#E7ECF4", fg: "#5A6472" },
-    "pajak manual":                 { bg: "#EFE4D6", fg: "#6B4E2E" },
+    "ok":                           { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "ok catatan":                   { bg: "var(--theme-fill-e9f2c6, #E9F2C6)", fg: "var(--theme-ink-55700d, #55700D)" },
+    "ditolak":                      { bg: "var(--theme-fill-fbe1de, #FBE1DE)", fg: "var(--theme-ink-bd1404, #BD1404)" },
+    "sudah":                        { bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)" },
+    "belum":                        { bg: "var(--theme-fill-fff1cf, #FFF1CF)", fg: "var(--theme-ink-8a6100, #8A6100)" },
+    "tidak ada pajak":              { bg: "var(--theme-fill-e7ecf4, #E7ECF4)", fg: "var(--theme-text, #5A6472)" },
+    "pajak manual":                 { bg: "var(--theme-fill-efe4d6, #EFE4D6)", fg: "var(--theme-ink-6b4e2e, #6B4E2E)" },
 };
-const DAFTAR_STATUS_MASALAH = { bg: "#FBE1DE", fg: "#BD1404" };
-const DAFTAR_STATUS_FALLBACK = { bg: "#E7ECF4", fg: "#5A6472" };
+const DAFTAR_STATUS_MASALAH = { bg: "var(--theme-fill-fbe1de, #FBE1DE)", fg: "var(--theme-ink-bd1404, #BD1404)" };
+const DAFTAR_STATUS_FALLBACK = { bg: "var(--theme-fill-e7ecf4, #E7ECF4)", fg: "var(--theme-text, #5A6472)" };
 
 function daftarStatusStyle(status) {
     const key = String(status ?? "").trim().toLowerCase();
@@ -182,22 +213,22 @@ const isStatusLabel = (label) => {
 // objects rather than CSS classes because those cells already take sx, and MUI's generated
 // styles are injected after the stylesheet and would win over a class rule.
 const HEAD_CELL = {
-    backgroundColor: "#F4F7FB",
-    color: "#5A6472",
+    backgroundColor: "var(--theme-table-header, #F4F7FB)",
+    color: "var(--theme-text, #5A6472)",
     fontSize: "0.71rem",
     fontWeight: 700,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
     whiteSpace: "nowrap",
     padding: "11px 14px",
-    borderBottom: "1px solid #E1E7EF",
+    borderBottom: "1px solid var(--theme-border, #E1E7EF)",
 };
 
 const BODY_CELL = {
     padding: "12px 14px",
-    borderBottom: "1px solid #F1F4F8",
+    borderBottom: "1px solid var(--theme-border, #F1F4F8)",
     fontSize: "0.9rem",
-    color: "#0a0f1b",
+    color: "var(--theme-ink-0a0f1b, #0a0f1b)",
 };
 
 // The per column treatments Daftar Pengajuan gives its cells: Jenis bold and uppercased,
@@ -415,11 +446,11 @@ const kkpWarnaHue = [210, 12, 145, 275, 32, 190, 330, 95, 250, 5,
 // indeks is the unit's position in the sorted list the API returns, so a colour is stable
 // for as long as the unit kerja list is. -1 (an unknown or blank unit) stays neutral.
 const kkpWarnaUnit = (indeks) => indeks < 0
-    ? {aksen: "#9AA4B2", latar: "#EDF1F7", teks: "#5A6472"}
+    ? {aksen: "var(--theme-muted, #9AA4B2)", latar: "var(--theme-fill-edf1f7, #EDF1F7)", teks: "var(--theme-text, #5A6472)"}
     : {
         aksen: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 62% 46%)`,
-        latar: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 78% 95%)`,
-        teks: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 68% 27%)`,
+        latar: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 78% var(--theme-unit-fill, 95%))`,
+        teks: `hsl(${kkpWarnaHue[indeks % kkpWarnaHue.length]} 68% var(--theme-unit-ink, 27%))`,
     };
 
 
@@ -431,9 +462,9 @@ const layananGajiStatus = ["Sedang Diproses", "Selesai", "Gagal Kirim Email File
 // them there would repaint Pembayaran BP's SELESAI along with them. Amber in progress, green
 // done - the same language as the pengajuan pills.
 const LAYANAN_GAJI_STATUS_STYLE = {
-    "sedang diproses":        {bg: "#FFF1CF", fg: "#8A6100"},
-    "selesai":                {bg: "#D6F5E1", fg: "#0F7A3D"},
-    "gagal kirim email file": {bg: "#FDE0E0", fg: "#A81E1E"},
+    "sedang diproses":        {bg: "var(--theme-fill-fff1cf, #FFF1CF)", fg: "var(--theme-ink-8a6100, #8A6100)"},
+    "selesai":                {bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)"},
+    "gagal kirim email file": {bg: "var(--theme-fill-fde0e0, #FDE0E0)", fg: "var(--theme-ink-a81e1e, #A81E1E)"},
 };
 const layananGajiStatusStyle = (status) =>
     LAYANAN_GAJI_STATUS_STYLE[String(status ?? "").trim().toLowerCase()]
@@ -443,8 +474,8 @@ const layananGajiStatusStyle = (status) =>
 // mailer existed, and rows whose address was just corrected - so an unset value is left
 // unstyled rather than reported as a failure that never happened.
 const LAYANAN_GAJI_EMAIL_STYLE = {
-    "aktif":       {bg: "#D6F5E1", fg: "#0F7A3D"},
-    "tidak aktif": {bg: "#FDE0E0", fg: "#A81E1E"},
+    "aktif":       {bg: "var(--theme-fill-d6f5e1, #D6F5E1)", fg: "var(--theme-ink-0f7a3d, #0F7A3D)"},
+    "tidak aktif": {bg: "var(--theme-fill-fde0e0, #FDE0E0)", fg: "var(--theme-ink-a81e1e, #A81E1E)"},
 };
 // Twin of LAYANAN_GAJI_EMAIL_MATI in server.js: the address is known not to receive mail, so
 // every send to it is blocked until the address is corrected.

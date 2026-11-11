@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
 //Import components;
@@ -36,23 +36,27 @@ function AksiPengajuan(props) {
     // Only once the existing DRPP rows are known may a save mean "delete what is there"
     const [docsLoaded, setDocsLoaded] = useState(false)
     const [warning, setWarning] = useState("")
+    const [bpPreview, setBpPreview] = useState(null)
+    const [isCheckingBp, setIsCheckingBp] = useState(false)
+    const saving = useRef(false)
+    const checking = useRef(false)
     //State for aju-verif select
     const [verifValue, setVerifValue] = useState("FALSE")
     const [drppProcess, setDrppProcess] = useState(false)
 
     //Options Data
     const optionPajak = [
-        {label: "", color: "white", textcolor: "white"},
-        {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
-        {label: "Belum ada bukti potong", color: "#C7B6A7", textcolor: "#5E4C3B"},
-        {label: "Belum ada faktur pajak", color: "#3D3630", textcolor: "#C7B6A7"},
-        {label: "Jenis pajak salah", color: "#F3B5B5", textcolor: "#8B0808"}, 
-        {label: "Perhitungan Salah", color: "#EB2727", textcolor: "#EEC6C6"},]
+        {label: "", color: "var(--theme-surface, white)", textcolor: "white"},
+        {label: "OK", color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)"},
+        {label: "Belum ada bukti potong", color: "var(--theme-fill-c7b6a7, #C7B6A7)", textcolor: "var(--theme-ink-5e4c3b, #5E4C3B)"},
+        {label: "Belum ada faktur pajak", color: "var(--theme-surface-raised, #3D3630)", textcolor: "var(--theme-ink-c7b6a7, #C7B6A7)"},
+        {label: "Jenis pajak salah", color: "var(--theme-fill-f3b5b5, #F3B5B5)", textcolor: "var(--theme-ink-8b0808, #8B0808)"},
+        {label: "Perhitungan Salah", color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)"},]
 
     const optionAnggaran = [
-        {label: "", color: "white", textcolor: "white"},
-        {label: "OK", color: "#9FFFC3", textcolor: "#0F9043"},
-        {label: "Pagu Minus", color: "#EB2727", textcolor: "#EEC6C6"},
+        {label: "", color: "var(--theme-surface, white)", textcolor: "white"},
+        {label: "OK", color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)"},
+        {label: "Pagu Minus", color: "var(--theme-fill-eb2727, #EB2727)", textcolor: "var(--theme-ink-eec6c6, #EEC6C6)"},
     ]
 
     async function fetchAntrianTable() {
@@ -77,11 +81,11 @@ function AksiPengajuan(props) {
                 params: { trans_id: props.fulldata[0], spm: props.fulldata[10] },
             });
             if (response.status === 200) {
-                const firstDRPP = response.data.data[0].drpp;
-                if (firstDRPP !== '') {
+                if ((response.data.data || []).some(row=>row.drpp || row.spp || row.spm || row.nominal)) {
                     setDocumentData(response.data.data || []);
                     setDrppProcess(true);
                 }
+                if (response.data.warning) setWarning(response.data.warning);
                 setDocsLoaded(true);
             }
         } catch (error) {
@@ -89,7 +93,10 @@ function AksiPengajuan(props) {
             // state is known. Any other failure leaves it unknown, and a save then
             // touches neither Monitoring DRPP nor Pembayaran BP.
             if (error.response?.status === 404) setDocsLoaded(true);
-            else console.error("Error fetching monitoring data", error);
+            else {
+                console.error("Error fetching monitoring data", error);
+                setWarning('Rincian DRPP belum dapat dimuat. Perubahan DRPP dan Pembayaran BP tidak akan disimpan. Muat ulang untuk mengubahnya.');
+            }
         }
     }
 
@@ -206,12 +213,25 @@ function AksiPengajuan(props) {
 
 
     //Handle Popup
-    function handlePopup() {
-        if (!isPopup) {
-            setIsPopup(true);
-        } else {
+    async function handlePopup() {
+        if (isPopup) {
             setIsPopup(false);
+            setBpPreview(null);
+            return;
         }
+        if (checking.current || saving.current) return;
+        checking.current=true;setIsCheckingBp(true);setWarning("");
+        try {
+            if (docsLoaded) {
+                const {data}=await apiClient.post('/bendahara/aksi-ajuan/pembayaran-bp-preview',{
+                    transId:props.fulldata[0],documentData,drppProcess,tanggalSp2d,
+                });
+                setBpPreview(data);
+            } else setBpPreview(null);
+            setIsPopup(true);
+        } catch(error) {
+            setWarning(error.response?.data?.message || 'Gagal memeriksa SPM di Pembayaran BP. Coba lagi sebelum menyimpan.');
+        } finally {checking.current=false;setIsCheckingBp(false);}
     }
 
     // Grouped the way the server does before writing Pembayaran BP: by SPM digits, so
@@ -241,21 +261,21 @@ function AksiPengajuan(props) {
 
     //Submit Handler
     async function handleOnSubmit(){
+        if (saving.current) return;
+        saving.current=true;
         // Unticking Buat DRPP means this pengajuan has no DRPP, so the antrian stops
         // claiming a DRPP, SPP and SPM as well
         const docRows = drppProcess ? documentData : [];
         const drppArray = docRows.map(row => row.drpp).join(", ");
-        const sppArray = docRows.map(row => row.spp).filter(spp => spp.trim() !== "");
+        const sppArray = docRows.map(row => row.spp).filter(spp => String(spp ?? '').trim() !== "");
         const sppString = [...new Set(sppArray)].join(", ");
 
-        const spmArray = docRows.map(row => row.spm).filter(spm => spm.trim() !== "");
+        const spmArray = docRows.map(row => row.spm).filter(spm => String(spm ?? '').trim() !== "");
         const spmString = [...new Set(spmArray)].join(", ");
 
         const updatedAntriData = {
             ...antriData,
-            drpp: drppArray, 
-            spp: sppString,
-            spm: spmString,
+            ...(docsLoaded ? {drpp:drppArray,spp:sppString,spm:spmString} : {}),
         };
 
         // Sent even when unticked: the rows already on the sheet have to be removed,
@@ -269,22 +289,26 @@ function AksiPengajuan(props) {
         const sendData = {
             updatedAntriData,
             monitoringDrppData,
+            bpPreviewToken:bpPreview?.token || null,
             ...(docsLoaded ? { documentData, drppProcess, tanggalSp2d } : {}),
         }
 
         try {
-            handlePopup();
+            setIsPopup(false);
             setIsLoading(true);
             const result = await apiClient.post('/bendahara/aksi-ajuan', sendData)
             if (result.status === 200) {
-                setIsLoading(false)
                 // Stay put when Pembayaran BP was not written, or the admin never sees it
                 if (result.data?.warning) return setWarning(result.data.warning)
                 props.changeComponent("kelola-pengajuan")
             }
         } catch (error) {
-            console.log("Failed sending Data.", error)
-        }
+            if (error.response?.status===409 && error.response.data?.code==='BP_CONFIRMATION_REQUIRED') {
+                setBpPreview(error.response.data.preview);
+                setWarning('Data Pembayaran BP berubah. Periksa kembali penambahan nominal sebelum menyimpan.');
+                setIsPopup(true);
+            } else setWarning(error.response?.data?.message || 'Gagal menyimpan data. Silakan coba lagi.');
+        } finally {saving.current=false;setIsLoading(false);}
     }
 
     return (
@@ -293,6 +317,7 @@ function AksiPengajuan(props) {
                 <h2 className="aksi-content-title">Informasi Antrian</h2>
                 <TableInfoAntri header={infoHeadData} body={infoTableData}/>
                 <form>
+                <fieldset className="aksi-pengajuan-fields" disabled={isCheckingBp || isLoading || isPopup}>
                 <div className="aksi-content-label">
                     <label htmlFor="aju-verif">Sedang Di Verifikasi?</label>
                     <select id="aju-verif" className="type-btn" name="ajuan_verifikasi" value={verifValue} onChange={e => handleInputChange(e.target)}>
@@ -382,8 +407,9 @@ function AksiPengajuan(props) {
                 }
                 <div className="form-submit aksi-submit">
                     <input className={"button-reject"} type="button" value="Kembali" onClick={() => props.changeComponent("kelola-pengajuan")}/>
-                    <input type="button" value="Simpan" onClick={handlePopup} />
+                    <input type="button" value={isCheckingBp ? "Memeriksa SPM…" : "Simpan"} onClick={handlePopup} />
                 </div>
+                </fieldset>
                 </form>
             </div>
             <div className="bg-card aksi-content">
@@ -393,7 +419,19 @@ function AksiPengajuan(props) {
                              tandaMak={tandaMak} />
                 }
             </div>
-            {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}
+            {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}
+                message={bpPreview?.additions?.length ? <span className="aksi-bp-confirm">
+                    <span className="aksi-bp-confirm-title">Nomor SPM sudah ada di Pembayaran BP</span>
+                    <span className="aksi-bp-confirm-note">SPM pengajuan ini akan menambah nominal pada data yang sudah ada.</span>
+                    <span className="aksi-bp-confirm-items">{bpPreview.additions.map(item=><span key={item.spm} className="aksi-bp-confirm-item">
+                        <strong>SPM {item.spm}</strong>
+                        <span>Nominal saat ini: Rp {numberFormats(item.existing) || '0'}</span>
+                        <span>Penambahan: <strong>Rp {numberFormats(item.increase) || '0'}</strong></span>
+                        <span>Total setelah disimpan: <strong>Rp {numberFormats(item.total) || '0'}</strong></span>
+                    </span>)}</span>
+                    <span className="aksi-bp-confirm-note">Lanjutkan menyimpan?</span>
+                </span> : bpPreview?.warning || undefined}/>
+            }
             {warning && <PopupAlert isAlert={!!warning} severity="warning" message={warning}/>}
             {isLoading && <LoadingScreen />}
         </div>

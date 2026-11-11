@@ -11,11 +11,13 @@ function Home() {
     const { user } = useContext(AuthContext);
     const satkerName = user.name;
     const userRole = user.role;
+    const canFilterUnit = String(userRole ?? "").toLowerCase().includes("admin");
 
     //State
     const [dashboard, setDashboard] = useState(null);
     const [anggaran, setAnggaran] = useState(null);
     const [anggaranError, setAnggaranError] = useState("");
+    const [unitKerja, setUnitKerja] = useState("");
 
     // Year state (load from localStorage or default to current year)
     const currentYear = new Date().getFullYear();
@@ -62,16 +64,24 @@ function Home() {
         return () => controller.abort();
     }, []);
 
+    const unitOptions = useMemo(() => [...new Set((anggaran?.anggaran || []).map(unit => unit.unitKerja))]
+        .sort((a, b) => a.localeCompare(b, "id")), [anggaran]);
+    const selectedUnit = canFilterUnit && unitOptions.includes(unitKerja) ? unitKerja : "";
+
     const ringkasan = useMemo(() => {
         if (!anggaran) return null;
         // Sum only unit totals: MAK and akun repeat the same budget at lower levels.
-        const totals = anggaran.anggaran.reduce((sum, unit) => ({
+        const units = selectedUnit
+            ? anggaran.anggaran.filter(unit => unit.unitKerja === selectedUnit)
+            : anggaran.anggaran;
+        const totals = units.reduce((sum, unit) => ({
             pagu: sum.pagu + unit.pagu,
-            terpakai: sum.terpakai + unit.terpakai,
-        }), {pagu: 0, terpakai: 0});
+            terpakai: sum.terpakai + unit.realisasi,
+            outstanding: sum.outstanding + unit.outstanding,
+        }), {pagu: 0, terpakai: 0, outstanding: 0});
         return {...totals, sisa: totals.pagu - totals.terpakai,
             persen: totals.pagu ? totals.terpakai / totals.pagu * 100 : 0};
-    }, [anggaran]);
+    }, [anggaran, selectedUnit]);
 
     const dashboardSections = useMemo(() => dashboard ? [
         {title: "Data Pengajuan", cards: [
@@ -124,6 +134,15 @@ function Home() {
                         {userRole === "user" ? `Realisasi Anggaran ${satkerName}` : "Realisasi Anggaran"}
                     </h3>
                     <div className="dashboard-realisasi" aria-live="polite">
+                        {canFilterUnit && <div className="dashboard-realisasi-filter">
+                            <label htmlFor="home-anggaran-unit">Unit Kerja</label>
+                            <select id="home-anggaran-unit" value={selectedUnit}
+                                    disabled={!anggaran || !!anggaranError || unitOptions.length === 0}
+                                    onChange={event => setUnitKerja(event.target.value)}>
+                                <option value="">Semua Unit Kerja</option>
+                                {unitOptions.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                            </select>
+                        </div>}
                         {anggaranError ? <p className="dashboard-realisasi-empty" role="alert">{anggaranError}</p> :
                             !ringkasan ? <LoadingAnimate /> :
                                 anggaran.anggaran.length === 0 ?
@@ -138,6 +157,7 @@ function Home() {
                                                     ["Terpakai", formatRupiah(ringkasan.terpakai)],
                                                     ["Sisa Anggaran", formatRupiah(ringkasan.sisa)],
                                                     ["Persentase", ringkasan.pagu ? `${ringkasan.persen.toFixed(2)}%` : "-"],
+                                                    ["Outstanding", formatRupiah(ringkasan.outstanding)],
                                                 ].map(([label, value]) => <div key={label}>
                                                     <dt>{label}</dt><dd>{value}</dd>
                                                 </div>)}

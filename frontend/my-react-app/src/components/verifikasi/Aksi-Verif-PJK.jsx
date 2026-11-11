@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import apiClient from "../../lib/apiClient";
 import PropTypes from "prop-types";
-import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm } from "../bendahara/head-data.js";
+import { columns, ringkasColumns, ringkasLabels, pjkInfoHeadData, pjkStatusOptions, pjkKelengkapanOptions, formatNomorSpp, jenisValueFromLabel, jenisMajuSpm, isMonitorPjkRow, pjkRepairOptions } from "../bendahara/head-data.js";
 import { TableKelola, TableInfoAntri } from "../../ui/tables.jsx";
 import LoadingAnimate, { LoadingScreen } from "../../ui/loading.jsx";
-import Popup from "../../ui/Popup.jsx";
+import Popup, { PopupAlert } from "../../ui/Popup.jsx";
 
 const FIELD = {
     no: 0, timestamp: 1, nama: 2, jenis: 3, nominal: 4, spp: 6,
@@ -13,6 +13,9 @@ const FIELD = {
     dokVerif: 15, majuSpm: 16, tanggalSp2d: 17,
     // Appended by the backend past R: the 'Write Antrian' id, set only on GUP/PTUP mirror rows
     sourceId: 18,
+    subjenis: 20,
+    deadline: 21, repairStatus: 22,
+    correctionLink: 23,
 };
 
 function AksiVerifPJK(props) {
@@ -21,6 +24,10 @@ function AksiVerifPJK(props) {
     const [isPopup, setIsPopup] = useState(false);
     const [tableData, setTableData] = useState([]);
     const [tandaMak, setTandaMak] = useState(null);
+    const [coloredRow, setColoredRow] = useState([]);
+    const [savedColors, setSavedColors] = useState([]);
+    const [colorRevision, setColorRevision] = useState("");
+    const [saveError, setSaveError] = useState("");
     const [pjkData, setPjkData] = useState({
         no_antri: "",
         mulai_verifikasi: "FALSE",
@@ -32,6 +39,9 @@ function AksiVerifPJK(props) {
         maju_spm: false,
         tgl_sp2d: "",
     });
+    const [repairDecision, setRepairDecision] = useState("");
+    const [sp2dChanged, setSp2dChanged] = useState(false);
+    const canReviewRepair = isMonitorPjkRow(props.fulldata);
 
     // A GUP/PTUP block is the full table; every other jenis stores the cropped one
     const sourceId = props.fulldata[FIELD.sourceId];
@@ -45,6 +55,8 @@ function AksiVerifPJK(props) {
     );
 
     useEffect(() => {
+        const savedDecision = String(props.fulldata[FIELD.repairStatus] ?? "").trim();
+        setRepairDecision(pjkRepairOptions.includes(savedDecision) ? savedDecision : "");
         setPjkData({
             no_antri: props.fulldata[FIELD.no],
             mulai_verifikasi: props.fulldata[FIELD.mulaiVerif] === "" ? "FALSE" : "TRUE",
@@ -64,12 +76,16 @@ function AksiVerifPJK(props) {
                 const unitKerja = props.fulldata[FIELD.unitKerja];
                 const response = await apiClient.get('/bendahara/data-transaksi', {
                     params: sourceId
-                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup", unitKerja }
-                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif", unitKerja },
+                        ? { tableKeyword: `TRANS_ID:${sourceId}`, flow: "gup", unitKerja, pjkColors: true }
+                        : { tableKeyword: `TRANS_ID:${props.fulldata[FIELD.no]}`, flow: "verif", unitKerja, pjkColors: true },
                 });
                 if (response.status === 200) {
                     setTableData(response.data.data || []);
                     setTandaMak(response.data.tandaMak || null);
+                    const colors = response.data.rowColors?.colors || [];
+                    setColoredRow(colors);
+                    setSavedColors(colors);
+                    setColorRevision(response.data.rowColors?.revision || "");
                 }
             } catch {
                 setTableData([]); // jenis without a table block
@@ -93,11 +109,20 @@ function AksiVerifPJK(props) {
     }, [pjkData]);
 
     function handleInputChange({name, value}) {
+        if (name === "tgl_sp2d") setSp2dChanged(true);
         setPjkData(prev => ({...prev, [name]: value}));
     }
 
     function handlePopup() {
         setIsPopup(!isPopup);
+    }
+
+    function addColorData(rowIndex, value) {
+        setColoredRow(previous => {
+            const next = [...previous];
+            next[rowIndex] = previous[rowIndex]?.[0] === value ? [""] : [value];
+            return next;
+        });
     }
 
     const infoTableData = [
@@ -106,6 +131,7 @@ function AksiVerifPJK(props) {
         <b key="spp">{formatNomorSpp(props.fulldata[FIELD.spp])}</b>,
         props.fulldata[FIELD.nama],
         props.fulldata[FIELD.jenis],
+        props.fulldata[FIELD.subjenis] || "",
         props.fulldata[FIELD.timestamp],
         props.fulldata[FIELD.unitKerja],
         props.fulldata[FIELD.nominal],
@@ -115,16 +141,26 @@ function AksiVerifPJK(props) {
         try {
             handlePopup();
             setIsLoading(true);
-            const result = await apiClient.post('/verifikasi/aksi-pjk', pjkData);
+            setSaveError("");
+            const changes = coloredRow.flatMap((row, index) =>
+                (row?.[0] || "") === (savedColors[index]?.[0] || "") ? [] : [{index, color: row?.[0] || ""}]);
+            const result = await apiClient.post('/verifikasi/aksi-pjk', {
+                ...pjkData,
+                update_sp2d: sp2dChanged,
+                ...(canReviewRepair && repairDecision ? {status_perbaikan: repairDecision} : {}),
+                ...(changes.length ? {rowColors: {revision: colorRevision, changes}} : {}),
+            });
             if (result.status === 200) props.changeComponent("pengujian-PJK");
         } catch (error) {
             console.log("Failed sending Data.", error);
+            setSaveError(error.response?.data?.message || "Gagal menyimpan verifikasi. Silakan coba lagi.");
         }
         setIsLoading(false);
     }
 
     return (
         <div className="aksi-pengajuan-container">
+            {saveError && <PopupAlert severity="error" message={saveError}/>}
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Verifikasi PJK</h2>
                 <TableInfoAntri header={pjkInfoHeadData} body={infoTableData}/>
@@ -159,8 +195,11 @@ function AksiVerifPJK(props) {
                     {bolehMajuSpm && <>
                         <label htmlFor="maju-spm">Maju SPM</label>
                         <input id="maju-spm" className="maju-spm-check" type="checkbox" checked={pjkData.maju_spm}
-                            onChange={e => setPjkData(prev => ({...prev, maju_spm: e.target.checked,
-                                tgl_sp2d: e.target.checked ? prev.tgl_sp2d : ""}))}/>
+                            onChange={e => {
+                                setSp2dChanged(true);
+                                setPjkData(prev => ({...prev, maju_spm: e.target.checked,
+                                    tgl_sp2d: e.target.checked ? prev.tgl_sp2d : ""}));
+                            }}/>
                         {pjkData.maju_spm && <>
                             <label className="maju-spm-date" htmlFor="tgl-sp2d">Tanggal SP2D</label>
                             <input id="tgl-sp2d" className="type-btn" type="date" name="tgl_sp2d" value={pjkData.tgl_sp2d}
@@ -169,8 +208,18 @@ function AksiVerifPJK(props) {
                         </>}
                     </>}
                 </div>
+                {canReviewRepair && <div className="pjk-repair-review">
+                    <label htmlFor="review-perbaikan">Penilaian Perbaikan</label>
+                    <select id="review-perbaikan" className="type-btn" value={repairDecision}
+                            onChange={event => setRepairDecision(event.target.value)}>
+                        <option value="">Pilih OK atau Tolak</option>
+                        {pjkRepairOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                </div>}
 
                 <div className="lampiran-aksi-pengajuan">
+                    {props.fulldata[FIELD.correctionLink] && <p>Perbaikan PJK: <a
+                        href={props.fulldata[FIELD.correctionLink]} target="_blank" rel="noopener noreferrer">Lihat Dokumen Perbaikan</a></p>}
                     <p>Lampiran: <span className={"padd-span-bend"}/>{ pjkData.lampiran ?
                         <a href={pjkData.lampiran} target={"_blank"} rel="noopener noreferrer">Klik disini</a> : <a>-</a> }
                     </p>
@@ -184,9 +233,12 @@ function AksiVerifPJK(props) {
             {isTableLoading || tableData.length > 0 ?
             <div className="bg-card aksi-content">
                 <h2 className="aksi-content-title">Tabel Ajuan</h2>
+                <p style={{margin: "0 30px 16px", color: "var(--theme-text, #5A6472)", fontSize: "0.9rem"}}>
+                    Klik dua kali untuk hijau muda, tiga kali untuk merah muda. Ulangi untuk menghapus warna, lalu klik Simpan.
+                </p>
                 {isTableLoading ? <LoadingAnimate /> :
-                <TableKelola type="aksi" header={tableHeader} content={tableData} fullContent={tableData}
-                             tandaMak={tandaMak} />
+                <TableKelola type="aksi-pjk" header={tableHeader} content={tableData} fullContent={tableData}
+                             tandaMak={tandaMak} coloredRow={coloredRow} addColorData={addColorData} />
                 }
             </div> : null}
             {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}/>}

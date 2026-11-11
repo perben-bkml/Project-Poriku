@@ -282,7 +282,7 @@ export default function KelolaPJK() {
                             style={{
                                 width: '60px',
                                 padding: '4px 8px',
-                                border: '1px solid #ccc',
+                                border: '1px solid var(--theme-border, #ccc)',
                                 borderRadius: '4px',
                                 textAlign: 'center'
                             }}
@@ -292,9 +292,9 @@ export default function KelolaPJK() {
                             disabled={!pageInput || totalPages === 0}
                             style={{
                                 padding: '4px 12px',
-                                border: '1px solid #ccc',
+                                border: '1px solid var(--theme-border, #ccc)',
                                 borderRadius: '4px',
-                                backgroundColor: '#f5f5f5',
+                                backgroundColor: 'var(--theme-surface-raised, #f5f5f5)',
                                 cursor: pageInput && totalPages > 0 ? 'pointer' : 'not-allowed'
                             }}
                         >

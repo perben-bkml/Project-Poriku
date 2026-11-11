@@ -36,9 +36,9 @@ import PropTypes from 'prop-types';
 const headLabel = (head) => typeof head === "string" ? head : head?.label ?? "";
 
 const BUKTI_SETOR_STYLE = {
-    "Sudah Diunggah": { color: "#9FFFC3", textcolor: "#0F9043" },
-    "Belum Diunggah": { color: "#C7B6A7", textcolor: "#5E4C3B" },
-    "Tidak Perlu": { color: "#E4E9F0", textcolor: "#5A6472" },
+    "Sudah Diunggah": { color: "var(--theme-fill-9fffc3, #9FFFC3)", textcolor: "var(--theme-ink-0f9043, #0F9043)" },
+    "Belum Diunggah": { color: "var(--theme-fill-c7b6a7, #C7B6A7)", textcolor: "var(--theme-ink-5e4c3b, #5E4C3B)" },
+    "Tidak Perlu": { color: "var(--theme-fill-e4e9f0, #E4E9F0)", textcolor: "var(--theme-text, #5A6472)" },
 };
 
 // SPM-Bend.jsx
@@ -92,7 +92,7 @@ export function TableSpmBendahara(props) {
                         {body
                             .slice(halaman * rowsPerPage, halaman * rowsPerPage + rowsPerPage)
                             .map((row, rowIndex) => (
-                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: '#F7FAFF'}}}>
+                                <TableRow key={rowIndex} sx={{'&:hover td': {backgroundColor: 'var(--theme-fill-f7faff, #F7FAFF)'}}}>
                                     {row.map((cell, cellIndex) => (
                                         <TableCell key={cellIndex}
                                                    sx={{...BODY_CELL, ...kolomGaya(head[cellIndex])}}>
@@ -311,7 +311,7 @@ export function TableKelola(props) {
                 onMouseLeave={() => setIsHovered(false)}
                 sx={{
                     ...props.sx,
-                    ...(props.column < 2 && props.feature === "AksiDrpp" ? { position: "sticky", left: '0px', zIndex: 1000, backgroundColor: "white" } : { position: 'relative'}),
+                    ...(props.column < 2 && props.feature === "AksiDrpp" ? { position: "sticky", left: '0px', zIndex: 1000, backgroundColor: "var(--theme-surface, white)" } : { position: 'relative'}),
                     '&:hover': {
                         backgroundColor: 'rgba(0, 0, 0, 0.02)'
                     }
@@ -436,7 +436,7 @@ export function TableKelola(props) {
 
         // Handle multiple clicks (double and triple)
         const handleRowClick = () => {
-            if (tableType !== 'aksi-drpp') return;
+            if (tableType !== 'aksi-drpp' && tableType !== 'aksi-pjk') return;
 
             const newCount = clickCount + 1;
             setClickCount(newCount);
@@ -449,11 +449,11 @@ export function TableKelola(props) {
             // Set new timer to detect click pattern
             const timer = setTimeout(() => {
                 if (newCount === 2) {
-                    // Double click - set to red
-                    props.addColorData(props.rowIndex, "colored");
+                    // First mark: PJK green, DRPP red.
+                    props.addColorData(props.rowIndex, tableType === 'aksi-pjk' ? "pjk-green" : "colored");
                 } else if (newCount >= 3) {
-                    // Triple click - set to purple
-                    props.addColorData(props.rowIndex, "color-purple");
+                    // Second mark: PJK red, DRPP orange.
+                    props.addColorData(props.rowIndex, tableType === 'aksi-pjk' ? "pjk-red" : "color-purple");
                 }
                 setClickCount(0);
             }, 300); // 300ms window to detect multiple clicks
@@ -463,18 +463,23 @@ export function TableKelola(props) {
 
         // Determine background color based on color status
         const getBackgroundColor = () => {
+            if (tableType === 'aksi-pjk') {
+                if (getCheckData[0] === 'pjk-green') return 'var(--theme-fill-d6f5e1, #D6F5E1)';
+                if (getCheckData[0] === 'pjk-red') return 'var(--theme-fill-fbe1de, #FBE1DE)';
+                return 'inherit';
+            }
             if (tableType !== 'aksi-drpp') return 'inherit';
-            if (getCheckData[0] === 'colored') return '#F3B5B5'; // Light red
-            if (getCheckData[0] === 'color-purple') return '#FFA500'; // Light orange
+            if (getCheckData[0] === 'colored') return 'var(--theme-fill-f3b5b5, #F3B5B5)'; // Light red
+            if (getCheckData[0] === 'color-purple') return 'var(--theme-fill-ffa500, #FFA500)'; // Light orange
             return 'inherit';
         };
 
         return (
             <Fragment>
                 <TableRow onClick={handleRowClick}
-                    sx={tableType === 'aksi-drpp'
+                    sx={tableType === 'aksi-drpp' || tableType === 'aksi-pjk'
                         ? {backgroundColor: getBackgroundColor(), cursor: 'pointer'}
-                        : gayaDaftar ? {'&:hover td': {backgroundColor: '#F7FAFF'}} : null}>
+                        : gayaDaftar ? {'&:hover td': {backgroundColor: 'var(--theme-fill-f7faff, #F7FAFF)'}} : null}>
                     {tableType === "kelola" || tableType === "monitor"?
                     <TableCell sx={{ ...BODY_CELL, width: "44px", paddingRight: 0 }}>
                         <IconButton
@@ -509,7 +514,7 @@ export function TableKelola(props) {
                                    onCheckboxChange={shouldShowCheckbox ? (checked, event) => handleCheckboxChange(props.rowIndex, index, data, checked, event) : null}
                                    sx={{ ...(gayaDaftar
                                            ? { ...BODY_CELL, ...kolomGaya(headLabels[index]) }
-                                           : { borderBottom: '2px solid rgb(214, 214, 214)' }),
+                                           : { borderBottom: '2px solid var(--theme-border, rgb(214, 214, 214))' }),
                                        ...(tableType !== 'monitor' && (index === 1 || index === 19)
                                        ? { maxWidth: '100px', whiteSpace: 'normal', wordWrap: 'break-word' } : null) }} >
                             {gayaTanda ?
@@ -521,11 +526,11 @@ export function TableKelola(props) {
                             tableType === 'monitor' && BUKTI_SETOR_STYLE[data] ?
                                 <CustomColoredCell {...BUKTI_SETOR_STYLE[data]} data={data} /> :
                             tableType === 'monitor' && (index === 4 || index === 5 || index === 8 || index === 9) ?
-                                (data === "Sudah" && index === 8 || data === "Sudah" && index === 9 ? <CustomColoredCell color={"#92eb7f"} data={data} /> :
-                                    (data === "Belum" && index === 8 || data === "Belum" && index === 9 ? <CustomColoredCell color={"#f27272"} data={data} /> :
-                                        (data === "Ada Masalah" && index === 8 || data === "Ada Masalah" && index === 9 ? <CustomColoredCell color={"#eb3d3d"} data={data} /> :
-                                            (data === "Tidak Ada Pajak" && index === 8 || data === "Tidak Ada Pajak" && index === 9 ? <CustomColoredCell color={"white"} data={data} /> :
-                                                (data === "Pajak Manual" && index === 8 || data === "Pajak Manual" && index === 9 ? <CustomColoredCell color={"#b39979"} data={data} /> :
+                                (data === "Sudah" && index === 8 || data === "Sudah" && index === 9 ? <CustomColoredCell color={"var(--theme-fill-92eb7f, #92eb7f)"} data={data} /> :
+                                    (data === "Belum" && index === 8 || data === "Belum" && index === 9 ? <CustomColoredCell color={"var(--theme-fill-f27272, #f27272)"} data={data} /> :
+                                        (data === "Ada Masalah" && index === 8 || data === "Ada Masalah" && index === 9 ? <CustomColoredCell color={"var(--theme-fill-eb3d3d, #eb3d3d)"} data={data} /> :
+                                            (data === "Tidak Ada Pajak" && index === 8 || data === "Tidak Ada Pajak" && index === 9 ? <CustomColoredCell color={"var(--theme-surface, white)"} data={data} /> :
+                                                (data === "Pajak Manual" && index === 8 || data === "Pajak Manual" && index === 9 ? <CustomColoredCell color={"var(--theme-fill-b39979, #b39979)"} data={data} /> :
                                          <p style={{margin: '0px', fontWeight: '700'}}>{data}</p>)))))
                                 : potongan
                                 ? <>{potongan[0]}<mark className="sorot" ref={isSorotPertama ? sorotRef : null}>{potongan[1]}</mark>{potongan[2]}</>
@@ -590,11 +595,11 @@ export function TableKelola(props) {
             sx={gayaDaftar
                 ? { maxHeight: 900, overflowX: 'auto' }
                 : { maxWidth: "96%", margin: "auto", borderRadius: "10px",
-                    border: "0.8px solid rgb(236, 236, 236)", maxHeight: 900, overflowX: 'auto' }}
+                    border: "0.8px solid var(--theme-border, rgb(236, 236, 236))", maxHeight: 900, overflowX: 'auto' }}
             onMouseMove={handleMouseMove}>
             <Table stickyHeader aria-label="sticky table" sx={{ transform: "translateZ(0)"}}>
                 <TableHead>
-                    <TableRow sx={gayaDaftar ? null : {backgroundColor: "#00449C"}}>
+                    <TableRow sx={gayaDaftar ? null : {backgroundColor: "var(--theme-table-header, #00449C)"}}>
                     {gayaDaftar ? <TableCell sx={{...HEAD_CELL, width: "30px"}}></TableCell> : null}
                     {props.header.map((data, index) => (
                         <TableCell key={index} sx={{
@@ -602,8 +607,8 @@ export function TableKelola(props) {
                                 ? { ...HEAD_CELL,
                                     ...(kolomGaya(headLabels[index])?.textAlign ? { textAlign: "right" } : null) }
                                 : { fontSize: "1rem", fontWeight: 550, color: "white",
-                                    backgroundColor: "#00449C", minWidth: data.minWidth }),
-                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: gayaDaftar ? "#F4F7FB" : "#00449C" } )
+                                    backgroundColor: "var(--theme-table-header, #00449C)", minWidth: data.minWidth }),
+                            ...( index < 2 && props.feature === "AksiDrpp" && { position: "sticky", left: '0px', zIndex: 1100, backgroundColor: gayaDaftar ? "var(--theme-fill-f4f7fb, #F4F7FB)" : "var(--theme-table-header, #00449C)" } )
                             }}>
                             {headLabel(data)}</TableCell>
                     ))}
@@ -624,11 +629,11 @@ export function TableKelola(props) {
                             />
                     ))}
                 </TableBody>
-                { props.type === "aksi" &&
+                { (props.type === "aksi" || props.type === "aksi-pjk") &&
                 <TableFooter>
                     <TableRow>
                         {getFooterSums().map((value, colIndex) => (
-                            <TableCell key={colIndex} className="table-footer-cell" sx={{ fontWeight: "bold", backgroundColor: "#f5f5f5" }}>
+                            <TableCell key={colIndex} className="table-footer-cell" sx={{ fontWeight: "bold", backgroundColor: "var(--theme-surface-raised, #f5f5f5)" }}>
                                 {value}
                             </TableCell>
                         ))}
@@ -639,7 +644,7 @@ export function TableKelola(props) {
                 <TableFooter>
                     <TableRow>
                         <TableCell colSpan={props.header ? props.header.length : 1}
-                                   sx={{ ...BODY_CELL, backgroundColor: "#F4F7FB" }}>
+                                   sx={{ ...BODY_CELL, backgroundColor: "var(--theme-fill-f4f7fb, #F4F7FB)" }}>
                             <strong>Total yang dipilih: {numberFormats(sudahVerifSum)}</strong>
                         </TableCell>
                     </TableRow>
@@ -706,7 +711,7 @@ TableKelola.propTypes = {
     aksiTarget: PropTypes.string,
     changeComponent: PropTypes.func,
     aksiData: PropTypes.func,
-    coloredRow: PropTypes.object,
+    coloredRow: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.string)),
     addColorData: PropTypes.func,
     filterActive: PropTypes.bool,
     filterColumns: PropTypes.arrayOf(PropTypes.number),
@@ -727,13 +732,13 @@ TableKelola.propTypes = {
 
 export function TableInfoAntri(props) {
     return(
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
+                    <TableRow sx={{width: "30px", backgroundColor: "var(--theme-table-header, #00449C)"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index}
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)"}}
                                 >{data}</TableCell>
                         ))}
                     </TableRow>
@@ -762,25 +767,25 @@ export function TableDokumenGaji(props) {
     const showActions = Boolean(props.onEdit || props.onDelete);
 
     return(
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
+                    <TableRow sx={{width: "30px", backgroundColor: "var(--theme-table-header, #00449C)"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index}
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)"}}
                                 >{data}</TableCell>
                         ))}
                         {showActions &&
                             <TableCell align="center"
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)"}}
                                 >Aksi</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {props.content.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "#666"}}>
+                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "var(--theme-text, #666)"}}>
                                 Tidak ada data.
                             </TableCell>
                         </TableRow>
@@ -800,13 +805,13 @@ export function TableDokumenGaji(props) {
                                         {props.onEdit &&
                                             <Tooltip title="Ubah">
                                                 <IconButton size="small" onClick={() => props.onEdit(row)}>
-                                                    <EditIcon sx={{fontSize: 24, color: "#edbd4d"}}/>
+                                                    <EditIcon sx={{fontSize: 24, color: "var(--theme-ink-edbd4d, #edbd4d)"}}/>
                                                 </IconButton>
                                             </Tooltip>}
                                         {props.onDelete &&
                                             <Tooltip title="Hapus">
                                                 <IconButton size="small" onClick={() => props.onDelete(row)}>
-                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "#BD1404"}}/>
+                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "var(--theme-ink-bd1404, #BD1404)"}}/>
                                                 </IconButton>
                                             </Tooltip>}
                                     </TableCell>}
@@ -821,13 +826,13 @@ export function TableDokumenGaji(props) {
 
 export function TableInfoPJK(props) {
     return(
-        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+        <TableContainer sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{width: "30px", backgroundColor: "#00449C"}}>
+                    <TableRow sx={{width: "30px", backgroundColor: "var(--theme-table-header, #00449C)"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index}
-                                       sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                       sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)"}}
                             >{data}</TableCell>
                         ))}
                     </TableRow>
@@ -852,14 +857,14 @@ export function TableInfoPJK(props) {
 
 export function TableNotif(props) {
     return(
-        <TableContainer sx={{border: '1px solid #e0e0e0', boxShadow: 'none'}}>
+        <TableContainer sx={{border: '1px solid var(--theme-border, #e0e0e0)', boxShadow: 'none'}}>
             <Table sx={{'& th, & td': { borderBottom: 'none' }}}>
 
                 <TableBody>
                     {props.content.map((data, index) => (
                         <Fragment key={index}>
-                            <TableRow sx={{ borderTop: index === 0 ? 'none' : '1px solid #e0e0e0', boxShadow: 'none'}}>
-                                <TableCell sx={{padding: '12px 16px 4px 16px', fontWeight: 'bold', fontSize: "15px", color: data[3] === 'no' ? 'black' : '#939090'}}>
+                            <TableRow sx={{ borderTop: index === 0 ? 'none' : '1px solid var(--theme-muted, #e0e0e0)', boxShadow: 'none'}}>
+                                <TableCell sx={{padding: '12px 16px 4px 16px', fontWeight: 'bold', fontSize: "15px", color: data[3] === 'no' ? 'var(--theme-text, black)' : 'var(--theme-muted, #939090)'}}>
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span>{data[1]}</span>
@@ -890,7 +895,7 @@ export function TableNotif(props) {
                             </TableRow>
                             <TableRow>
                                 {/* pre-line keeps the "Keterangan:" line break stored in the sheet */}
-                                <TableCell sx={{padding: '0px 16px 12px 16px', color: '#666', whiteSpace: 'pre-line'}}>{data[2]}</TableCell>
+                                <TableCell sx={{padding: '0px 16px 12px 16px', color: 'var(--theme-text, #666)', whiteSpace: 'pre-line'}}>{data[2]}</TableCell>
                             </TableRow>
                         </Fragment>
                     ))}
@@ -900,9 +905,9 @@ export function TableNotif(props) {
     )
 }
 // Shared styles for budget and financial tables.
-const REALISASI_HEADER_BLUE = "#00449C";
-const realisasiHeadCell = {fontSize: "1rem", fontWeight: 550, color: "white", backgroundColor: REALISASI_HEADER_BLUE};
-const realisasiContainer = {maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"};
+const FINANCIAL_HEADER_BACKGROUND = "var(--theme-table-header, #00449C)";
+const realisasiHeadCell = {fontSize: "1rem", fontWeight: 550, color: "white", backgroundColor: FINANCIAL_HEADER_BACKGROUND};
+const realisasiContainer = {maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"};
 
 function formatRupiah(nominal) {
     return `Rp ${Math.round(nominal).toLocaleString('id-ID')}`;
@@ -1002,25 +1007,25 @@ export function TablePembayaranBp(props) {
     return (
         <>
         <TableContainer ref={tableRef} onMouseMove={trackMouse} className="table-scroll-x"
-                        sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid rgb(236, 236, 236)"}}>
+                        sx={{ maxWidth: "96%", margin: "auto", borderRadius: "10px", border: "0.8px solid var(--theme-border, rgb(236, 236, 236))"}}>
             <Table>
                 <TableHead>
-                    <TableRow sx={{backgroundColor: "#00449C"}}>
+                    <TableRow sx={{backgroundColor: "var(--theme-table-header, #00449C)"}}>
                         {props.header.map((data, index) => (
                             <TableCell key={index} className={freeze(index)}
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C", whiteSpace: "nowrap"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)", whiteSpace: "nowrap"}}
                                 >{data}</TableCell>
                         ))}
                         {showActions &&
                             <TableCell align="center"
-                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "#00449C"}}
+                                sx={{ fontSize:"1rem", fontWeight: 550, color: "white", backgroundColor: "var(--theme-table-header, #00449C)"}}
                                 >Aksi</TableCell>}
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {props.content.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "#666"}}>
+                            <TableCell colSpan={props.header.length + (showActions ? 1 : 0)} align="center" sx={{color: "var(--theme-text, #666)"}}>
                                 Tidak ada data.
                             </TableCell>
                         </TableRow>
@@ -1048,13 +1053,13 @@ export function TablePembayaranBp(props) {
                                         {props.onEdit &&
                                             <Tooltip title="Ubah">
                                                 <IconButton size="small" onClick={() => props.onEdit(row)}>
-                                                    <EditIcon sx={{fontSize: 24, color: "#edbd4d"}}/>
+                                                    <EditIcon sx={{fontSize: 24, color: "var(--theme-ink-edbd4d, #edbd4d)"}}/>
                                                 </IconButton>
                                             </Tooltip>}
                                         {props.onDelete &&
                                             <Tooltip title="Hapus">
                                                 <IconButton size="small" onClick={() => props.onDelete(row)}>
-                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "#BD1404"}}/>
+                                                    <DeleteForeverIcon sx={{fontSize: 24, color: "var(--theme-ink-bd1404, #BD1404)"}}/>
                                                 </IconButton>
                                             </Tooltip>}
                                     </TableCell>}
@@ -1125,7 +1130,7 @@ export function TableRekKoran(props) {
                 {canUpload &&
                     <Tooltip title="Ganti berkas">
                         <IconButton size="small" onClick={() => pick(row, month)}>
-                            <UploadFileIcon sx={{fontSize: 18, color: "#00449C"}}/>
+                            <UploadFileIcon sx={{fontSize: 18, color: "var(--theme-ink-00449c, #00449C)"}}/>
                         </IconButton>
                     </Tooltip>}
             </>
@@ -1197,7 +1202,7 @@ DaftarBerkas.propTypes = {
     pending: PropTypes.bool,
 };
 
-const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hiddenDetail, onView, onEdit, onDelete }) {
+const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, summaryColumns, hiddenDetail, onView, onEdit, onDelete }) {
     const [open, setOpen] = useState(false);
     const status = daftarStatusStyle(row.status);
     const promoted = [...jenisColumns, ...extraColumns].map(column => column.field);
@@ -1206,6 +1211,16 @@ const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hid
     return (
         <Fragment>
             <tr className={`dp-row${open ? " dp-row-open" : ""}`}>
+                {summaryColumns ? summaryColumns.map(column => (
+                    <td key={column.field} className={column.numeric ? "dp-num dp-cell-nominal" : column.field === "jenis" ? "dp-cell-jenis" : undefined}>
+                        {column.field === "statusPerbaikan"
+                            ? <span className="dp-status" style={{
+                                backgroundColor: daftarStatusStyle(row[column.field]).bg,
+                                color: daftarStatusStyle(row[column.field]).fg,
+                            }}>{dash(row[column.field])}</span>
+                            : dash(row[column.field])}
+                    </td>
+                )) : <>
                 <td className="dp-cell-toggle">
                     <IconButton size="small" aria-label={open ? "Tutup rincian" : "Lihat rincian"}
                         aria-expanded={open} onClick={() => setOpen(value => !value)}>
@@ -1223,30 +1238,31 @@ const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hid
                     <span className="dp-status" style={{ backgroundColor: status.bg, color: status.fg }}>{dash(row.status)}</span>
                     {row.hasilVerifPending && <span className="dp-status-note">Hasil verif. dibuat…</span>}
                 </td>
+                </>}
                 <td>
                     <div className="dp-actions">
                         {row.locked
                             ? <Tooltip title="Lihat detail" arrow>
                                 <IconButton size="small" aria-label="Lihat detail pengajuan" onClick={() => onView(row)}>
-                                    <RemoveRedEyeIcon sx={{ fontSize: 21, color: "#00204A" }} />
+                                    <RemoveRedEyeIcon sx={{ fontSize: 21, color: "var(--theme-ink-00204a, #00204A)" }} />
                                 </IconButton>
                             </Tooltip>
                             : <>
                                 <Tooltip title="Ubah pengajuan" arrow>
                                     <IconButton size="small" aria-label="Ubah pengajuan" onClick={() => onEdit(row)}>
-                                        <EditIcon sx={{ fontSize: 21, color: "#D9A33B" }} />
+                                        <EditIcon sx={{ fontSize: 21, color: "var(--theme-ink-d9a33b, #D9A33B)" }} />
                                     </IconButton>
                                 </Tooltip>
-                                <Tooltip title="Hapus pengajuan" arrow>
+                                {!row.deleteLocked && <Tooltip title="Hapus pengajuan" arrow>
                                     <IconButton size="small" aria-label="Hapus pengajuan" onClick={() => onDelete(row)}>
-                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "#BD1404" }} />
+                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "var(--theme-ink-bd1404, #BD1404)" }} />
                                     </IconButton>
-                                </Tooltip>
+                                </Tooltip>}
                             </>}
                     </div>
                 </td>
             </tr>
-            <tr className="dp-detail-row">
+            {!summaryColumns && <tr className="dp-detail-row">
                 <td className="dp-detail-cell" colSpan={span}>
                     <Collapse in={open} timeout={160} unmountOnExit>
                         <div className="dp-detail">
@@ -1274,7 +1290,7 @@ const DaftarRow = memo(function DaftarRow({ row, jenisColumns, extraColumns, hid
                         </div>
                     </Collapse>
                 </td>
-            </tr>
+            </tr>}
         </Fragment>
     );
 });
@@ -1284,15 +1300,16 @@ DaftarRow.propTypes = {
     jenisColumns: PropTypes.array.isRequired,
     extraColumns: PropTypes.array.isRequired,
     hiddenDetail: PropTypes.array.isRequired,
+    summaryColumns: PropTypes.array,
     onView: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
     onDelete: PropTypes.func.isRequired,
 };
 
 export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerPage, rowsPerPageOptions,
-                                       jenisColumns = [], extraColumns, hiddenDetail = [], onPageChange,
+                                       jenisColumns = [], extraColumns, summaryColumns, hiddenDetail = [], onPageChange,
                                        onRowsPerPageChange, onView, onEdit, onDelete }) {
-    const span = DAFTAR_FIXED_COLUMNS + jenisColumns.length + extraColumns.length;
+    const span = summaryColumns ? summaryColumns.length + 1 : DAFTAR_FIXED_COLUMNS + jenisColumns.length + extraColumns.length;
     return (
         <div className="dp-table-card">
             <div className="dp-toolbar">
@@ -1310,6 +1327,9 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                 <table className="dp-table">
                     <thead>
                         <tr>
+                            {summaryColumns ? summaryColumns.map(column => (
+                                <th key={column.field} className={column.numeric ? "dp-th-right" : undefined}>{column.label}</th>
+                            )) : <>
                             <th className="dp-cell-toggle"><span className="dp-sr-only">Rincian</span></th>
                             <th>No.</th>
                             <th>Jenis</th>
@@ -1318,6 +1338,7 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                             <th>Tgl. Antri</th>
                             {extraColumns.map(column => <th key={column.field}>{column.label}</th>)}
                             <th>Status</th>
+                            </>}
                             <th className="dp-th-right">Aksi</th>
                         </tr>
                     </thead>
@@ -1328,6 +1349,7 @@ export function TableDaftarPengajuan({ rows, loading, page, totalPages, rowsPerP
                                 ? <tr><td colSpan={span} className="dp-placeholder dp-empty">Belum ada pengajuan.</td></tr>
                                 : rows.map(row => (
                                     <DaftarRow key={row.key} row={row} jenisColumns={jenisColumns} extraColumns={extraColumns}
+                                        summaryColumns={summaryColumns}
                                         hiddenDetail={hiddenDetail} onView={onView} onEdit={onEdit} onDelete={onDelete} />
                                 ))}
                     </tbody>
@@ -1349,6 +1371,7 @@ TableDaftarPengajuan.propTypes = {
     jenisColumns: PropTypes.array,
     extraColumns: PropTypes.array.isRequired,
     hiddenDetail: PropTypes.array,
+    summaryColumns: PropTypes.array,
     onPageChange: PropTypes.func.isRequired,
     onRowsPerPageChange: PropTypes.func.isRequired,
     onView: PropTypes.func.isRequired,
@@ -1405,7 +1428,7 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                         {/* The 5px margin is the small IconButton's own padding, so swapping the
                             two does not change the row height */}
                         {sibuk
-                            ? <CircularProgress size={21} sx={{ color: "#00449C", m: "5px" }} />
+                            ? <CircularProgress size={21} sx={{ color: "var(--theme-ink-00449c, #00449C)", m: "5px" }} />
                             : <>
                                 {/* Offered whenever a document exists: the retry re-sends the
                                     file already on Drive, so re-uploading is only for a
@@ -1419,20 +1442,20 @@ const LayananGajiRow = memo(function LayananGajiRow({ row, onUnggah, onKirimUlan
                                                 aria-label="Kirim ulang e-mail lampiran"
                                                 onClick={() => onKirimUlang(row)}>
                                                 <ForwardToInboxIcon
-                                                    sx={{ fontSize: 21, color: alamatGagal ? "#9AA4B2" : "#8A6100" }} />
+                                                    sx={{ fontSize: 21, color: alamatGagal ? "var(--theme-muted, #9AA4B2)" : "var(--theme-ink-8a6100, #8A6100)" }} />
                                             </IconButton>
                                         </span>
                                     </Tooltip>}
                                 <Tooltip arrow title={`Unggah lampiran (${row.lampiran.length}/${row.daftarJenis.length})`}>
                                     <IconButton size="small" aria-label="Unggah lampiran"
                                         onClick={() => onUnggah(row)}>
-                                        <UploadFileIcon sx={{ fontSize: 21, color: "#00449C" }} />
+                                        <UploadFileIcon sx={{ fontSize: 21, color: "var(--theme-ink-00449c, #00449C)" }} />
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Hapus permintaan" arrow>
                                     <IconButton size="small" aria-label="Hapus permintaan"
                                         onClick={() => onHapus(row)}>
-                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "#A81E1E" }} />
+                                        <DeleteForeverIcon sx={{ fontSize: 21, color: "var(--theme-ink-a81e1e, #A81E1E)" }} />
                                     </IconButton>
                                 </Tooltip>
                             </>}
@@ -1567,26 +1590,24 @@ TableLayananGaji.propTypes = {
 
 // Anggaran.jsx - the pagu tree, Unit Kerja -> MAK -> Akun Belanja.
 // Positional arrays cannot express three levels, so unlike TableKelola this one takes the
-// nested objects GET /anggaran returns and keeps its own expand state per row. "Belum
-// dirinci" is the gap between a level's own pagu and what its children account for, which
-// is the whole reason pagu is stored at every level rather than only at the leaf; "Sisa"
-// is that pagu less everything committed or already paid against it, and a negative one is
+// nested objects GET /anggaran returns and keeps its own expand state per row. "Sisa"
+// is that pagu less recognized realization, and a negative one is
 // the computed replacement for the Pagu Minus an admin used to set by hand.
-// The displayed "Realisasi" still uses the API's terpakai (commitments + realization).
-// Sisa subtracts both, so a unit cannot over-submit while its pengajuan wait for KPPN.
+// Realisasi follows flow-specific approved/disbursed statuses; Outstanding is the remaining
+// commitment. Sisa subtracts recognized realization only; accrual is tracked separately.
 const ANGGARAN_HEAD = [
-    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Belum Dirinci",
+    "Unit Kerja / MAK / Akun", "Uraian", "Pagu", "Realisasi", "Sisa", "% Realisasi", "Outstanding",
 ];
 
-const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0)
+const persenRealisasi = (row) => row.luarPagu || row.takDirinci || !(row.pagu > 0) || row.realisasiKumulatif === null
     ? "-"
-    : `${(row.terpakai / row.pagu * 100).toLocaleString('id-ID', {
+    : `${((row.realisasiKumulatif ?? row.realisasi) / row.pagu * 100).toLocaleString('id-ID', {
         minimumFractionDigits: 2, maximumFractionDigits: 2,
     })}%`;
 
 // Level indents rather than separate columns, so a deep row still reads as one line
 const indentSel = (level) => ({paddingLeft: `${16 + level * 28}px`, whiteSpace: "nowrap"});
-const sisaWarna = (nilai) => nilai < 0 ? "#BD1404" : "inherit";
+const sisaWarna = (nilai) => nilai < 0 ? "var(--theme-ink-bd1404, #BD1404)" : "inherit";
 
 // Badges sit on their own line under the label rather than beside it: inline they widen the
 // first column enough to squeeze every money column off a laptop screen, and the cell is
@@ -1605,16 +1626,30 @@ const tandaTakDirinci = (jumlah) => jumlah > 0
       </span>
     : null;
 
+const tandaPaguMinus = ada => ada
+    ? <span key="pagu-minus" className="anggaran-lencana-klaim"
+            title="Ada Akun dengan Sisa anggaran negatif di bawah kategori ini.">
+        Ada Pagu Minus
+      </span>
+    : null;
+
 // A claimed MAK belongs to another unit kerja, so it has no pagu here and nothing to
 // subtract from - every figure that would need one reads as a dash rather than a zero,
 // which would look like a real ceiling of nothing.
-const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : formatRupiah(nilai);
+const uangAnggaran = value => value === null ? '—' : formatRupiah(value);
+const nilaiRealisasi = row => <>{uangAnggaran(row.realisasi)}{row.realisasiKumulatif !== undefined &&
+    <small className="anggaran-period-cumulative">Kumulatif: {uangAnggaran(row.realisasiKumulatif)}</small>}</>;
+const selLuarPagu = (nilai, luarPagu) => luarPagu ? "-" : uangAnggaran(nilai);
 
-export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini."}) {
+export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk tahun ini.", pencarian = "", onSpmDetails}) {
     // Keyed by unit name and by "unit|kode" so expanding one MAK never opens its namesake
     // under another unit kerja
     const [terbuka, setTerbuka] = useState({});
     const toggle = (kunci) => setTerbuka(prev => ({...prev, [kunci]: !prev[kunci]}));
+    const spmButton = (unit, mak, akun) => onSpmDetails ? <button type="button" className="anggaran-spm-trigger"
+        aria-label={`Rincian SPM ${unit.unitKerja}${mak ? ` MAK ${mak.kode}` : ''}${akun ? ` Akun ${akun.kode}` : ''}`}
+        onClick={() => onSpmDetails({unitKerja: unit.unitKerja, kodeMak: mak?.kode || '',
+            kodeAkun: akun?.kode || '', uraian: mak?.uraian || ''})}>Rincian SPM</button> : null;
 
     if (!anggaran || anggaran.length === 0) {
         return <p style={{margin: "20px 30px", opacity: 0.7}}>{kosong}</p>;
@@ -1626,18 +1661,22 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                 <RealisasiHead heads={ANGGARAN_HEAD}/>
                 <TableBody>
                     {anggaran.map(unit => {
-                        const unitBuka = !!terbuka[unit.unitKerja];
+                        const unitBuka = !!pencarian || !!terbuka[unit.unitKerja];
                         return (
                             <Fragment key={unit.unitKerja}>
                                 <TableRow hover>
                                     <TableCell sx={{...indentSel(0), fontWeight: 600}}>
                                         {unit.mak.length > 0 &&
                                             <IconButton size="small" onClick={() => toggle(unit.unitKerja)}
+                                                        disabled={!!pencarian}
+                                                        title={pencarian ? "Hasil pencarian ditampilkan terbuka" : undefined}
                                                         aria-label={unitBuka ? "Tutup" : "Buka"}>
                                                 {unitBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                             </IconButton>}
                                         {unit.unitKerja}
                                         {barisLencana(
+                                            tandaPaguMinus(unit.adaPaguMinus),
+                                            spmButton(unit),
                                             unit.klaimUnitLain > 0 &&
                                                 <span key="klaim" className="anggaran-lencana-klaim"
                                                       title="Belanja yang memakai Kode MAK milik unit kerja lain">
@@ -1656,20 +1695,18 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                         )}
                                     </TableCell>
                                     <TableCell/>
-                                    <TableCell sx={{fontWeight: 600}}>{formatRupiah(unit.pagu)}</TableCell>
-                                    <TableCell>{formatRupiah(unit.terpakai)}</TableCell>
+                                    <TableCell sx={{fontWeight: 600}}>{uangAnggaran(unit.pagu)}</TableCell>
+                                    <TableCell>{nilaiRealisasi(unit)}</TableCell>
                                     <TableCell sx={{fontWeight: 600, color: sisaWarna(unit.sisa)}}>
-                                        {formatRupiah(unit.sisa)}
+                                        {uangAnggaran(unit.sisa)}
                                     </TableCell>
                                     <TableCell>{persenRealisasi(unit)}</TableCell>
-                                    <TableCell sx={{color: sisaWarna(unit.belumDirinci)}}>
-                                        {formatRupiah(unit.belumDirinci)}
-                                    </TableCell>
+                                    <TableCell>{uangAnggaran(unit.outstanding)}</TableCell>
                                 </TableRow>
 
                                 {unitBuka && unit.mak.map((mak, urutan) => {
                                     const kunciMak = `${unit.unitKerja}|${mak.kode}`;
-                                    const makBuka = !!terbuka[kunciMak];
+                                    const makBuka = !!pencarian || !!terbuka[kunciMak];
                                     // The claimed MAK are appended after the unit's own, so the
                                     // first of them opens the group. Announced rather than just
                                     // indented: these rows carry a nominal but deliberately do
@@ -1689,11 +1726,15 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 <TableCell sx={indentSel(1)}>
                                                     {mak.akun.length > 0 &&
                                                         <IconButton size="small" onClick={() => toggle(kunciMak)}
+                                                                    disabled={!!pencarian}
+                                                                    title={pencarian ? "Hasil pencarian ditampilkan terbuka" : undefined}
                                                                     aria-label={makBuka ? "Tutup" : "Buka"}>
                                                             {makBuka ? <KeyboardArrowUpIcon fontSize="inherit"/> : <KeyboardArrowDownIcon fontSize="inherit"/>}
                                                         </IconButton>}
                                                     {mak.kode}
                                                     {barisLencana(
+                                                        tandaPaguMinus(mak.adaPaguMinus),
+                                                        spmButton(unit, mak),
                                                         mak.luarPagu &&
                                                             <span key="milik" className="anggaran-lencana-klaim">
                                                                 milik {(mak.pemilik || []).join(", ") || "unit kerja lain"}
@@ -1708,20 +1749,19 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                 </TableCell>
                                                 <TableCell>{dash(mak.uraian)}</TableCell>
                                                 <TableCell>{selLuarPagu(mak.pagu, mak.luarPagu)}</TableCell>
-                                                <TableCell>{formatRupiah(mak.terpakai)}</TableCell>
+                                                <TableCell>{nilaiRealisasi(mak)}</TableCell>
                                                 <TableCell sx={{color: sisaWarna(mak.sisa ?? 0)}}>
                                                     {selLuarPagu(mak.sisa, mak.luarPagu)}
                                                 </TableCell>
                                                 <TableCell>{persenRealisasi(mak)}</TableCell>
-                                                <TableCell sx={{color: sisaWarna(mak.belumDirinci ?? 0)}}>
-                                                    {selLuarPagu(mak.belumDirinci, mak.luarPagu)}
-                                                </TableCell>
+                                                <TableCell>{uangAnggaran(mak.outstanding)}</TableCell>
                                             </TableRow>
                                             {makBuka && mak.akun.map(akun => (
                                                 <TableRow key={`${kunciMak}|${akun.kode}`} hover>
                                                     <TableCell sx={indentSel(2)}>
                                                         {akun.kode}
                                                         {barisLencana(
+                                                            spmButton(unit, mak, akun),
                                                             akun.takDirinci &&
                                                                 <span key="dirinci" className="anggaran-tanda-baru"
                                                                       title="Belum ada di DIPA, jadi tidak dihitung ke Realisasi">
@@ -1739,13 +1779,12 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
                                                     {/* Neither an undetailed akun nor a claimed one has a pagu
                                                         of its own, so neither has a Sisa */}
                                                     <TableCell>{selLuarPagu(akun.pagu, akun.takDirinci || akun.luarPagu)}</TableCell>
-                                                    <TableCell>{formatRupiah(akun.terpakai)}</TableCell>
+                                                    <TableCell>{nilaiRealisasi(akun)}</TableCell>
                                                     <TableCell sx={{color: sisaWarna(akun.sisa ?? 0)}}>
                                                         {selLuarPagu(akun.sisa, akun.takDirinci || akun.luarPagu)}
                                                     </TableCell>
                                                     <TableCell>{persenRealisasi(akun)}</TableCell>
-                                                    {/* an akun has no children, so it has nothing left to detail */}
-                                                    <TableCell/>
+                                                    <TableCell>{uangAnggaran(akun.outstanding)}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </Fragment>
@@ -1763,6 +1802,8 @@ export function TableAnggaranPohon({anggaran, kosong = "Belum ada anggaran untuk
 TableAnggaranPohon.propTypes = {
     anggaran: PropTypes.array,
     kosong: PropTypes.string,
+    pencarian: PropTypes.string,
+    onSpmDetails: PropTypes.func,
 };
 
 // Spending whose MAK has no home in the active revisi. Shown rather than dropped: a
@@ -1811,7 +1852,7 @@ export function TableKlaimUnitLain({baris}) {
                             <TableCell>{dash(row.unitKerja)}</TableCell>
                             <TableCell style={{whiteSpace: "nowrap"}}>{dash(row.kodeMak)}</TableCell>
                             <TableCell>{dash(row.kodeAkun)}</TableCell>
-                            <TableCell sx={{color: "#BD1404"}}>{dash((row.pemilik || []).join(", "))}</TableCell>
+                            <TableCell sx={{color: "var(--theme-ink-bd1404, #BD1404)"}}>{dash((row.pemilik || []).join(", "))}</TableCell>
                             {/* A claim carried by the uploaded baseline has no pengajuan to name */}
                             <TableCell>{row.alur === "awal"
                                 ? <span className="anggaran-tanda-baru">unggahan realisasi awal</span>
@@ -1945,8 +1986,8 @@ TableSbmTransportasi.propTypes = {
 // spending this is, and whether it is settled is said in words on its own pill. The two
 // were competing for one chip before, and status is the thing that must never be guessed.
 const KKP_STATUS_GAYA = {
-    lunas:  {latar: "#DFF5E6", teks: "#0F7A38", titik: "#12A24A"},
-    belum:  {latar: "#FFF1CC", teks: "#8A6100", titik: "#E0A200"},
+    lunas:  {latar: "var(--theme-fill-dff5e6, #DFF5E6)", teks: "var(--theme-ink-0f7a38, #0F7A38)", titik: "var(--theme-ink-12a24a, #12A24A)"},
+    belum:  {latar: "var(--theme-fill-fff1cc, #FFF1CC)", teks: "var(--theme-ink-8a6100, #8A6100)", titik: "var(--theme-ink-e0a200, #E0A200)"},
 };
 
 function StatusKkp({lunas, label}) {
@@ -2061,7 +2102,7 @@ export function TableTransaksiKkp({grup, kosong, warna, onSpm, onUbah, onHapus})
                                                 <span>
                                                     <IconButton size="small" disabled={item.lunas}
                                                                 onClick={() => onUbah(row)}>
-                                                        <EditIcon sx={{fontSize: 19, color: item.lunas ? "#C9CFD8" : "#00449C"}}/>
+                                                        <EditIcon sx={{fontSize: 19, color: item.lunas ? "var(--theme-muted, #C9CFD8)" : "var(--theme-ink-00449c, #00449C)"}}/>
                                                     </IconButton>
                                                 </span>
                                             </Tooltip>
@@ -2069,7 +2110,7 @@ export function TableTransaksiKkp({grup, kosong, warna, onSpm, onUbah, onHapus})
                                                 <span>
                                                     <IconButton size="small" disabled={item.lunas}
                                                                 onClick={() => onHapus(row)}>
-                                                        <DeleteForeverIcon sx={{fontSize: 19, color: item.lunas ? "#C9CFD8" : "#BD1404"}}/>
+                                                        <DeleteForeverIcon sx={{fontSize: 19, color: item.lunas ? "var(--theme-muted, #C9CFD8)" : "var(--theme-ink-bd1404, #BD1404)"}}/>
                                                     </IconButton>
                                                 </span>
                                             </Tooltip>
@@ -2144,7 +2185,7 @@ export function TableKalkulatorRincian({baris, kolom, onUbah, onHapus}) {
                                     <span>
                                         <IconButton size="small" disabled={baris.length === 1}
                                                     onClick={() => onHapus(row.id)}>
-                                            <DeleteForeverIcon sx={{fontSize: 22, color: baris.length === 1 ? "#C9CFD8" : "#BD1404"}}/>
+                                            <DeleteForeverIcon sx={{fontSize: 22, color: baris.length === 1 ? "var(--theme-muted, #C9CFD8)" : "var(--theme-ink-bd1404, #BD1404)"}}/>
                                         </IconButton>
                                     </span>
                                 </Tooltip>
@@ -2167,9 +2208,9 @@ TableKalkulatorRincian.propTypes = {
 // The upload diff. Deliberately not paginated: an admin about to replace a budget should
 // scroll the whole list, and a "hapus" hiding on page 3 is exactly what must not happen.
 const AKSI_GAYA = {
-    tambah: {label: "Tambah", warna: "#0F9043", latar: "#9FFFC3"},
-    ubah:   {label: "Ubah",   warna: "#5E4C3B", latar: "#F0E0CC"},
-    hapus:  {label: "Hapus",  warna: "#8B0808", latar: "#F3B5B5"},
+    tambah: {label: "Tambah", warna: "var(--theme-ink-0f9043, #0F9043)", latar: "var(--theme-fill-9fffc3, #9FFFC3)"},
+    ubah:   {label: "Ubah",   warna: "var(--theme-ink-5e4c3b, #5E4C3B)", latar: "var(--theme-fill-f0e0cc, #F0E0CC)"},
+    hapus:  {label: "Hapus",  warna: "var(--theme-ink-8b0808, #8B0808)", latar: "var(--theme-fill-f3b5b5, #F3B5B5)"},
 };
 const TINGKAT_LABEL = {unit: "Unit Kerja", mak: "MAK", akun: "Akun"};
 

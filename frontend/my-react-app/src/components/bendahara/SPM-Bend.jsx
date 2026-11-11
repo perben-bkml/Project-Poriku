@@ -123,7 +123,7 @@ function InfoSPMBendahara() {
                 </div>
                 {isSearching ? <LoadingAnimate/> : spmResult && (
                     spmResult.length === 0
-                        ? <p style={{textAlign: "center", margin: "20px 0", color: "#5A6472"}}>Nomor SPM tidak ditemukan.</p>
+                        ? <p style={{textAlign: "center", margin: "20px 0", color: "var(--theme-text, #5A6472)"}}>Nomor SPM tidak ditemukan.</p>
                         : <TableSpmBendahara tableData={[SPM_HEAD, ...spmResult.map(row => [
                             row.tanggalSp2d, row.nomorSpm, row.jenis, row.unitKerja,
                             row.nilaiSp2d, row.buktiBayar, row.tanggalBayarPenerima, row.statusBayarPenerima,
@@ -133,7 +133,7 @@ function InfoSPMBendahara() {
             <div className='bg-card spm-bend'>
                 <h2 className='spm-titles'>SPM Yang Belum Selesai Dibayarkan</h2>
                 {isLoading1 ? <LoadingAnimate /> : notPaidSPM.length === 0
-                    ? <p style={{textAlign: "center", margin: "20px 0", color: "#5A6472"}}>Tidak ada SPM yang belum selesai dibayarkan.</p>
+                    ? <p style={{textAlign: "center", margin: "20px 0", color: "var(--theme-text, #5A6472)"}}>Tidak ada SPM yang belum selesai dibayarkan.</p>
                     : <TableSpmBendahara tableData={[BELUM_BAYAR_HEAD, ...notPaidSPM.map(row => [
                         row.tanggalSp2d, row.nomorSpm, row.jenis, row.va, row.unitKerja,
                         row.nilaiSp2d, row.statusBayarPenerima, row.statusPajak,
@@ -143,7 +143,7 @@ function InfoSPMBendahara() {
             <div className='bg-card spm-bend'>
                 <h2 className='spm-titles'>Informasi Rekening Koran</h2>
                 {isLoading2 ? <LoadingAnimate /> : rekKoran.length === 0
-                    ? <p style={{textAlign: "center", margin: "20px 0", color: "#5A6472"}}>Data Rekening Koran tidak tersedia.</p>
+                    ? <p style={{textAlign: "center", margin: "20px 0", color: "var(--theme-text, #5A6472)"}}>Data Rekening Koran tidak tersedia.</p>
                     : <TableRekKoran rows={rekKoran} months={rekKoranMonths} uploading={uploading}
                                      onUpload={canUpload ? handleRekKoranPick : undefined}/>
                 }

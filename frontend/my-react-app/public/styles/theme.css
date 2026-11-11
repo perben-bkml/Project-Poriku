@@ -1,0 +1,350 @@
+/* Theme tokens keep each original light color as its declaration fallback. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --theme-border: #324359;
+    --theme-table-header: #111c2b;
+    --theme-footer: #111c2b;
+    --theme-accent: #a5c9ff;
+    --theme-accent-fill: #213b5c;
+    --theme-input: #111d2d;
+    --theme-card-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+    --theme-fill-016ffc: #153661;
+    --theme-fill-9fffc3: #1b432a;
+    --theme-fill-c7b6a7: #483a2e;
+    --theme-fill-d5eef6: #1b3943;
+    --theme-fill-d6f5e1: #1d422a;
+    --theme-fill-dce9ff: #1b2a43;
+    --theme-fill-dff5e6: #1f3f29;
+    --theme-fill-e1ecfc: #1b2c43;
+    --theme-fill-e4e9f0: #232d39;
+    --theme-fill-e4e9f1: #232d39;
+    --theme-fill-e5defa: #251b43;
+    --theme-fill-e7ecf4: #232d39;
+    --theme-fill-e8a33d: #43331b;
+    --theme-fill-e9edf3: #232d39;
+    --theme-fill-e9f2c6: #3a421c;
+    --theme-fill-eaf1fc: #1b2a43;
+    --theme-fill-eb2727: #431b1b;
+    --theme-fill-edf1f7: #232d39;
+    --theme-fill-eef4fd: #1b2b43;
+    --theme-fill-efe4d6: #3d3122;
+    --theme-fill-f0e0cc: #40311f;
+    --theme-fill-f0f5ff: #293d54;
+    --theme-fill-f0f6ff: #24384f;
+    --theme-fill-f1f3f7: #232d39;
+    --theme-fill-f1f4f8: #232d39;
+    --theme-fill-f2f6fc: #232d39;
+    --theme-fill-f2f7ff: #24384f;
+    --theme-fill-f2fbf6: #1f3f2d;
+    --theme-fill-f3b5b5: #431b1b;
+    --theme-fill-f3f5f8: #232d39;
+    --theme-fill-f4f7fb: #232d39;
+    --theme-fill-f5f6fa: #232d39;
+    --theme-fill-f7f9fc: #232d39;
+    --theme-fill-f7fafd: #232d39;
+    --theme-fill-f7faff: #293d54;
+    --theme-fill-f8fafd: #232d39;
+    --theme-fill-fabd1f: #43381b;
+    --theme-fill-fafbfd: #232d39;
+    --theme-fill-fbe1de: #431f1b;
+    --theme-fill-fbeaea: #431b1b;
+    --theme-fill-fbf4f3: #3f2420;
+    --theme-fill-fbfcfe: #232d39;
+    --theme-fill-fcfdfe: #232d39;
+    --theme-fill-fde0e0: #431b1b;
+    --theme-fill-fdecec: #431b1b;
+    --theme-fill-ffa500: #43351b;
+    --theme-fill-ffcf5f: #43371b;
+    --theme-fill-ffdcc0: #432d1b;
+    --theme-fill-ffe2cc: #432c1b;
+    --theme-fill-ffe39f: #43371b;
+    --theme-fill-ffe9a8: #43391b;
+    --theme-fill-fff1cc: #43381b;
+    --theme-fill-fff1cf: #43371b;
+    --theme-fill-fff3c4: #433b1b;
+    --theme-fill-fff6e0: #43371b;
+    --theme-fill-fff6e2: #43361b;
+    --theme-fill-fff8e8: #43371b;
+    --theme-fill-fff8e9: #43361b;
+    --theme-fill-fff8ec: #43341b;
+    --theme-fill-fffbea: #433b1b;
+    --theme-ink-00204a: #ffffff;
+    --theme-ink-00449c: #ffffff;
+    --theme-ink-0a0f1b: #f6f8fc;
+    --theme-ink-0b5f2e: #a7f5c8;
+    --theme-ink-0b6478: #a7e7f5;
+    --theme-ink-0f7a38: #a8f5c5;
+    --theme-ink-0f7a3d: #a8f5c9;
+    --theme-ink-0f9043: #a7f5c6;
+    --theme-ink-12a24a: #a7f5c5;
+    --theme-ink-1a284b: #f5f5f5;
+    --theme-ink-243347: #f5f5f5;
+    --theme-ink-2a3446: #f5f5f5;
+    --theme-ink-33537b: #e8e8e8;
+    --theme-ink-3f7a57: #beddcb;
+    --theme-ink-41506b: #e8e8e8;
+    --theme-ink-4b32a8: #bfb4e9;
+    --theme-ink-55700d: #e0f5a7;
+    --theme-ink-594524: #e3d3b9;
+    --theme-ink-5e4c3b: #d9cdc3;
+    --theme-ink-6b4a00: #f5dda7;
+    --theme-ink-6b4e2e: #e1cfba;
+    --theme-ink-7a0b0b: #f5a7a7;
+    --theme-ink-7a4b00: #f5d7a7;
+    --theme-ink-7a5000: #f5daa7;
+    --theme-ink-85551b: #eed1ad;
+    --theme-ink-88500a: #f5d2a7;
+    --theme-ink-8a1c1c: #eeadad;
+    --theme-ink-8a5a10: #f5d6a7;
+    --theme-ink-8a6100: #f5dea7;
+    --theme-ink-8b0808: #f5a7a7;
+    --theme-ink-8b3a2e: #e7bcb5;
+    --theme-ink-92eb7f: #b7f1aa;
+    --theme-ink-9c4a06: #f5caa7;
+    --theme-ink-a64b00: #f5caa7;
+    --theme-ink-a81e1e: #f0acac;
+    --theme-ink-b26a00: #f5d5a7;
+    --theme-ink-b39979: #dcd0c1;
+    --theme-ink-bd1404: #f5ada7;
+    --theme-ink-c62828: #eeadad;
+    --theme-ink-c7b6a7: #d9cdc3;
+    --theme-ink-d9a33b: #efd9ad;
+    --theme-ink-e0a200: #f5e0a7;
+    --theme-ink-e4e9f0: #c8d3e1;
+    --theme-ink-e4e9f2: #c8d3e1;
+    --theme-ink-e8ebf1: #c8d3e1;
+    --theme-ink-eb2727: #f5a7a7;
+    --theme-ink-eb3d3d: #f5a7a7;
+    --theme-ink-edbd4d: #f5dda7;
+    --theme-ink-eec6c6: #e9b4b4;
+    --theme-ink-f27272: #f5a7a7;
+    --theme-ink-fa3e3e: #f5a7a7;
+    --theme-ink-ffcf5f: #f5dda7;
+    --theme-muted: #c8d3e1;
+    --theme-surface: #172333;
+    --theme-surface-raised: #1d2c3f;
+    --theme-text: #f6f8fc;
+}
+
+body {
+    background-color: var(--theme-page, #fff);
+    color: var(--theme-text, #0a0f1b);
+}
+
+:root[data-theme="dark"] {
+    --theme-page: #0d1521;
+    --theme-unit-fill: 22%;
+    --theme-unit-ink: 87%;
+    --theme-fill-92eb7f: #243a26;
+    --theme-fill-f27272: #431b1b;
+    --theme-fill-eb3d3d: #431b1b;
+    --theme-fill-b39979: #483a2e;
+}
+
+/* Native controls and MUI portals share the application theme. */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+    color-scheme: dark;
+}
+:root[data-theme="dark"] input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="dark"] textarea {
+    color: var(--theme-text);
+    background-color: var(--theme-surface);
+}
+:root[data-theme="dark"] select option {
+    background-color: var(--theme-surface);
+    color: var(--theme-text);
+}
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+    color: var(--theme-muted);
+    opacity: 1;
+}
+:root[data-theme="dark"] a:not([class]) {
+    color: #a6c8ff;
+}
+
+/* The ribbon stays subdued while page content uses blue-gray surfaces. */
+:root[data-theme="dark"] .home-content,
+:root[data-theme="dark"] .main-page-navbar {
+    background-color: #17273b;
+    background-blend-mode: multiply;
+}
+
+.theme-picker {
+    position: fixed;
+    right: 18px;
+    bottom: 14px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border: 1px solid var(--theme-border, #d8dee8);
+    border-radius: 24px;
+    background-color: var(--theme-surface, #fff);
+    color: var(--theme-text, #00204a);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18);
+    font-size: 0.8rem;
+}
+.theme-picker select {
+    max-width: 115px;
+    padding: 3px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+.theme-picker:focus-within {
+    outline: 2px solid var(--theme-accent, #00449c);
+    outline-offset: 3px;
+}
+@media (max-width: 600px) {
+    .theme-picker {right: 10px; bottom: 10px; padding: 5px 8px;}
+    .theme-picker-label {display: none;}
+}
+@media print {
+    .theme-picker {display: none;}
+}
+
+/* Native and MUI tables use the same dark header, including their sticky cells. */
+:root[data-theme="dark"] .dp-table thead th {
+    background-color: var(--theme-table-header);
+    color: #fff;
+}
+:root[data-theme="dark"] .dp-row:nth-child(even):not(.dp-row-open):not(:hover) > td {
+    background-color: #1b293b;
+}
+
+/* Calm navy: the workspace recedes, cards frame the task, and blue indicates action. */
+:root[data-theme="dark"] .page-content {
+    background-color: var(--theme-page);
+}
+:root[data-theme="dark"] :is(.bg-card, .gup-panel, .dashboard-realisasi) {
+    box-shadow: var(--theme-card-shadow);
+    border-color: #304157;
+}
+:root[data-theme="dark"] .dp-table-card {
+    border-color: #304157;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+}
+:root[data-theme="dark"] :is(.dp-toolbar, .kkp-band > td) {
+    background-color: #1a283a;
+}
+:root[data-theme="dark"] :is(.dp-toolbar-info, .dp-perpage, .dashboard-realisasi-note,
+    .dashboard-realisasi-filter, .gup-legend, .anggaran-sync-info) {
+    color: var(--theme-muted);
+}
+:root[data-theme="dark"] :is(.dash-tab, .dash-content, .dash-title, .dash-user) {
+    background-color: #111d2c;
+    border-color: #2a3b50;
+}
+:root[data-theme="dark"] .dash-button {
+    background-color: transparent;
+    border-radius: 10px;
+    color: #d5deeb;
+}
+:root[data-theme="dark"] .dash-button:hover {
+    background-color: #1c2e44;
+    color: #fff;
+}
+:root[data-theme="dark"] .dash-button.btn-selected {
+    background-color: var(--theme-accent-fill);
+    color: #fff;
+    box-shadow: inset 3px 0 0 #9cc5ff;
+}
+:root[data-theme="dark"] .home-navbar-content {
+    background-color: #17283d;
+    box-shadow: inset 0 0 0 1px #354960;
+}
+:root[data-theme="dark"] .home-button {
+    color: #e3ebf6;
+}
+:root[data-theme="dark"] .home-button:hover {
+    background-color: #293d54;
+    box-shadow: none;
+}
+:root[data-theme="dark"] .home-button-clicked,
+:root[data-theme="dark"] .home-button-clicked:hover {
+    background-color: #2b4565;
+    color: #fff;
+    box-shadow: inset 0 0 0 1px #7599c3;
+}
+:root[data-theme="dark"] .home-button-logout:hover {
+    background-color: #492a32;
+    color: #ffd6d6;
+}
+:root[data-theme="dark"] .kelola-tab {
+    background-color: #172333;
+    color: #d3ddea;
+}
+:root[data-theme="dark"] .kelola-tab:hover {
+    background-color: #20344b;
+    border-color: #7296c1;
+    color: #fff;
+}
+:root[data-theme="dark"] .kelola-tab-active {
+    background-color: var(--theme-accent-fill);
+    border-color: #80a8d9;
+    color: #fff;
+}
+:root[data-theme="dark"] .kelola-tab-alert.kelola-tab-active {
+    background-color: #492a32;
+    border-color: #cc929a;
+}
+:root[data-theme="dark"] .kelola-tab-alert:not(.kelola-tab-active) {
+    color: #f5b8bb;
+}
+:root[data-theme="dark"] .dp-table a,
+:root[data-theme="dark"] .MuiTableCell-root a {
+    color: var(--theme-accent);
+    text-underline-offset: 3px;
+}
+:root[data-theme="dark"] .dp-table a:hover,
+:root[data-theme="dark"] .MuiTableCell-root a:hover {
+    color: #dceaff;
+}
+:root[data-theme="dark"] :is(input, select, textarea, button, a):focus-visible {
+    outline: 2px solid var(--theme-accent);
+    outline-offset: 3px;
+}
+:root[data-theme="dark"] :is(.type-btn, .filter-input1, .filter-search input,
+    .dp-perpage select, .anggaran-period input, .anggaran-period select,
+    .dashboard-realisasi-filter select) {
+    background-color: var(--theme-input);
+    color: var(--theme-text);
+    border-color: #4c627f;
+}
+:root[data-theme="dark"] .footer {
+    border-top: 1px solid #2a3b50;
+    box-sizing: border-box;
+    color: #c8d3e1;
+}
+:root[data-theme="dark"] .theme-picker {
+    background-color: #172333;
+    border-color: #4c627f;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme="dark"] :is(.btn-submit, .form-submit input, .btn-aksi, .verif-btn, .spm-button):not(.button-reject) {
+    background-color: #294f7b;
+    color: #fff;
+    box-shadow: inset 0 0 0 1px #6087b5;
+}
+:root[data-theme="dark"] :is(.btn-submit, .form-submit input, .btn-aksi, .verif-btn, .spm-button):not(.button-reject):hover:not(:disabled) {
+    background-color: #345f8e;
+    transform: none;
+    box-shadow: inset 0 0 0 1px #8fb2da;
+}
+:root[data-theme="dark"] .verif-btn.verif-btn-pressed:not(.button-reject) {
+    background-color: #345f8e;
+    box-shadow: inset 0 0 0 2px #a5c9ff;
+}
+:root[data-theme="dark"] :is(.btn-submit, .form-submit input, .btn-aksi, .verif-btn, .spm-button):disabled {
+    background-color: #1d2c3f;
+    color: #97a8bd;
+    box-shadow: inset 0 0 0 1px #324359;
+    cursor: not-allowed;
+}

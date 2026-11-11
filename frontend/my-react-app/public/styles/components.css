@@ -5,7 +5,7 @@
     display: inline-block;
     height: 80px;
     width: 100%;
-    background-color: #00449C;
+    background-color: var(--theme-footer, #00449C);
     color: white;
     font-size: 1.2rem;
     font-weight: 400;
@@ -24,11 +24,11 @@
     width: 94%;
     height: 86%;
     margin: 5px 50px;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 20px;
     padding-bottom: 10px;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .pengajuan {
@@ -92,7 +92,7 @@
     font-size: 1.3rem;
     height: 30px;
     width: 172px;
-    background-color: #fdfdfd;
+    background-color: var(--theme-surface, #fdfdfd);
 }
 
 .pagination {
@@ -106,10 +106,10 @@
 .gup-panel {
     width: 94%;
     margin: 5px 50px 0 50px;
-    background-color: white;
-    border: 1px solid rgb(214, 214, 214);
+    background-color: var(--theme-surface, white);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 20px;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .gup-panel-head {
@@ -124,12 +124,12 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .gup-toggle {
     padding: 8px 18px;
-    border: 1px solid #00449C;
+    border: 1px solid var(--theme-border, #00449C);
     border-radius: 20px;
     background-color: #00449C;
     color: white;
@@ -141,12 +141,12 @@
 }
 
 .gup-toggle:hover {
-    color: #FFCF5F;
+    color: var(--theme-ink-ffcf5f, #FFCF5F);
 }
 
 .gup-body {
     padding: 0 20px 18px 20px;
-    border-top: 1px solid #EDF1F6;
+    border-top: 1px solid var(--theme-border, #EDF1F6);
 }
 
 .gup-legend {
@@ -156,14 +156,14 @@
     gap: 14px;
     padding: 14px 0;
     font-size: 0.8rem;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .gup-legend-month {
     margin-right: 8px;
     font-size: 1.25rem;
     font-weight: 600;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .gup-legend-item {
@@ -181,12 +181,12 @@
 .gup-reload {
     margin-left: auto;
     padding: 5px 12px;
-    border: 1px solid #D8DEE8;
+    border: 1px solid var(--theme-border, #D8DEE8);
     border-radius: 8px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     font-family: inherit;
     font-size: 0.78rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     cursor: pointer;
 }
 
@@ -203,7 +203,7 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #7A8598;
+    color: var(--theme-muted, #7A8598);
 }
 
 .gup-cell {
@@ -227,7 +227,7 @@
 
 /* An outline, not a background swap - the background is the band and must survive selection */
 .gup-cell-active {
-    outline: 2px solid #00449C;
+    outline: 2px solid var(--theme-border, #00449C);
     outline-offset: -2px;
 }
 
@@ -243,17 +243,17 @@
     font-variant-numeric: tabular-nums;
 }
 
-.gup-band-hijau  { background-color: #D6F5E1; border-color: #A9E4C3; color: #0F7A3D; }
-.gup-band-kuning { background-color: #FFF3C4; border-color: #F0DC9A; color: #8A6100; }
-.gup-band-jingga { background-color: #FFDCC0; border-color: #F3C398; color: #9C4A06; }
-.gup-band-merah  { background-color: #FBE1DE; border-color: #F2BDB7; color: #BD1404; }
+.gup-band-hijau  { background-color: var(--theme-fill-d6f5e1, #D6F5E1); border-color: var(--theme-border, #A9E4C3); color: var(--theme-ink-0f7a3d, #0F7A3D); }
+.gup-band-kuning { background-color: var(--theme-fill-fff3c4, #FFF3C4); border-color: var(--theme-border, #F0DC9A); color: var(--theme-ink-8a6100, #8A6100); }
+.gup-band-jingga { background-color: var(--theme-fill-ffdcc0, #FFDCC0); border-color: var(--theme-border, #F3C398); color: var(--theme-ink-9c4a06, #9C4A06); }
+.gup-band-merah  { background-color: var(--theme-fill-fbe1de, #FBE1DE); border-color: var(--theme-border, #F2BDB7); color: var(--theme-ink-bd1404, #BD1404); }
 
 /* Past the admin's batas nothing may be submitted, so the cell drops its band colour
    entirely - a remaining amount nobody can claim is worse than no number at all */
 .gup-cell-tutup {
-    background-color: #F1F3F6;
-    border-color: #DFE3EA;
-    color: #98A1B0;
+    background-color: var(--theme-surface-raised, #F1F3F6);
+    border-color: var(--theme-border, #DFE3EA);
+    color: var(--theme-muted, #98A1B0);
 }
 
 .gup-cell-tutup:hover {
@@ -265,7 +265,7 @@
    remaining amount stays printed on the cell, so dropping the band loses no information. */
 .gup-cell-batas {
     background-color: #B3261E;
-    border-color: #8C1D18;
+    border-color: var(--theme-border, #8C1D18);
     color: white;
     box-shadow: 0 2px 10px rgba(179, 38, 30, 0.4);
 }
@@ -281,13 +281,13 @@
 .gup-note {
     margin: 12px 0 0 0;
     font-size: 0.82rem;
-    color: #7A8598;
+    color: var(--theme-muted, #7A8598);
 }
 
 .gup-note-batas {
     margin-top: 16px;
     font-size: 1rem;
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
 }
 
 .gup-batas-tanggal {
@@ -298,9 +298,9 @@
 .gup-detail {
     margin-top: 16px;
     padding: 14px 16px;
-    border: 1px solid #E1E7EF;
+    border: 1px solid var(--theme-border, #E1E7EF);
     border-radius: 10px;
-    background-color: #F8FAFD;
+    background-color: var(--theme-fill-f8fafd, #F8FAFD);
 }
 
 .gup-detail-head {
@@ -309,11 +309,11 @@
     gap: 18px;
     margin-bottom: 10px;
     font-size: 0.88rem;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .gup-lebih {
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
     font-weight: 600;
 }
 
@@ -331,14 +331,14 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: #7A8598;
-    border-bottom: 1px solid #E1E7EF;
+    color: var(--theme-muted, #7A8598);
+    border-bottom: 1px solid var(--theme-border, #E1E7EF);
 }
 
 .gup-table td {
     padding: 9px 10px;
-    border-bottom: 1px solid #EDF1F6;
-    color: #0a0f1b;
+    border-bottom: 1px solid var(--theme-border, #EDF1F6);
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
 }
 
 .gup-table th:nth-child(2),
@@ -479,7 +479,7 @@
 .cari-bp .cari-input {
     width: 220px;
     margin: 0 0 0 30px;
-    border-bottom: 1px solid #c7ccd6;
+    border-bottom: 1px solid var(--theme-border, #c7ccd6);
 }
 
 /* Marks the Cari term inside the DRPP transaction table. <mark> carries a UA background,
@@ -487,8 +487,8 @@
 .sorot {
     padding: 1px 3px;
     border-radius: 3px;
-    background-color: #FFE9A8;
-    color: #6B4A00;
+    background-color: var(--theme-fill-ffe9a8, #FFE9A8);
+    color: var(--theme-ink-6b4a00, #6B4A00);
     font-weight: 700;
 }
 
@@ -499,22 +499,22 @@
     width: 96%;
     margin: 0 auto 10px auto;
     padding: 10px 14px;
-    border: 1px solid #E1E7EF;
+    border: 1px solid var(--theme-border, #E1E7EF);
     border-radius: 10px;
-    background-color: #F8FAFD;
+    background-color: var(--theme-fill-f8fafd, #F8FAFD);
     font-size: 0.9rem;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .sorot-bersihkan {
     margin-left: auto;
     padding: 5px 12px;
-    border: 1px solid #D8DEE8;
+    border: 1px solid var(--theme-border, #D8DEE8);
     border-radius: 8px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     font-family: inherit;
     font-size: 0.8rem;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     cursor: pointer;
 }
 
@@ -522,8 +522,8 @@
     margin-left: 8px;
     padding: 2px 8px;
     border-radius: 999px;
-    background-color: #FFF1CF;
-    color: #8A6100;
+    background-color: var(--theme-fill-fff1cf, #FFF1CF);
+    color: var(--theme-ink-8a6100, #8A6100);
     font-size: 0.7rem;
     font-weight: 600;
 }
@@ -547,12 +547,12 @@
 
 .batas-input {
     padding: 8px 12px;
-    border: 1px solid #D8DEE8;
+    border: 1px solid var(--theme-border, #D8DEE8);
     border-radius: 8px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     font-family: inherit;
     font-size: 0.9rem;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .batas-input:disabled,
@@ -564,11 +564,11 @@
 
 .batas-hapus {
     margin-left: 0;
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
 }
 
 .batas-pesan {
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 /* Daftar-Pengajuan tab strip. Sits inside .bg-card rather than beside it, so only the
@@ -585,10 +585,10 @@
    eight fields side by side, the table keeps those as columns and hangs the rest
    (SPP, SPM, pajak, anggaran, berkas, catatan) off an expandable detail row. */
 .dp-table-card {
-    background-color: #fdfdfd;
+    background-color: var(--theme-surface, #fdfdfd);
     width: 94%;
     margin: 20px auto;
-    border: 1px solid rgb(228, 233, 240);
+    border: 1px solid var(--theme-border, rgb(228, 233, 240));
     border-radius: 14px;
     /* clips the sticky header and the first/last row corners to the card radius */
     overflow: hidden;
@@ -600,14 +600,14 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px 20px;
-    border-bottom: 1px solid #EDF1F6;
-    background-color: #FBFCFE;
+    border-bottom: 1px solid var(--theme-border, #EDF1F6);
+    background-color: var(--theme-fill-fbfcfe, #FBFCFE);
 }
 
 .dp-toolbar-info {
     font-size: 0.85rem;
     font-weight: 500;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .dp-perpage {
@@ -615,17 +615,17 @@
     align-items: center;
     gap: 8px;
     font-size: 0.82rem;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .dp-perpage select {
     font-family: inherit;
     font-size: 0.82rem;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
     padding: 5px 8px;
-    border: 1px solid #D8DEE8;
+    border: 1px solid var(--theme-border, #D8DEE8);
     border-radius: 8px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     cursor: pointer;
 }
 
@@ -639,11 +639,11 @@
     border-collapse: separate;
     border-spacing: 0;
     font-size: 0.9rem;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
 }
 
 .dp-table thead th {
-    background-color: #F4F7FB;
+    background-color: var(--theme-fill-f4f7fb, #F4F7FB);
     padding: 11px 14px;
     text-align: left;
     white-space: nowrap;
@@ -651,13 +651,13 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #5A6472;
-    border-bottom: 1px solid #E1E7EF;
+    color: var(--theme-text, #5A6472);
+    border-bottom: 1px solid var(--theme-border, #E1E7EF);
 }
 
 .dp-table td {
     padding: 12px 14px;
-    border-bottom: 1px solid #F1F4F8;
+    border-bottom: 1px solid var(--theme-border, #F1F4F8);
     vertical-align: middle;
 }
 
@@ -671,11 +671,11 @@
 }
 
 .dp-row:hover td {
-    background-color: #F7FAFF;
+    background-color: var(--theme-fill-f7faff, #F7FAFF);
 }
 
 .dp-row-open td {
-    background-color: #F2F7FF;
+    background-color: var(--theme-fill-f2f7ff, #F2F7FF);
     border-bottom-color: transparent;
 }
 
@@ -730,7 +730,39 @@
     display: block;
     margin-top: 4px;
     font-size: 0.7rem;
-    color: #8A6100;
+    color: var(--theme-ink-8a6100, #8A6100);
+}
+
+.pjk-repair-summary {
+    margin: 16px 24px;
+}
+
+.pjk-repair-summary > p {
+    margin: 0 0 10px;
+    color: var(--theme-ink-41506b, #41506B);
+    font-size: 0.85rem;
+}
+
+.pjk-repair-counters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.pjk-repair-counter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.pjk-repair-counter strong {
+    font-size: 1.4rem;
+    font-weight: 800;
 }
 
 /* Layanan Gaji: the switch that decides what the public page serves. Above the filters and
@@ -742,9 +774,9 @@
     flex-wrap: wrap;
     gap: 8px 16px;
     padding: 10px 14px;
-    border: 1px solid #E4E9F0;
+    border: 1px solid var(--theme-border, #E4E9F0);
     border-radius: 10px;
-    background-color: #FBFCFE;
+    background-color: var(--theme-fill-fbfcfe, #FBFCFE);
 }
 
 .lg-sistem div {
@@ -758,13 +790,13 @@
 
 .lg-sistem span {
     font-size: 0.85rem;
-    color: #6B7A90;
+    color: var(--theme-muted, #6B7A90);
 }
 
 /* Layanan Gaji: the per jenis upload dialog */
 .ulg {
     padding: 24px 26px;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 .ulg h2 {
@@ -776,7 +808,7 @@
     margin: 0 0 18px 0;
     font-size: 0.95rem;
     line-height: 1.5;
-    color: #41506B;
+    color: var(--theme-ink-41506b, #41506B);
 }
 
 .ulg-daftar {
@@ -794,7 +826,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 10px 12px;
-    border: 1px solid #E4E9F0;
+    border: 1px solid var(--theme-border, #E4E9F0);
     border-radius: 10px;
 }
 
@@ -816,36 +848,36 @@
 }
 
 .ulg-ada {
-    color: #0F7A3D;
+    color: var(--theme-ink-0f7a3d, #0F7A3D);
 }
 
 .ulg-baru {
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     font-weight: 600;
 }
 
 .ulg-kosong {
-    color: #8A6100;
+    color: var(--theme-ink-8a6100, #8A6100);
 }
 
 .ulg-catatan {
     margin: 16px 0 0 0;
     font-size: 0.85rem;
     line-height: 1.5;
-    color: #6B7A90;
+    color: var(--theme-muted, #6B7A90);
 }
 
 .ulg-paksa {
     margin-top: 14px;
     padding: 10px 12px;
-    border: 1px solid #F5C842;
+    border: 1px solid var(--theme-border, #F5C842);
     border-radius: 8px;
-    background: #FFFBEA;
+    background: var(--theme-fill-fffbea, #FFFBEA);
 }
 
 .ulg-paksa-label {
     font-size: 0.875rem;
-    color: #7A5000;
+    color: var(--theme-ink-7a5000, #7A5000);
     display: flex;
     align-items: center;
 }
@@ -854,7 +886,7 @@
     margin: 6px 0 0 28px;
     font-size: 0.8rem;
     line-height: 1.5;
-    color: #7A5000;
+    color: var(--theme-ink-7a5000, #7A5000);
 }
 
 .ulg-aksi {
@@ -878,13 +910,13 @@
     padding: 5px 8px;
     font-family: inherit;
     font-size: 0.9rem;
-    border: 1px solid #C9D2E0;
+    border: 1px solid var(--theme-border, #C9D2E0);
     border-radius: 6px;
     outline: none;
 }
 
 .lg-email-input:focus {
-    border-color: #00449C;
+    border-color: var(--theme-border, #00449C);
 }
 
 .dp-actions {
@@ -906,19 +938,19 @@
 }
 
 .dp-table thead th:last-child {
-    background-color: #F4F7FB;
+    background-color: var(--theme-fill-f4f7fb, #F4F7FB);
 }
 
 .dp-row > td:last-child {
-    background-color: #fdfdfd;
+    background-color: var(--theme-surface, #fdfdfd);
 }
 
 .dp-row:hover > td:last-child {
-    background-color: #F7FAFF;
+    background-color: var(--theme-fill-f7faff, #F7FAFF);
 }
 
 .dp-row-open > td:last-child {
-    background-color: #F2F7FF;
+    background-color: var(--theme-fill-f2f7ff, #F2F7FF);
 }
 
 /* The detail row is always in the DOM so Collapse has something to animate; without a
@@ -929,12 +961,12 @@
 }
 
 .dp-row-open + .dp-detail-row td {
-    border-bottom: 1px solid #E1E7EF;
+    border-bottom: 1px solid var(--theme-border, #E1E7EF);
 }
 
 .dp-detail {
     padding: 16px 20px 18px 52px;
-    background-color: #F8FAFD;
+    background-color: var(--theme-fill-f8fafd, #F8FAFD);
 }
 
 .dp-detail-grid {
@@ -950,14 +982,14 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: #7A8598;
+    color: var(--theme-muted, #7A8598);
 }
 
 .dp-detail-item dd {
     margin: 3px 0 0 0;
     font-size: 0.88rem;
     font-weight: 500;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
     overflow-wrap: break-word;
 }
 
@@ -973,29 +1005,29 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border: 1px solid #DCE3EC;
+    border: 1px solid var(--theme-border, #DCE3EC);
     border-radius: 999px;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     font-size: 0.8rem;
     font-weight: 500;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
     text-decoration: none;
 }
 
 .dp-file:hover {
-    border-color: #00449C;
-    background-color: #F0F5FF;
+    border-color: var(--theme-border, #00449C);
+    background-color: var(--theme-fill-f0f5ff, #F0F5FF);
 }
 
 .dp-file-empty {
-    color: #8B94A3;
-    background-color: #F3F5F8;
+    color: var(--theme-muted, #8B94A3);
+    background-color: var(--theme-fill-f3f5f8, #F3F5F8);
 }
 
 .dp-file-pending {
-    color: #8A6100;
-    background-color: #FFF6E2;
-    border-color: #F0DFB8;
+    color: var(--theme-ink-8a6100, #8A6100);
+    background-color: var(--theme-fill-fff6e2, #FFF6E2);
+    border-color: var(--theme-border, #F0DFB8);
 }
 
 .dp-detail-notes {
@@ -1007,11 +1039,11 @@
 .dp-detail-notes p {
     margin: 0;
     padding: 10px 14px;
-    border-left: 3px solid #C9D4E4;
+    border-left: 3px solid var(--theme-border, #C9D4E4);
     border-radius: 0 8px 8px 0;
-    background-color: white;
+    background-color: var(--theme-surface, white);
     font-size: 0.86rem;
-    color: #2A3446;
+    color: var(--theme-ink-2a3446, #2A3446);
 }
 
 .dp-detail-notes span {
@@ -1021,7 +1053,7 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: #7A8598;
+    color: var(--theme-muted, #7A8598);
 }
 
 .dp-placeholder {
@@ -1030,7 +1062,7 @@
 }
 
 .dp-empty {
-    color: #7A8598;
+    color: var(--theme-muted, #7A8598);
     font-size: 0.9rem;
 }
 
@@ -1038,7 +1070,7 @@
     display: flex;
     justify-content: center;
     padding: 14px 0;
-    border-top: 1px solid #EDF1F6;
+    border-top: 1px solid var(--theme-border, #EDF1F6);
 }
 
 .dp-sr-only {
@@ -1106,6 +1138,37 @@
     font-size: 1.2rem;
 }
 
+.pengajuan-fields {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.pengajuan-correction-upload {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+.pengajuan-form-tabledata.pengajuan-has-correction {
+    grid-template-rows: auto auto 1fr;
+}
+
+.pengajuan-correction-upload .verif-btn {
+    width: auto;
+    padding: 0 20px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.pengajuan-correction-link {
+    margin: 12px 35px;
+    color: var(--theme-ink-41506b, #41506B);
+}
+
 .pengajuan-form-textdata label {
     display: flex;
     align-items: center;
@@ -1140,7 +1203,7 @@
 
 .pengajuan-form-error {
     margin: -4px 35px 0 35px;
-    color: #BD1404;
+    color: var(--theme-ink-bd1404, #BD1404);
     font-size: 1rem;
     font-weight: 600;
 }
@@ -1187,11 +1250,11 @@
 }
 
 .table-cell {
-    border: 0.8px solid rgb(214, 214, 214);
+    border: 0.8px solid var(--theme-border, rgb(214, 214, 214));
 }
 
 .selected-cell {
-    background-color: #f1f1f1;
+    background-color: var(--theme-surface-raised, #f1f1f1);
 }
 
 .table-cell textarea {
@@ -1236,7 +1299,7 @@
 
 .form-submit input:hover,
 .btn-submit:hover {
-    background-color: #016FFC;
+    background-color: var(--theme-fill-016ffc, #016FFC);
     transform: scale(1.1, 1.1);
 }
 
@@ -1286,7 +1349,7 @@
     max-width: 90vw;
     height: auto;
     min-height: 210px;
-    background-color: #f5f6fa;
+    background-color: var(--theme-fill-f5f6fa, #f5f6fa);
     border-radius: 20px;
 }
 
@@ -1373,9 +1436,9 @@
     max-width: 700px;
     margin: 0;
     padding: 7px 12px;
-    border: 1px solid #C7CDD8;
+    border: 1px solid var(--theme-border, #C7CDD8);
     border-radius: 4px;
-    background-color: #FDFDFD;
+    background-color: var(--theme-surface, #FDFDFD);
     font-size: 1rem;
     font-weight: 500;
     overflow-wrap: break-word;
@@ -1483,7 +1546,7 @@ input[type="number"]::-webkit-inner-spin-button {
     height: 70px;
     position: relative;
     overflow: hidden;
-    border: 0.8px solid rgb(214, 214, 214);
+    border: 0.8px solid var(--theme-border, rgb(214, 214, 214));
     margin: auto;
     margin-top: 10px;
     margin-bottom: 20px;
@@ -1586,10 +1649,10 @@ input[type="number"]::-webkit-inner-spin-button {
     align-items: center;
     gap: 8px;
     padding: 8px 16px;
-    border: solid 1px rgb(214, 214, 214);
+    border: solid 1px var(--theme-border, rgb(214, 214, 214));
     border-radius: 20px;
-    background-color: white;
-    color: #5A6472;
+    background-color: var(--theme-surface, white);
+    color: var(--theme-text, #5A6472);
     font-family: inherit;
     font-size: 0.95rem;
     font-weight: 500;
@@ -1598,12 +1661,12 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .kelola-tab:hover {
-    border-color: #00449C;
-    color: #00449C;
+    border-color: var(--theme-border, #00449C);
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .kelola-tab:focus-visible {
-    outline: 2px solid #00449C;
+    outline: 2px solid var(--theme-border, #00449C);
     outline-offset: 2px;
 }
 
@@ -1611,8 +1674,8 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 26px;
     padding: 1px 7px;
     border-radius: 20px;
-    background-color: #EDF1F7;
-    color: #5A6472;
+    background-color: var(--theme-fill-edf1f7, #EDF1F7);
+    color: var(--theme-text, #5A6472);
     font-size: 0.85rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -1620,14 +1683,14 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .kelola-tab-active {
-    border-color: #00449C;
+    border-color: var(--theme-border, #00449C);
     background-color: #00449C;
     color: white;
     font-weight: 600;
 }
 
 .kelola-tab-active:hover {
-    color: #FFCF5F;
+    color: var(--theme-ink-ffcf5f, #FFCF5F);
 }
 
 .kelola-tab-active .kelola-tab-count {
@@ -1636,34 +1699,34 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .kelola-tab-alert .kelola-tab-count {
-    background-color: #EB2727;
+    background-color: var(--theme-fill-eb2727, #EB2727);
     color: white;
 }
 
 .kelola-tab-alert:not(.kelola-tab-active) {
-    border-color: #F3B5B5;
-    color: #8B0808;
+    border-color: var(--theme-border, #F3B5B5);
+    color: var(--theme-ink-8b0808, #8B0808);
 }
 
 .kelola-tab-alert.kelola-tab-active {
-    border-color: #8B0808;
+    border-color: var(--theme-border, #8B0808);
     background-color: #8B0808;
 }
 
 .kelola-tab-count-alert {
-    background-color: #EB2727;
+    background-color: var(--theme-fill-eb2727, #EB2727);
     color: white;
 }
 
 .kelola-tab-count-warn {
-    background-color: #FFE39F;
-    color: #8A6100;
+    background-color: var(--theme-fill-ffe39f, #FFE39F);
+    color: var(--theme-ink-8a6100, #8A6100);
 }
 
 .kelola-empty {
     padding: 48px 16px;
     text-align: center;
-    color: #8A93A2;
+    color: var(--theme-muted, #8A93A2);
     font-size: 1rem;
 }
 
@@ -1734,7 +1797,7 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-left: 25px;
     margin-bottom: 5px;
     font-size: 2rem;
-    color: #0a0f1b;
+    color: var(--theme-ink-0a0f1b, #0a0f1b);
 }
 
 .aksi-submit {
@@ -1743,6 +1806,14 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-left: 30px;
     transform: scale(1.1, 1.1);
 }
+
+.aksi-pengajuan-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.aksi-pengajuan-fields:disabled { opacity: .7; }
+.aksi-bp-confirm { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.aksi-bp-confirm-title { color: var(--theme-ink-88500a, #88500a); }
+.aksi-bp-confirm-note { font-size: 13px; font-weight: 400; line-height: 1.6; }
+.aksi-bp-confirm-items { display: flex; flex-direction: column; gap: 10px; max-height: 40vh; overflow: auto; }
+.aksi-bp-confirm-item { display: flex; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid var(--theme-border, #e8cf9f); border-radius: 8px; background: var(--theme-fill-fff8e9, #fff8e9); color: var(--theme-ink-594524, #594524); text-align: left; font-size: 12px; font-weight: 400; line-height: 1.6; }
 
 .aksi-content-label {
     display: grid;
@@ -1764,8 +1835,19 @@ input[type="number"]::-webkit-inner-spin-button {
     height: 22px;
     justify-self: start;
     align-self: center;
-    accent-color: #00449C;
+    accent-color: var(--theme-ink-00449c, #00449C);
     cursor: pointer;
+}
+
+/* Keep repair review outside the fixed verification grid and its spanning Catatan field. */
+.pjk-repair-review {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    margin: 12px 35px 20px;
+    font-size: 1.05rem;
+    color: var(--theme-ink-00204a, #00204A);
 }
 
 /* The Catatan textarea spans two rows in column 2, so auto-placement would drop this
@@ -1800,17 +1882,17 @@ input[type="number"]::-webkit-inner-spin-button {
 .tup-sisa-nilai {
     font-size: 2.2rem;
     font-weight: 600;
-    color: #00449C;
+    color: var(--theme-ink-00449c, #00449C);
 }
 
 .tup-sisa-info {
     font-size: 1rem;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .tup-kosong {
     margin: 0 0 0 30px;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .tup-riwayat {
@@ -1824,10 +1906,10 @@ input[type="number"]::-webkit-inner-spin-button {
     gap: 20px;
     width: 100%;
     padding: 12px 20px;
-    border: 1px solid rgb(214, 214, 214);
+    border: 1px solid var(--theme-border, rgb(214, 214, 214));
     border-radius: 12px;
-    background-color: #F7FAFD;
-    color: #00204A;
+    background-color: var(--theme-fill-f7fafd, #F7FAFD);
+    color: var(--theme-ink-00204a, #00204A);
     font-family: inherit;
     font-size: 1.1rem;
     font-weight: 600;
@@ -1836,12 +1918,12 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .tup-riwayat-judul:hover {
-    border-color: #00449C;
+    border-color: var(--theme-border, #00449C);
 }
 
 .tup-riwayat-tanggal {
     font-weight: 500;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .tup-riwayat-isi {
@@ -1866,10 +1948,10 @@ input[type="number"]::-webkit-inner-spin-button {
     max-width: 460px;
     margin: 12px 0 26px;
     padding: 14px 18px;
-    border: 1px solid #E4E9F0;
-    border-left: 4px solid #00449C;
+    border: 1px solid var(--theme-border, #E4E9F0);
+    border-left: 4px solid var(--theme-border, #00449C);
     border-radius: 12px;
-    background: #F7FAFD;
+    background: var(--theme-fill-f7fafd, #F7FAFD);
 }
 
 .docs-rincian-title {
@@ -1879,7 +1961,7 @@ input[type="number"]::-webkit-inner-spin-button {
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
 
 .docs-rincian-row {
@@ -1887,7 +1969,7 @@ input[type="number"]::-webkit-inner-spin-button {
     justify-content: space-between;
     gap: 24px;
     padding: 4px 0;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
     font-weight: 500;
 }
 
@@ -1898,8 +1980,8 @@ input[type="number"]::-webkit-inner-spin-button {
 .docs-rincian-total {
     margin-top: 8px;
     padding-top: 10px;
-    border-top: 1px solid #D8DEE8;
-    color: #00204A;
+    border-top: 1px solid var(--theme-border, #D8DEE8);
+    color: var(--theme-ink-00204a, #00204A);
     font-size: 1.05rem;
     font-weight: 600;
 }
@@ -1907,7 +1989,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .docs-btn {
     height: 30px;
     border-radius: 20px;
-    border: solid 0.8px rgb(199, 199, 199);
+    border: solid 0.8px var(--theme-border, rgb(199, 199, 199));
     font-size: 1rem;
     font-weight: 500;
     padding: 0px 10px;
@@ -1919,7 +2001,7 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 150px;
     margin-top: 10px;
     border-radius: 20px;
-    border: solid 0.8px rgb(199, 199, 199);
+    border: solid 0.8px var(--theme-border, rgb(199, 199, 199));
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
@@ -1933,7 +2015,7 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 230px;
     border-radius: 20px;
     padding-left: 10px;
-    border: solid 0.8px rgb(199, 199, 199);
+    border: solid 0.8px var(--theme-border, rgb(199, 199, 199));
     font-size: 1rem;
     font-weight: 500;
 }
@@ -2037,12 +2119,12 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .verif-btn:hover {
     transform: scale(1.1, 1.1);
-    background-color: #016FFC;
+    background-color: var(--theme-fill-016ffc, #016FFC);
     box-shadow: 0px 1px 8px #016FFC;
 }
 
 .verif-btn-pressed {
-    background-color: #016FFC;
+    background-color: var(--theme-fill-016ffc, #016FFC);
 }
 
 .verif-submit-buttons {
@@ -2088,7 +2170,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .upload-error {
     font-size: 1.1rem;
     font-weight: 500;
-    color: #c62828;
+    color: var(--theme-ink-c62828, #c62828);
 }
 
 
@@ -2211,8 +2293,8 @@ input[type="number"]::-webkit-inner-spin-button {
     height: 100%;
     width: 480px;
     max-width: 92vw;
-    background: white;
-    color: #00204A;
+    background: var(--theme-surface, white);
+    color: var(--theme-ink-00204a, #00204A);
     z-index: 1201;
     box-shadow: -2px 0 18px rgba(0, 32, 74, 0.25);
     display: flex;
@@ -2239,9 +2321,9 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 1.8rem;
     line-height: 1;
     cursor: pointer;
-    color: #5A6472;
+    color: var(--theme-text, #5A6472);
 }
-.side-panel-close:hover { color: #00204A; }
+.side-panel-close:hover { color: var(--theme-ink-00204a, #00204A); }
 
 /* Single column at every size. Only the fields scroll: the buttons are a row of the
    layout rather than an overlay, so a form taller than a laptop screen can never push
@@ -2260,21 +2342,21 @@ input[type="number"]::-webkit-inner-spin-button {
     /* macOS hides overlay scrollbars until you scroll, so a long form gives no hint
        that there is more below */
     scrollbar-width: thin;
-    scrollbar-color: #00449C #E4E9F0;
+    scrollbar-color: var(--theme-ink-00449c, #00449C) var(--theme-ink-e4e9f0, #E4E9F0);
 }
 .bp-form-fields::-webkit-scrollbar { width: 11px; }
-.bp-form-fields::-webkit-scrollbar-track { background: #E4E9F0; }
+.bp-form-fields::-webkit-scrollbar-track { background: var(--theme-fill-e4e9f0, #E4E9F0); }
 .bp-form-fields::-webkit-scrollbar-thumb {
     background: #00449C;
     border-radius: 10px;
-    border: 2px solid #E4E9F0;
+    border: 2px solid var(--theme-border, #E4E9F0);
 }
 .bp-form-footer {
     flex: none;
-    border-top: 1px solid #E4E9F0;
+    border-top: 1px solid var(--theme-border, #E4E9F0);
     padding-top: 12px;
     padding-bottom: 28px;
-    background: white;
+    background: var(--theme-surface, white);
 }
 .bp-field {
     display: flex;
@@ -2284,7 +2366,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .bp-field label {
     margin-bottom: 6px;
     font-weight: 500;
-    color: #00204A;
+    color: var(--theme-ink-00204a, #00204A);
 }
 /* A file picker carries a wrapping label above and a hint line below, so it needs more
    room than the single line fields it sits between. */
@@ -2297,10 +2379,10 @@ input[type="number"]::-webkit-inner-spin-button {
     max-width: 470px;
     margin: 4px 0 26px;
     padding: 14px 18px 16px;
-    border: 1px solid #F0C36B;
-    border-left: 6px solid #E8A33D;
+    border: 1px solid var(--theme-border, #F0C36B);
+    border-left: 6px solid var(--theme-border, #E8A33D);
     border-radius: 12px;
-    background: #FFF8E8;
+    background: var(--theme-fill-fff8e8, #FFF8E8);
     animation: docs-sp2d-attention 2.2s ease-in-out infinite;
 }
 
@@ -2316,7 +2398,7 @@ input[type="number"]::-webkit-inner-spin-button {
     font-weight: 700;
     letter-spacing: 0.6px;
     text-transform: uppercase;
-    color: #7A4B00;
+    color: var(--theme-ink-7a4b00, #7A4B00);
 }
 
 .docs-sp2d-icon {
@@ -2326,7 +2408,7 @@ input[type="number"]::-webkit-inner-spin-button {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: #E8A33D;
+    background: var(--theme-fill-e8a33d, #E8A33D);
     color: #FFFFFF;
     font-size: 0.95rem;
     font-weight: 700;
@@ -2337,7 +2419,7 @@ input[type="number"]::-webkit-inner-spin-button {
     margin-left: auto;
     padding: 3px 10px;
     border-radius: 20px;
-    background: #E8A33D;
+    background: var(--theme-fill-e8a33d, #E8A33D);
     color: #FFFFFF;
     font-size: 0.7rem;
     font-weight: 700;
@@ -2355,15 +2437,15 @@ input[type="number"]::-webkit-inner-spin-button {
 .docs-sp2d .type-btn {
     width: 190px;
     height: 38px;
-    border: solid 1.5px #E8A33D;
-    background: #FFFFFF;
+    border: solid 1.5px var(--theme-border, #E8A33D);
+    background: var(--theme-surface, #FFFFFF);
     font-size: 1.05rem;
     font-weight: 600;
-    color: #7A4B00;
+    color: var(--theme-ink-7a4b00, #7A4B00);
 }
 
 .docs-sp2d .type-btn:focus-visible {
-    outline: 2px solid #B26A00;
+    outline: 2px solid var(--theme-border, #B26A00);
     outline-offset: 1px;
 }
 
@@ -2373,18 +2455,18 @@ input[type="number"]::-webkit-inner-spin-button {
     font-size: 0.82rem;
     font-weight: 500;
     line-height: 1.35;
-    color: #8A5A10;
+    color: var(--theme-ink-8a5a10, #8A5A10);
 }
 
 .docs-sp2d-filled {
-    border-color: #B6E5C9;
-    border-left-color: #0F9043;
-    background: #F2FBF6;
+    border-color: var(--theme-border, #B6E5C9);
+    border-left-color: var(--theme-border, #0F9043);
+    background: var(--theme-fill-f2fbf6, #F2FBF6);
     animation: none;
 }
 
 .docs-sp2d-filled .docs-sp2d-head label {
-    color: #0B5F2E;
+    color: var(--theme-ink-0b5f2e, #0B5F2E);
 }
 
 .docs-sp2d-filled .docs-sp2d-icon,
@@ -2393,12 +2475,12 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .docs-sp2d-filled .type-btn {
-    border-color: #0F9043;
-    color: #0B5F2E;
+    border-color: var(--theme-border, #0F9043);
+    color: var(--theme-ink-0b5f2e, #0B5F2E);
 }
 
 .docs-sp2d-filled .docs-sp2d-hint {
-    color: #3F7A57;
+    color: var(--theme-ink-3f7a57, #3F7A57);
 }
 
 @keyframes docs-sp2d-attention {
@@ -2462,22 +2544,22 @@ input[type="number"]::-webkit-inner-spin-button {
 .table-scroll-x {
     overflow-x: auto;
     scrollbar-width: thin;
-    scrollbar-color: #00449C #E4E9F0;
+    scrollbar-color: var(--theme-ink-00449c, #00449C) var(--theme-ink-e4e9f0, #E4E9F0);
 }
 .table-scroll-x::-webkit-scrollbar {
     height: 11px;
 }
 .table-scroll-x::-webkit-scrollbar-track {
-    background: #E4E9F0;
+    background: var(--theme-fill-e4e9f0, #E4E9F0);
     border-radius: 0 0 10px 10px;
 }
 .table-scroll-x::-webkit-scrollbar-thumb {
     background: #00449C;
     border-radius: 10px;
-    border: 2px solid #E4E9F0;
+    border: 2px solid var(--theme-border, #E4E9F0);
 }
 .table-scroll-x::-webkit-scrollbar-thumb:hover {
-    background: #016FFC;
+    background: var(--theme-fill-016ffc, #016FFC);
 }
 
 /* No, Tanggal SP2D and Nomor SPM stay put while the rest scrolls sideways. Widths are
@@ -2488,15 +2570,15 @@ input[type="number"]::-webkit-inner-spin-button {
     box-sizing: border-box;
     z-index: 1;
 }
-.table-scroll-x .bp-freeze { background: white; }
+.table-scroll-x .bp-freeze { background: var(--theme-surface, white); }
 .table-scroll-x thead .bp-freeze { background: #00449C; z-index: 3; }
-.table-scroll-x tbody tr:hover .bp-freeze { background: #F5F5F5; }
+.table-scroll-x tbody tr:hover .bp-freeze { background: var(--theme-surface-raised, #F5F5F5); }
 /* Rekening Koran took the Daftar Pengajuan look, and a sticky cell paints over whatever
    it scrolls across, so each of its states has to repeat that palette. Pembayaran BP above
    keeps the blue one. */
-.table-scroll-x .rk-freeze { background: #fdfdfd; }
-.table-scroll-x thead .rk-freeze { background: #F4F7FB; z-index: 3; }
-.table-scroll-x tbody tr:hover .rk-freeze { background: #F7FAFF; }
+.table-scroll-x .rk-freeze { background: var(--theme-surface, #fdfdfd); }
+.table-scroll-x thead .rk-freeze { background: var(--theme-fill-f4f7fb, #F4F7FB); z-index: 3; }
+.table-scroll-x tbody tr:hover .rk-freeze { background: var(--theme-fill-f7faff, #F7FAFF); }
 .table-scroll-x .bp-freeze-1 { left: 0;     min-width: 80px;  max-width: 80px; }
 .table-scroll-x .bp-freeze-2 { left: 80px;  min-width: 150px; max-width: 150px; }
 .table-scroll-x .bp-freeze-3 {
@@ -2510,7 +2592,7 @@ input[type="number"]::-webkit-inner-spin-button {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #B26A00;
+    color: var(--theme-ink-b26a00, #B26A00);
     white-space: nowrap;
 }
 .bp-toolbar {
@@ -2520,7 +2602,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .berkas-kurang-ringkas {
     margin: 0 0 12px 2%;
     padding-top: 20px;
-    color: #B26A00;
+    color: var(--theme-ink-b26a00, #B26A00);
     font-weight: 550;
 }
 
@@ -2566,9 +2648,9 @@ input[type="number"]::-webkit-inner-spin-button {
 .nilai-otomatis {
     width: 220px;
     box-sizing: border-box;
-    background-color: #F1F3F7;
-    color: #5A6472;
-    border: 1px dashed #C9D0DB;
+    background-color: var(--theme-fill-f1f3f7, #F1F3F7);
+    color: var(--theme-text, #5A6472);
+    border: 1px dashed var(--theme-border, #C9D0DB);
     cursor: default;
     display: flex;
     align-items: center;
@@ -2636,7 +2718,7 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .spm-button.lg-periksa:disabled {
-    background-color: #7A8699;
+    background-color: var(--theme-surface-raised, #7A8699);
     box-shadow: none;
     cursor: not-allowed;
 }
@@ -2644,10 +2726,100 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Inside the card, under its title and above the table, on the same 35px gutter the head and
    the table content already sit on */
 .bar-cari-pjk {
+    display: block;
+    container-type: inline-size;
     margin: 22px 0;
     /* 30px matches .wide-card-title's own left margin, so the bar starts level with the title */
     padding: 0 30px;
     /* Daftar-Pengajuan inherits this from .pengajuan-filter; here there is no wrapper to take
        it from, and the labels must read at the same size on both screens */
     font-size: 1.2rem;
+}
+
+/* Size the grid to the card, so it also adapts when the sidebar is opened or closed. */
+.pjk-filter-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 20px;
+}
+
+.pjk-filter-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 7px;
+}
+
+.pjk-filter-field label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--theme-ink-41506b, #41506B);
+}
+
+.bar-cari-pjk .type-btn {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    color: var(--theme-ink-1a284b, #1A284B);
+    background-color: var(--theme-surface, #FFFFFF);
+}
+
+.bar-cari-pjk .type-btn:focus-visible {
+    outline: 2px solid var(--theme-border, #00449C);
+    outline-offset: 2px;
+}
+
+.bar-cari-pjk .type-btn:disabled {
+    color: var(--theme-muted, #7A8699);
+    background-color: var(--theme-fill-f1f4f8, #F1F4F8);
+    cursor: not-allowed;
+}
+
+.pjk-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.bar-cari-pjk .spm-button {
+    box-sizing: border-box;
+    width: auto;
+    height: 38px;
+    min-width: 92px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+
+.bar-cari-pjk .pjk-filter-reset {
+    color: var(--theme-ink-41506b, #41506B);
+    background-color: var(--theme-fill-f1f4f8, #F1F4F8);
+    box-shadow: none;
+}
+
+.bar-cari-pjk .pjk-filter-reset:hover {
+    background-color: var(--theme-fill-e4e9f1, #E4E9F1);
+}
+
+@container (min-width: 1320px) {
+    .pjk-filter-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@container (max-width: 680px) {
+    .pjk-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 430px) {
+    .pjk-filter-fields { grid-template-columns: minmax(0, 1fr); }
+    .pjk-filter-actions .spm-button { flex: 1; }
+}
+
+@media (max-width: 640px) {
+    .bar-cari-pjk { padding: 0 16px; }
 }

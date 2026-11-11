@@ -2,6 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Apply before the first paint so a saved dark theme never flashes white.
+      (() => {
+        let preference = 'light';
+        try { preference = localStorage.getItem('poriku-theme') || 'light'; } catch { /* Storage can be disabled. */ }
+        // Only the authenticated application routes support dark mode (see AppTheme).
+        const themeEnabled = /^\/(?:home|menu-bendahara|menu-verifikasi)\/?$/i.test(window.location.pathname);
+        const preferredMode = preference === 'dark' ? 'dark' : 'light';
+        const mode = themeEnabled ? preferredMode : 'light';
+        document.documentElement.dataset.theme = mode;
+        document.documentElement.style.colorScheme = mode;
+      })();
+    </script>
     <!-- Image for Website Tab: -->
     <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
     <!-- Fonts: Outfit & Raleway -->

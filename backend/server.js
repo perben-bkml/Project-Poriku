@@ -8735,9 +8735,9 @@ app.get("/bendahara/pembayaran-bp/bukti-setor", async (req, res) => {
         for (const record of records) {
             const spm = spmDigits(record.nomorSpm);
             if (!spm || data[spm]?.ada || data[spm]?.tidakPerlu || (wanted && spm !== wanted)) continue;
-            const ada = Boolean(record.buktiBayarDepositPajak.nama);
+            const ada = Boolean(record.buktiBayar.nama);
             const tidakPerlu = normalizeSatker(record.statusPajak) === STATUS_PAJAK_TANPA_DEPOSIT;
-            if (ada || tidakPerlu || includeEmpty) data[spm] = { ada, tidakPerlu, url: record.buktiBayarDepositPajak.url };
+            if (ada || tidakPerlu || includeEmpty) data[spm] = { ada, tidakPerlu, url: record.buktiBayar.url };
         }
 
         return res.status(200).json({ data });

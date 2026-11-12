@@ -39,7 +39,7 @@ const MULAI_DOK_COLUMNS = [...MULAI_COLUMNS, DOK_VERIF];
 
 const SPP_AT = INFO_COLUMNS.indexOf(SPP) + 1;
 const SUDAH_COLUMNS = [...INFO_DOK_COLUMNS.slice(0, SPP_AT), TANGGAL_SP2D, ...INFO_DOK_COLUMNS.slice(SPP_AT), BUKTI_SETOR];
-const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD, "Bukti Setor Pajak"];
+const SUDAH_HEAD = [...pjkHeadData.slice(0, SPP_AT), "Tanggal SP2D", ...pjkHeadData.slice(SPP_AT), DOK_HEAD, "Bukti Bayar"];
 const SUDAH_LEBAR = [6, 8, 20, 11, 13, 24, 24, 42, 16, 24, 13, 13, 46, 46, 60];
 const MONITOR_COLUMNS = [...SUDAH_COLUMNS, DEADLINE, REPAIR_STATUS];
 const MONITOR_HEAD = [...SUDAH_HEAD, ...monitorPjkHead];
@@ -92,7 +92,7 @@ function PengujianPJK(props) {
                 setBuktiSetorError("");
             } else {
                 setBuktiSetor({});
-                setBuktiSetorError("Bukti Setor Pajak gagal dimuat. Klik Muat Ulang untuk mencoba lagi.");
+                setBuktiSetorError("Bukti Bayar gagal dimuat. Klik Muat Ulang untuk mencoba lagi.");
             }
             if (pjkResult.status === "rejected") throw pjkResult.reason;
             const response = pjkResult.value;
@@ -145,12 +145,12 @@ function PengujianPJK(props) {
         if (index === BUKTI_SETOR) {
             const entries = buktiSetorEntries(row);
             const multiple = /[,&]/.test(String(row[SPM] ?? ""));
-            if (!multiple && entries[0]?.url) return <a key={index} href={entries[0].url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>;
+            if (!multiple && entries[0]?.url) return <a key={index} href={entries[0].url} target="_blank" rel="noopener noreferrer">Lihat Bukti Bayar</a>;
             return entries.length ? <span key={index}>{entries.map(({spm, url, label, entry}, at) => {
                 const style = daftarStatusStyle(entry.tidakPerlu || entry.ada ? "sudah" : "belum");
                 return <span key={spm}>
                     {at > 0 ? ", " : ""}{multiple ? `SPM ${spm}: ` : ""}
-                    {url ? <a href={url} target="_blank" rel="noopener noreferrer">Lihat Bukti Setor Pajak</a>
+                    {url ? <a href={url} target="_blank" rel="noopener noreferrer">Lihat Bukti Bayar</a>
                         : <span className="dp-status" style={{backgroundColor: style.bg, color: style.fg}}>{label}</span>}
                 </span>;
             })}</span> : <span key={index}/>;

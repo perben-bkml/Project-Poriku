@@ -159,8 +159,8 @@ function BendaharaPage(props) {
     }
 
     // Handle invisible component (invisible on button)
-    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp, catatan, pjkCatatan}) {
-        const rowData = [keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp, catatan, pjkCatatan];
+    function handleInvisibleComponent(compType, {lastPage, keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp, catatan, pjkCatatan, subjenis, editMode, correctionLink}) {
+        const rowData = [keyword, antriName, antriType, antriSum, antriDate, antriNum, createDate, accDate, status, fileLink, flow, pjkLink, spp, catatan, pjkCatatan, subjenis, editMode, correctionLink];
         if (!lastPage) {
             return () => {
                 setButtonSelect(compType);

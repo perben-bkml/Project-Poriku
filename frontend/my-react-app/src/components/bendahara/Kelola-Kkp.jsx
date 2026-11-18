@@ -54,7 +54,7 @@ export default function KelolaKkp() {
     // semuaKalkulator is about the kalkulator alone: Uang Harian and Transportasi are part
     // of the Jaldis set, and a master admin sees everything on this screen - the full
     // admin half as well as all four kalkulator.
-    const semuaKalkulator = hanyaKalkulator || user?.role === "master admin";
+    const semuaKalkulator = hanyaKalkulator || user?.role === "admin" || user?.role === "master admin";
 
     const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState(null);
@@ -637,9 +637,7 @@ export default function KelolaKkp() {
                                   </>}
                         </div>
 
-                        {/* Uang Harian and Transportasi belong to the Kalkulator SBM Jaldis
-                            set, so a plain admin does not get them - but a master admin,
-                            who sees everything on this screen, does */}
+                        {/* Uang Harian and Transportasi belong to the Kalkulator SBM Jaldis set. */}
                         {semuaKalkulator && <>
                         <div className="kkp-blok">
                             <div className="kkp-blok-head">

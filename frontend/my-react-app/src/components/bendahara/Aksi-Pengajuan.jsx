@@ -260,7 +260,7 @@ function AksiPengajuan(props) {
     ]
 
     //Submit Handler
-    async function handleOnSubmit(){
+    async function handleOnSubmit(skipBp = false){
         if (saving.current) return;
         saving.current=true;
         // Unticking Buat DRPP means this pengajuan has no DRPP, so the antrian stops
@@ -290,6 +290,7 @@ function AksiPengajuan(props) {
             updatedAntriData,
             monitoringDrppData,
             bpPreviewToken:bpPreview?.token || null,
+            skipPembayaranBp:skipBp,
             ...(docsLoaded ? { documentData, drppProcess, tanggalSp2d } : {}),
         }
 
@@ -419,19 +420,24 @@ function AksiPengajuan(props) {
                              tandaMak={tandaMak} />
                 }
             </div>
-            {isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}
-                message={bpPreview?.additions?.length ? <span className="aksi-bp-confirm">
+            {isPopup && bpPreview?.additions?.length ? <div className="popup-wrapper"><div className="popup aksi-bp-popup">
+                <div className="popup-text"><div className="aksi-bp-confirm">
                     <span className="aksi-bp-confirm-title">Nomor SPM sudah ada di Pembayaran BP</span>
-                    <span className="aksi-bp-confirm-note">SPM pengajuan ini akan menambah nominal pada data yang sudah ada.</span>
+                    <span className="aksi-bp-confirm-note">Pilih cara menyimpan pengajuan ini.</span>
                     <span className="aksi-bp-confirm-items">{bpPreview.additions.map(item=><span key={item.spm} className="aksi-bp-confirm-item">
                         <strong>SPM {item.spm}</strong>
                         <span>Nominal saat ini: Rp {numberFormats(item.existing) || '0'}</span>
                         <span>Penambahan: <strong>Rp {numberFormats(item.increase) || '0'}</strong></span>
                         <span>Total setelah disimpan: <strong>Rp {numberFormats(item.total) || '0'}</strong></span>
                     </span>)}</span>
-                    <span className="aksi-bp-confirm-note">Lanjutkan menyimpan?</span>
-                </span> : bpPreview?.warning || undefined}/>
-            }
+                </div></div>
+                <div className="popup-footer"><div className="popup-btn aksi-bp-actions">
+                    <button type="button" onClick={handleOnSubmit}>Tambahkan nominal</button>
+                    <button type="button" onClick={()=>handleOnSubmit(true)}>Simpan tanpa menambah ke Pembayaran BP</button>
+                    <button type="button" onClick={handlePopup}>Batal</button>
+                </div></div>
+            </div></div> : isPopup && <Popup type="submit" whenClick={handleOnSubmit} cancel={handlePopup}
+                message={bpPreview?.warning || undefined}/>}
             {warning && <PopupAlert isAlert={!!warning} severity="warning" message={warning}/>}
             {isLoading && <LoadingScreen />}
         </div>

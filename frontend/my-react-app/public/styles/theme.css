@@ -333,6 +333,23 @@ body {
     color: #fff;
     box-shadow: inset 0 0 0 1px #6087b5;
 }
+:root[data-theme="dark"] .aksi-bp-actions button:not(:last-child) {
+    background-color: #294f7b;
+    color: #fff;
+    box-shadow: inset 0 0 0 1px #6087b5;
+}
+:root[data-theme="dark"] .aksi-bp-actions button:not(:last-child):hover {
+    background-color: #345f8e;
+    box-shadow: inset 0 0 0 1px #8fb2da;
+}
+:root[data-theme="dark"] .aksi-bp-actions button:last-child {
+    color: #d7e2f0;
+    box-shadow: inset 0 0 0 1px #4c627f;
+}
+:root[data-theme="dark"] .aksi-bp-actions button:last-child:hover {
+    background-color: #1d2c3f;
+    box-shadow: inset 0 0 0 1px #8fb2da;
+}
 :root[data-theme="dark"] :is(.btn-submit, .form-submit input, .btn-aksi, .verif-btn, .spm-button):not(.button-reject):hover:not(:disabled) {
     background-color: #345f8e;
     transform: none;

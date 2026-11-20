@@ -1810,10 +1810,22 @@ input[type="number"]::-webkit-inner-spin-button {
 .aksi-pengajuan-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .aksi-pengajuan-fields:disabled { opacity: .7; }
 .aksi-bp-confirm { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.aksi-bp-confirm-title { color: var(--theme-ink-88500a, #88500a); }
+.aksi-bp-popup { width: 560px; max-height: 90vh; min-height: 0; }
+.aksi-bp-popup .popup-text { align-items: flex-start; padding: 26px 30px 0; overflow-y: auto; }
+.aksi-bp-confirm-title { color: var(--theme-ink-88500a, #88500a); font-size: 1.1rem; font-weight: 700; line-height: 1.4; }
 .aksi-bp-confirm-note { font-size: 13px; font-weight: 400; line-height: 1.6; }
 .aksi-bp-confirm-items { display: flex; flex-direction: column; gap: 10px; max-height: 40vh; overflow: auto; }
 .aksi-bp-confirm-item { display: flex; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid var(--theme-border, #e8cf9f); border-radius: 8px; background: var(--theme-fill-fff8e9, #fff8e9); color: var(--theme-ink-594524, #594524); text-align: left; font-size: 12px; font-weight: 400; line-height: 1.6; }
+.aksi-bp-actions { flex-direction: column; align-items: stretch; gap: 10px; padding: 0 30px; }
+.aksi-bp-actions button { width: 100%; min-height: 42px; padding: 9px 16px; border: 0; border-radius: 10px; background: #00204a; color: #fff; box-shadow: 0 2px 8px rgb(0 32 74 / 22%); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; line-height: 1.4; transition: background-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.aksi-bp-actions button:hover { background: var(--theme-fill-016ffc, #016ffc); box-shadow: 0 3px 10px rgb(0 32 74 / 28%); transform: translateY(-1px); }
+.aksi-bp-actions button:last-child { background: transparent; color: var(--theme-text, #333); box-shadow: inset 0 0 0 1px var(--theme-border, #b9c2cf); }
+.aksi-bp-actions button:last-child:hover { background: var(--theme-fill-f5f6fa, #f5f6fa); box-shadow: inset 0 0 0 1px var(--theme-ink-5e4c3b, #5e4c3b); transform: none; }
+@media (max-width: 600px) {
+    .aksi-bp-popup .popup-text { padding: 22px 18px 0; }
+    .aksi-bp-actions { padding: 0 18px; }
+    .aksi-bp-actions button { font-size: 13px; }
+}
 
 .aksi-content-label {
     display: grid;

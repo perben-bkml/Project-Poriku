@@ -2879,7 +2879,7 @@ async function saveAksiPengajuan(req, res) {
             if (!monitoringDrppData || String(monitoringDrppData.trans_id).trim()!==String(no_antri).trim())
                 throw aksiBpError('Identitas rincian DRPP tidak sesuai dengan pengajuan.');
             preparedBp=await prepareAksiPembayaranBp(req,allRows[rowIndex-1],getAntrianResponse.data.valueRanges[2]?.values || []);
-            if (preparedBp.plan) {
+            if (preparedBp.plan && !req.body.skipPembayaranBp) {
                 const {plan}=preparedBp, token=req.body.bpPreviewToken;
                 const changed=plan.changes.length>0 || plan.registrations.length>0;
                 if (token && token!==plan.token && changed || !token && plan.additions.length) {
@@ -2887,6 +2887,16 @@ async function saveAksiPengajuan(req, res) {
                     error.code='BP_CONFIRMATION_REQUIRED';error.preview=publicAksiBpPreview(preparedBp);throw error;
                 }
                 await registerAksiBpContributions(preparedBp);
+            } else if (preparedBp.plan && req.body.skipPembayaranBp) {
+                const matchedSpms=[...new Set((drppProcess===false ? [] : documentData).map(row=>spmDigits(row?.spm)).filter(Boolean))];
+                if (!matchedSpms.length) throw aksiBpError('Nomor SPM yang sudah ada tidak ditemukan pada rincian DRPP. Muat ulang sebelum menyimpan.',409);
+                const paymentDates=matchedSpms.map(spm=>preparedBp.snapshot.payments
+                    .filter(payment=>payment.spm===spm).map(payment=>toIsoDate(payment.tanggalSp2d)).find(Boolean) || '');
+                if (paymentDates.some(date=>!periodDate(date))) throw aksiBpError('Tanggal SP2D salah satu SPM tidak ditemukan atau tidak valid di Pembayaran BP. Muat ulang sebelum menyimpan.',409);
+                const dates=[...new Set(paymentDates)];
+                if (dates.length>1) throw aksiBpError('Tanggal SP2D SPM yang sudah ada berbeda. Periksa Pembayaran BP sebelum menyimpan.',409);
+                preparedBp.skipBpWrite=true;
+                preparedBp.existingTanggalSp2d=dates[0];
             }
         }
 
@@ -2954,7 +2964,9 @@ async function saveAksiPengajuan(req, res) {
         // Only when Buat DRPP was part of this save; an unrelated save carries no
         // documentData and would otherwise clear these
         if (monitoringDrppData) {
-            const sp2dValue = trimmed(tanggalSp2d);
+            const sp2dValue = preparedBp?.skipBpWrite
+                ? preparedBp.existingTanggalSp2d
+                : trimmed(tanggalSp2d);
             // rowIndex 1 is the header, and R1 holds the id counter
             if (rowIndex > 1) {
                 rawCells.push(cellAt(AJUAN_FLOWS.gup.antrianSheet, AJUAN_FLOWS.gup.tanggalSp2dColumn, rowIndex, sp2dValue));
@@ -3114,7 +3126,7 @@ async function saveAksiPengajuan(req, res) {
         // Source writes succeeded. Financial amounts and their contribution log now commit
         // together, while the workbook lock still covers this entire action.
         let warning=null;
-        if (preparedBp) {
+        if (preparedBp && !preparedBp.skipBpWrite) {
             try {warning=await syncPembayaranBpFromAksi(preparedBp);}
             catch(error) {console.error('Gagal mencatat ke Pembayaran BP (aksi-ajuan):',error);warning=error.message || 'Transaksi gagal dicatat di Pembayaran BP.';}
             if (warning) warning=`Aksi tersimpan, tetapi ${warning}`;
@@ -8396,14 +8408,15 @@ async function readAksiBpSnapshot(spreadsheetId,sheetName) {
     const payment=properties.find(s=>s.title===sheetName);
     if (!payment) throw aksiBpError(`Tab "${sheetName}" tidak ditemukan.`,409);
     const tracking=properties.find(s=>s.title===AKSI_BP_LOG_SHEET);
-    const ranges=[`'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:H`,...(tracking ? [`'${AKSI_BP_LOG_SHEET}'!A:E`] : [])];
-    const response=await readRanges(sheets,spreadsheetId,ranges,{valueRenderOption:'UNFORMATTED_VALUE'});
-    const values=response.data.valueRanges[0].values || [];
-    const trackingValues=tracking ? response.data.valueRanges[1].values || [] : [];
-    const payments=values.flatMap((row,i)=>spmDigits(row[1]) ? [{row:i+PEMBAYARAN_BP_FIRST_ROW,
-        spm:spmDigits(row[1]),nominal:parseRupiah(row[5]),va:String(row[3] ?? '').trim()}] : []);
+    const ranges=[`'${sheetName}'!C${PEMBAYARAN_BP_FIRST_ROW}:C`,`'${sheetName}'!D${PEMBAYARAN_BP_FIRST_ROW}:H`,...(tracking ? [`'${AKSI_BP_LOG_SHEET}'!A:E`] : [])];
+    const response=await readRanges(sheets,spreadsheetId,ranges,{valueRenderOption:'UNFORMATTED_VALUE',dateTimeRenderOption:'FORMATTED_STRING'});
+    const dates=response.data.valueRanges[0].values || [];
+    const values=response.data.valueRanges[1].values || [];
+    const trackingValues=tracking ? response.data.valueRanges[2].values || [] : [];
+    const payments=values.flatMap((row,i)=>spmDigits(row[0]) ? [{row:i+PEMBAYARAN_BP_FIRST_ROW,
+        spm:spmDigits(row[0]),tanggalSp2d:trimmed(dates[i]?.[0]),nominal:parseRupiah(row[4]),va:String(row[2] ?? '').trim()}] : []);
     let appendRow=PEMBAYARAN_BP_FIRST_ROW;
-    values.forEach((row,i)=>{if (filled(row[0]) || filled(row[1])) appendRow=i+PEMBAYARAN_BP_FIRST_ROW+1;});
+    values.forEach((row,i)=>{if (filled(dates[i]?.[0]) || filled(row[0])) appendRow=i+PEMBAYARAN_BP_FIRST_ROW+1;});
     return {sheetId:payment.sheetId,trackingId:tracking?.sheetId ?? null,
         log:parseAksiBpLog(trackingValues,tracking?.sheetId),logNextRow:Math.max(2,trackingValues.length+1),
         payments,appendRow,sheetIds:new Set(properties.map(s=>s.sheetId))};

@@ -220,6 +220,14 @@ function AksiPengajuan(props) {
             return;
         }
         if (checking.current || saving.current) return;
+
+        // Pembayaran BP preview only for "Buat DRPP" = checked
+        if (!drppProcess) {
+            setBpPreview(null);
+            setWarning("");
+            setIsPopup(true);
+            return;
+        }
         checking.current=true;setIsCheckingBp(true);setWarning("");
         try {
             if (docsLoaded) {

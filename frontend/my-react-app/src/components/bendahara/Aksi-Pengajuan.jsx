@@ -273,25 +273,47 @@ function AksiPengajuan(props) {
         const spmArray = docRows.map(row => row.spm).filter(spm => String(spm ?? '').trim() !== "");
         const spmString = [...new Set(spmArray)].join(", ");
 
+
         const updatedAntriData = {
-            ...antriData,
+            no_antri: String(antriData.no_antri ?? ''),
+            ajuan_verifikasi: String(antriData.ajuan_verifikasi ?? ''),
+            tgl_verifikasi: String(antriData.tgl_verifikasi ?? ''),
+            status_pajak: String(antriData.status_pajak ?? ''),
+            sedia_anggaran: String(antriData.sedia_anggaran ?? ''),
+            tgl_setuju: String(antriData.tgl_setuju ?? ''),
+            drpp: String(antriData.drpp ?? ''),
+            spp: String(antriData.spp ?? ''),
+            spm: String(antriData.spm ?? ''),
+            catatan: String(antriData.catatan ?? ''),
+            lampiran: String(antriData.lampiran ?? ''),
             ...(docsLoaded ? {drpp:drppArray,spp:sppString,spm:spmString} : {}),
         };
 
         // Sent even when unticked: the rows already on the sheet have to be removed,
         // which the server can only do if it is told about this save
         const monitoringDrppData = docsLoaded ? {
-            trans_id: props.fulldata[0],
-            satker: props.fulldata[11],
-            jenis: props.fulldata[3],
+            trans_id: String(props.fulldata[0] ?? ''),
+            satker: String(props.fulldata[11] ?? ''),
+            jenis: String(props.fulldata[3] ?? ''),
         } : null
 
         const sendData = {
             updatedAntriData,
             monitoringDrppData,
-            bpPreviewToken:bpPreview?.token || null,
-            skipPembayaranBp:skipBp,
-            ...(docsLoaded ? { documentData, drppProcess, tanggalSp2d } : {}),
+            bpPreviewToken:bpPreview?.token == null ? null : String(bpPreview.token),
+            // Popup buttons pass their click event as the first argument. Only the
+            // explicit alternate action should enable skipping Pembayaran BP.
+            skipPembayaranBp:skipBp === true,
+            ...(docsLoaded ? {
+                documentData: documentData.map(row => ({
+                    drpp: String(row?.drpp ?? ''),
+                    nominal: String(row?.nominal ?? ''),
+                    spp: String(row?.spp ?? ''),
+                    spm: String(row?.spm ?? ''),
+                })),
+                drppProcess: Boolean(drppProcess),
+                tanggalSp2d: String(tanggalSp2d ?? ''),
+            } : {}),
         }
 
         try {
@@ -308,7 +330,16 @@ function AksiPengajuan(props) {
                 setBpPreview(error.response.data.preview);
                 setWarning('Data Pembayaran BP berubah. Periksa kembali penambahan nominal sebelum menyimpan.');
                 setIsPopup(true);
-            } else setWarning(error.response?.data?.message || 'Gagal menyimpan data. Silakan coba lagi.');
+            } else {
+                console.error('Gagal menyimpan aksi pengajuan:', {
+                    message: error.message,
+                    status: error.response?.status,
+                    url: error.config?.baseURL ? `${error.config.baseURL}${error.config.url || ''}` : error.config?.url,
+                    response: error.response?.data,
+                    code: error.code,
+                }, error);
+                setWarning(error.response?.data?.message || error.response?.data?.error || 'Gagal menyimpan data. Silakan coba lagi.');
+            }
         } finally {saving.current=false;setIsLoading(false);}
     }
 
